@@ -2,6 +2,14 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.12.0 - Pets & the Travelling Zoo (2026-10-02)
+
+- Pets! 25 companions, 5 of each rarity (Common, Uncommon, Rare, Epic, Legendary), each with its own ability: finding coins, saving bait, Double Catches, longer casts, rescuing lost fish, legendary-hunting and more.
+- The Travelling Zoo sells them. Its wagon moves around the lake every 15 minutes (on the quarter hour) and brings 3 new animals each time. Rarer pets turn up less often. Press E at the wagon to adopt.
+- Pets menu (P): see every pet and its ability, what the zoo has right now and where it is, and pick which pet comes with you.
+- Your pet follows you around the lake and out to sea. Everyone can see it. Pets stay home during duels.
+- New achievements: Zookeeper (own 5 pets) and Menagerie (own all 25).
+
 ## 0.11.0 - Chum buckets (2026-10-02)
 
 - Chum buckets: buy them at the Bait Shop (60 coins each) and press C to put one down where you stand. It lasts 10 minutes or 30 fish.

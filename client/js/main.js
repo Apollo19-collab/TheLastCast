@@ -10,6 +10,7 @@ import { computeStats } from '/shared/gear.js';
 import { VERSION } from '/shared/version.js';
 import { DUEL } from '/shared/duel.js';
 import { BOAT, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
+import { PETS, ZOO } from '/shared/pets.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
@@ -81,9 +82,17 @@ function aimAngle() {
   return Math.atan2(m.y - selfPos.y, m.x - selfPos.x);
 }
 
-/** Tackle stats in effect right now (duels use matched tackle). */
+/** Tackle stats in effect right now (duels use matched tackle; some pets cast further). */
 function currentStats(me) {
-  return me?.du ? DUEL_STATS : stats;
+  if (me?.du) return DUEL_STATS;
+  const extra = PETS[me?.pt]?.fx.castRange ?? 0;
+  return extra ? { ...stats, castRange: stats.castRange + extra } : stats;
+}
+
+/** Is the local player at the Travelling Zoo's wagon? */
+function atZoo() {
+  const zoo = room === 'lake' ? buffer.latest()?.zoo : null;
+  return !!zoo && Math.hypot(selfPos.x - zoo.x, selfPos.y - zoo.y) <= ZOO.range;
 }
 
 // ---- rooms: the lake, or a voyage at sea ----------------------------------------------
@@ -244,6 +253,7 @@ function atBaitShop() {
 /** What pressing E would do right now: { text, run } or null. */
 function interaction(me) {
   if (!me) return null;
+  if (!me.ab && atZoo()) return { text: 'E: visit the Travelling Zoo', run: () => ui.openZoo() };
   if (!me.ab && !me.du && atBaitShop()) {
     return { text: room === 'voyage' ? 'E: buy bait from the deckhand' : 'E: open the Bait Shop', run: () => ui.openShop() };
   }
@@ -305,7 +315,16 @@ net.on(MSG.STATE, (snap) => {
   // At sea, the water you aim at is named after the current stop.
   if (snap.vy) seaWorld.zones[0].name = SEA_LOCATIONS[snap.vy.loc]?.name ?? 'Open Sea';
   ui.updateLeaderboard(snap.players, meId, room);
+  // The Travelling Zoo moved on with new animals.
+  if (snap.zoo) {
+    const key = snap.zoo.stock.join();
+    if (lastZooStock && key !== lastZooStock) {
+      ui.feed(`🎪 The Travelling Zoo has moved to ${snap.zoo.area} with: ${snap.zoo.stock.map((id) => `${PETS[id].emoji} ${PETS[id].name}`).join(', ')}.`, '#e0c3fc');
+    }
+    lastZooStock = key;
+  }
 });
+let lastZooStock = null;
 
 function onBoatEvent(ev, mine) {
   switch (ev.what) {
@@ -433,6 +452,17 @@ net.on(MSG.EVENT, (ev) => {
     case 'lineHeld':
       ui.flash(ev.message, 2000);
       audio.play('hook');
+      break;
+    case 'petAdopted':
+      ui.feed(`🐾 ${mine ? 'You' : ev.name} adopted a ${ev.pet} from the Travelling Zoo!`, '#e0c3fc');
+      break;
+    case 'petFind':
+      renderer.addEffect({ type: 'text', text: `🐾 +${ev.coins} coins`, x: selfPos.x, y: selfPos.y - 40, color: '#ffd166', duration: 1800 });
+      ui.feed(`🐾 Your pet found ${ev.coins} coins!`, '#ffd166');
+      audio.play('coin');
+      break;
+    case 'petRescue':
+      ui.flash(ev.message, 2500);
       break;
     case 'chumPlaced':
       ui.flash(`Chum bucket down! Land fish near it to turn them into bait (${Math.round(ev.seconds / 60)} min or ${ev.fish} fish).`, 4000);
@@ -643,6 +673,7 @@ function frame(now) {
     ui.updateMe(me, aimZone, where);
     ui.prompt(ui.menuOpen ? null : interaction(me)?.text ?? null);
     ui.setShopAccess(atBaitShop());
+    ui.setZooAccess(atZoo(), snap?.zoo ?? null);
     updateBoatLine(me, snap?.boat);
     updateDuelPanel(me, snap?.players ?? []);
     updateVoyagePanel(me, snap);
@@ -660,6 +691,7 @@ function frame(now) {
     players: drawn,
     hotspots: snap?.hotspots ?? [],
     chums: snap?.chums ?? [],
+    zoo: room === 'lake' ? snap?.zoo ?? null : null,
     meId,
     aim,
     boat,

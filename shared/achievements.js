@@ -56,6 +56,8 @@ export const ACHIEVEMENTS = [
   { id: 'current_rider', name: 'Current Rider', desc: 'Catch 40 fish during special events at sea.', metric: 'eventCatches', goal: 40, coins: 600 },
   { id: 'rising_star', name: 'Rising Star', desc: 'Reach level 10.', metric: 'level', goal: 10, coins: 300 },
   { id: 'master_angler', name: 'Master Angler', desc: 'Reach the maximum level, 50.', metric: 'level', goal: 50, coins: 5000 },
+  { id: 'zookeeper', name: 'Zookeeper', desc: 'Own 5 pets.', metric: 'pets', goal: 5, coins: 1000 },
+  { id: 'menagerie', name: 'Menagerie', desc: 'Own all 25 pets.', metric: 'pets', goal: 25, coins: 15000 },
   { id: 'leviathan_slayer', name: 'Leviathan Slayer', desc: 'Catch The Leviathan in the Abyssal Trench.', metric: 'index.leviathan', goal: 1, coins: 2500 },
 ];
 
@@ -78,6 +80,7 @@ function read(profile, path) {
   if (path === 'species') return Object.keys(profile.index || {}).length;
   if (path === 'score') return profile.score || 0;
   if (path === 'level') return levelFor(profile.xp || 0);
+  if (path === 'pets') return profile.pets?.length || 0;
   const [group, key] = path.split('.');
   if (group === 'index') return profile.index?.[key]?.count || 0;
   const c = profile.counters || {};

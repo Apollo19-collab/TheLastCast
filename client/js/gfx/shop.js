@@ -176,3 +176,111 @@ export function drawChumBucket(ctx, c, time, mine, { radius, attract }) {
   ctx.fillText(label, c.x, c.y + 18.5);
   ctx.textBaseline = 'alphabetic';
 }
+
+// ---- the Travelling Zoo wagon ----------------------------------------------------
+
+let zooSprite = null;
+
+/** The zoo's wagon: a striped circus tent on wheels with a flag. */
+export function drawZoo(ctx, x, y, time) {
+  if (!zooSprite) zooSprite = paintZoo();
+  ctx.drawImage(zooSprite, x - 60, y - 70, 120, 100);
+  // Flag on top.
+  ctx.fillStyle = '#ffd166';
+  ctx.beginPath();
+  const flap = Math.sin(time / 200) * 3;
+  ctx.moveTo(x, y - 66);
+  ctx.lineTo(x + 16, y - 61 + flap);
+  ctx.lineTo(x, y - 56);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function paintZoo() {
+  const c = document.createElement('canvas');
+  c.width = 240;
+  c.height = 200;
+  const g = c.getContext('2d');
+  g.scale(2, 2);
+  g.translate(60, 70);
+  g.fillStyle = 'rgba(40,30,10,0.3)';
+  g.beginPath();
+  g.ellipse(4, 22, 52, 12, 0, 0, Math.PI * 2);
+  g.fill();
+  // Wagon bed and wheels.
+  g.fillStyle = '#7a3e1d';
+  g.fillRect(-46, 0, 92, 18);
+  g.fillStyle = '#ffd166';
+  g.fillRect(-46, 6, 92, 3);
+  for (const wx of [-34, 34]) {
+    g.fillStyle = '#3a2410';
+    g.beginPath();
+    g.arc(wx, 20, 8, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#b5865a';
+    g.beginPath();
+    g.arc(wx, 20, 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Striped tent roof.
+  for (let i = 0; i < 8; i++) {
+    g.fillStyle = i % 2 ? '#fdfcdc' : '#9d4edd';
+    g.beginPath();
+    g.moveTo(0, -56);
+    g.lineTo(-46 + i * 11.5, 0);
+    g.lineTo(-46 + (i + 1) * 11.5, 0);
+    g.closePath();
+    g.fill();
+  }
+  g.strokeStyle = 'rgba(60,20,80,0.6)';
+  g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(0, -56);
+  g.lineTo(-46, 0);
+  g.lineTo(46, 0);
+  g.closePath();
+  g.stroke();
+  g.fillStyle = '#5a189a';
+  g.fillRect(-1, -64, 2, 10);
+  // Sign.
+  g.fillStyle = '#fff3b0';
+  g.strokeStyle = '#5a189a';
+  g.beginPath();
+  g.roundRect(-24, -14, 48, 12, 3);
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#5a189a';
+  g.font = '900 8px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('ZOO', 0, -7.5);
+  return c;
+}
+
+/** A pet trotting along behind its owner. */
+export function drawPet(ctx, pos, pet, rarityColor, time) {
+  const hop = Math.abs(Math.sin(time / 160 + pos.phase)) * (pos.moving ? 4 : 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(pos.x, pos.y + 9, 9, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const g = ctx.createRadialGradient(pos.x, pos.y - hop, 2, pos.x, pos.y - hop, 17);
+  g.addColorStop(0, `${rarityColor}55`);
+  g.addColorStop(1, `${rarityColor}00`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y - hop, 17, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = '21px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  if (pos.flip) {
+    ctx.translate(pos.x, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-pos.x, 0);
+  }
+  ctx.fillText(pet.emoji, pos.x, pos.y - hop);
+  ctx.restore();
+  ctx.textBaseline = 'alphabetic';
+}

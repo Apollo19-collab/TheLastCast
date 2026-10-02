@@ -477,3 +477,22 @@ table.controls td:first-child { opacity: 0.6; width: 90px; }
 @media (max-width: 800px) { .armour-pieces { grid-template-columns: repeat(2, 1fr); } }
 
 .chum-icon { display: grid; place-items: center; font-size: 28px; }
+
+/* ---- pets and the zoo ---- */
+#pet-line { font-size: 12px; color: #e0c3fc; }
+#pet-line:empty { display: none; }
+.zoo-box { padding: 10px; margin-bottom: 12px; border-radius: 12px; background: rgba(157, 78, 221, 0.12); border: 1px solid rgba(199, 125, 255, 0.45); }
+.zoo-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 800; margin-bottom: 6px; }
+.zoo-head span:last-child { font-weight: 600; color: #e0c3fc; font-variant-numeric: tabular-nums; }
+.pet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.pet-card { --rarity: #cfd8dc; padding: 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid color-mix(in srgb, var(--rarity) 45%, transparent); display: flex; flex-direction: column; gap: 3px; }
+.pet-card.missing { opacity: 0.5; border-style: dashed; }
+.pet-card.active { box-shadow: 0 0 0 2px var(--rarity), 0 0 14px color-mix(in srgb, var(--rarity) 40%, transparent); }
+.pet-top { display: flex; align-items: center; gap: 8px; }
+.pet-emoji { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4)); }
+.pet-card.missing .pet-emoji { filter: grayscale(1) brightness(0.6); }
+.pet-name { font-weight: 800; }
+.pet-rarity { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--rarity); }
+.pet-ability { font-size: 12px; color: #ffe9a8; font-weight: 700; }
+.pet-desc { font-size: 12px; opacity: 0.85; }
+.pet-card .btn { margin-top: 4px; }

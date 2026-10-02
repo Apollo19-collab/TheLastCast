@@ -31,6 +31,7 @@ export class Hub {
       kind: 'lake',
       ids: this.ids,
       rng,
+      now,
       maxPlayers: Infinity, // the hub enforces the total
       onProfileChange,
       hooks: { snapshot: () => ({ boat: this.boat.snapshot() }) },

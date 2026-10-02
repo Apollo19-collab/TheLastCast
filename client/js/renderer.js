@@ -19,7 +19,8 @@ import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
 import { SeaScene } from './gfx/sea.js';
-import { drawBaitShop, drawChumBucket } from './gfx/shop.js';
+import { drawBaitShop, drawChumBucket, drawPet, drawZoo } from './gfx/shop.js';
+import { PETS, PET_RARITIES } from '/shared/pets.js';
 import { CHUM } from '/shared/chum.js';
 import { BOAT, SEA_BOAT } from '/shared/voyage.js';
 
@@ -38,6 +39,7 @@ export class Renderer {
     this.camera = { x: world.spawn.x, y: world.spawn.y, zoom: 1 };
     this.effects = [];
     this.anims = new Map(); // player id -> { x, y, phase, moving }
+    this.petPos = new Map(); // player id -> where their pet is
     if (world.kind === 'sea') {
       this.sea = new SeaScene(this.ctx);
     } else {
@@ -143,6 +145,7 @@ export class Renderer {
     this.drawSurf(time);
     this.drawReeds(time);
     for (const shop of this.world.shops ?? []) if (this.onScreen(shop.x, shop.y, 80)) drawBaitShop(ctx, shop.x, shop.y);
+    if (frame.zoo && this.onScreen(frame.zoo.x, frame.zoo.y, 120)) drawZoo(ctx, frame.zoo.x, frame.zoo.y, time);
     this.drawAreaLabels();
 
     for (const h of frame.hotspots) this.drawHotspot(h, time);
@@ -152,6 +155,7 @@ export class Renderer {
     if (frame.aim) this.drawAim(frame.aim);
     const sorted = [...frame.players].sort((a, b) => a.y - b.y);
     for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
+    this.drawPets(frame.players, time);
     for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
     // Your own fight bars last, so nothing covers them.
     for (const p of frame.players) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
@@ -189,6 +193,7 @@ export class Renderer {
     if (frame.aim) this.drawAim(frame.aim);
     const sorted = [...frame.players].sort((a, b) => a.y - b.y);
     for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
+    this.drawPets(frame.players, time);
 
     // Daylight, night and weather over the scene; lanterns shine through.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -201,6 +206,35 @@ export class Renderer {
     for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
     this.drawEffects(time);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  /** Pets trot after their owners, settling just behind them. */
+  drawPets(players, time) {
+    const seen = new Set();
+    for (const p of players) {
+      const pet = PETS[p.pt];
+      if (!pet) continue;
+      seen.add(p.id);
+      const tx = p.x - Math.cos(p.f) * 24 + Math.sin(p.f) * 16;
+      const ty = p.y - Math.sin(p.f) * 24 - Math.cos(p.f) * 16 + 4;
+      let pos = this.petPos.get(p.id);
+      if (!pos) {
+        pos = { x: tx, y: ty, phase: Math.random() * 6, moving: false, flip: false };
+        this.petPos.set(p.id, pos);
+      }
+      const dx = tx - pos.x;
+      const dy = ty - pos.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 300) Object.assign(pos, { x: tx, y: ty }); // teleported (new room)
+      else {
+        pos.x += dx * 0.12;
+        pos.y += dy * 0.12;
+      }
+      pos.moving = dist > 3;
+      if (Math.abs(dx) > 1) pos.flip = dx > 0;
+      if (this.onScreen(pos.x, pos.y)) drawPet(this.ctx, pos, pet, PET_RARITIES[pet.rarity].color, time);
+    }
+    for (const id of this.petPos.keys()) if (!seen.has(id)) this.petPos.delete(id);
   }
 
   drawChums(frame, time) {
@@ -604,6 +638,18 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(x0 + h.x * scale, y0 + h.y * scale, 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (frame.zoo) {
+      ctx.fillStyle = '#c77dff';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(x0 + frame.zoo.x * scale, y0 + frame.zoo.y * scale - 5 * dpr);
+      ctx.lineTo(x0 + frame.zoo.x * scale + 4.5 * dpr, y0 + frame.zoo.y * scale + 3.5 * dpr);
+      ctx.lineTo(x0 + frame.zoo.x * scale - 4.5 * dpr, y0 + frame.zoo.y * scale + 3.5 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
     ctx.fillStyle = '#c1121f';
     for (const c of frame.chums ?? []) {

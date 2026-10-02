@@ -10,6 +10,7 @@ import { CHANGELOG, VERSION } from '/shared/version.js';
 import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
 import { CHUM } from '/shared/chum.js';
+import { PETS, PET_IDS, PET_RARITIES, petPrice } from '/shared/pets.js';
 import { ARMOUR_SLOTS, ARMOUR_SLOT_LABELS, SETS, computeArmour } from '/shared/armour.js';
 import { MAX_LEVEL, levelFor, levelProgress } from '/shared/levels.js';
 
@@ -40,7 +41,12 @@ function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') el.className = v;
-    else if (k === 'style') Object.assign(el.style, v);
+    else if (k === 'style') {
+      for (const [prop, value] of Object.entries(v)) {
+        if (prop.startsWith('--')) el.style.setProperty(prop, value); // CSS variables
+        else el.style[prop] = value;
+      }
+    }
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) el.setAttribute(k, v === true ? '' : v);
   }
@@ -110,6 +116,8 @@ export class UI {
     this.onEquip = onEquip;
     this.tackleSlot = 'rod';
     this.shopAccess = false; // standing at the Bait Shop (or at sea): bait can be bought
+    this.zooAccess = false; // standing at the Travelling Zoo
+    this.zoo = null; // { stock, x, y, area, tl } from the latest lake snapshot
     for (const el of document.querySelectorAll('.version-label')) {
       el.textContent = `v${VERSION} · What's new`;
       el.addEventListener('click', () => this.openMenu('news'));
@@ -157,6 +165,7 @@ export class UI {
     this.profile = profile;
     this.setBait(profile);
     this.setLevel(profile.xp);
+    this.setPet(profile);
     if (this.menuTab === 'options') { this.setStats(profile); return; }
     $('me-coins').textContent = profile.coins;
     $('me-score').textContent = profile.score;
@@ -176,6 +185,7 @@ export class UI {
       history: () => this.renderHistory(),
       achievements: () => this.renderAchievements(),
       armour: () => this.renderArmour(),
+      pets: () => this.renderPets(),
     };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
     body.scrollTop = scroll; // keep your place when the profile updates
@@ -220,7 +230,8 @@ export class UI {
         ['Interact', 'E: open the Bait Shop, board the boat, or challenge a nearby angler to a duel'],
         ['Duels', 'Y accept · N decline a challenge'],
         ['Chum', 'C: put a chum bucket down (buy them at the Bait Shop)'],
-        ['Menus', 'G tackle · R armour · I fish index · H history · T achievements · O options'],
+        ['Pets', 'P: your pets · E at the Travelling Zoo to adopt one'],
+        ['Menus', 'G tackle · R armour · P pets · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];
@@ -413,6 +424,69 @@ export class UI {
       summary,
       ...sets,
     ];
+  }
+
+  // ---- pets ------------------------------------------------------------------------------
+
+  petCard(id, { buy = false } = {}) {
+    const p = this.profile;
+    const pet = PETS[id];
+    const rarity = PET_RARITIES[pet.rarity];
+    const owned = p.pets.includes(id);
+    let action = null;
+    if (buy) {
+      if (owned) action = h('span', { class: 'tag equipped' }, 'Adopted');
+      else if (this.zooAccess) action = h('button', { class: 'btn buy', disabled: p.coins < petPrice(id), onclick: () => this.onBuy(id) }, `Adopt · ${num(petPrice(id))}`);
+      else action = h('span', { class: 'locked-progress' }, `${num(petPrice(id))} coins · visit the zoo to adopt`);
+    } else if (owned) {
+      action = h('button', { class: `btn${p.pet === id ? ' buy' : ''}`, onclick: () => this.onEquip(id) }, p.pet === id ? 'With you · send home' : 'Take along');
+    }
+    return h('div', { class: `pet-card${owned || buy ? '' : ' missing'}${p.pet === id && !buy ? ' active' : ''}`, style: { '--rarity': rarity.color } },
+      h('div', { class: 'pet-top' },
+        h('span', { class: 'pet-emoji' }, pet.emoji),
+        h('div', {}, h('div', { class: 'pet-name' }, pet.name), h('div', { class: 'pet-rarity' }, rarity.label))),
+      h('div', { class: 'pet-ability' }, pet.ability),
+      h('div', { class: 'pet-desc' }, pet.desc),
+      action);
+  }
+
+  renderPets() {
+    const p = this.profile;
+    const zoo = this.zoo;
+    const zooBox = zoo
+      ? h('div', { class: 'zoo-box' },
+        h('div', { class: 'zoo-head' }, h('span', {}, `🎪 Travelling Zoo · at ${zoo.area}`), h('span', {}, `moves on in ${clock(zoo.tl)}`)),
+        h('div', { class: 'pet-grid' }, zoo.stock.map((id) => this.petCard(id, { buy: true }))),
+        this.zooAccess ? null : h('p', { class: 'menu-note' }, 'Walk up to the zoo wagon (purple on the minimap) and press E to adopt.'))
+      : h('p', { class: 'menu-note' }, 'The Travelling Zoo is back at Mirror Lake. Check its animals when you return.');
+    const byRarity = Object.keys(PET_RARITIES).flatMap((r) => PET_IDS.filter((id) => PETS[id].rarity === r));
+    return [
+      h('p', { class: 'menu-note' }, h('b', {}, `${p.pets.length} / ${PET_IDS.length} pets`),
+        ` · ${num(p.coins)} coins. One pet comes with you at a time and gives you its ability. Pets stay home during duels.`),
+      zooBox,
+      h('h4', { class: 'option-heading' }, 'Your pets'),
+      h('div', { class: 'pet-grid' }, byRarity.map((id) => this.petCard(id))),
+    ];
+  }
+
+  /** Open the Pets tab with adopting enabled. */
+  openZoo() {
+    this.zooAccess = true;
+    this.openMenu('pets');
+  }
+
+  setZooAccess(on, zoo) {
+    const stockChanged = zoo && (!this.zoo || this.zoo.stock.join() !== zoo.stock.join());
+    const secondTick = zoo && this.zoo && zoo.tl !== this.zoo.tl;
+    if (zoo) this.zoo = zoo;
+    if (this.zooAccess === on && !stockChanged && !(secondTick && this.menuTab === 'pets')) return;
+    this.zooAccess = on;
+    if (this.menuTab === 'pets') this.renderMenu();
+  }
+
+  setPet(profile) {
+    const pet = PETS[profile.pet];
+    setText($('pet-line'), pet ? `${pet.emoji} ${pet.name} · ${pet.ability}` : '');
   }
 
   /** The bait line in the player panel. */

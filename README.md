@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.11.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.12.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -17,7 +17,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Open the Bait Shop / board the boat / challenge an angler to a duel | `E` when you're next to the shop, the boat or another angler |
 | Accept / decline a duel | `Y` / `N` |
 | Put down a chum bucket | `C` |
-| Tackle / Armour / Fish Index / Achievements / Catch History | `G` / `R` / `I` / `T` / `H` (or the buttons under your score) |
+| Tackle / Armour / Pets / Fish Index / Achievements / Catch History | `G` / `R` / `P` / `I` / `T` / `H` (or the buttons under your score) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
 
@@ -103,6 +103,17 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   | Golden Angler | 50 | Golden Touch: 25% Double Catch, +25% coins and XP, legendaries ×1.5 |
 
   Armour shows on your angler and is switched off in duels. Sets live in `shared/armour.js`, and their effects are applied in `server/fishing.js`.
+- **Pets** (`P`). 25 pets, 5 per rarity, each with a unique ability. They're sold by the **Travelling Zoo**: its wagon moves between South Beach, Pine Point, Lily Marsh and the River Mouth every 15 minutes (on the quarter hour) with 3 new animals. Stock is picked from the clock, so everyone sees the same zoo, and rarer pets turn up less often. Walk up to the wagon (purple on the minimap) and press `E` to adopt. One pet comes with you at a time (it follows you, visible to everyone) and its ability stacks with your armour. Pets stay home during duels.
+
+  | Rarity | Price | Pets |
+  | --- | --- | --- |
+  | Common | 400 | Lily Frog (faster bites in marsh and reeds), Duckling (10% bait saved), Sand Crab (70% fewer boots), Garden Snail (+10% XP), Field Mouse (finds 5-20 coins) |
+  | Uncommon | 1,200 | Otter Pup (more trout), Flamingo (+0.5 s to hook), Hermit Crab (+20% hotspot points), Pond Turtle (tension 10% slower), Kingfisher (cast +40) |
+  | Rare | 3,000 | Raccoon (finds 20-60 coins), Barn Owl (rare fish +25%), Beaver (fish slip away 40% slower), Penguin (8% Double Catch), Seal Pup (+25% at sea) |
+  | Epic | 7,500 | Snow Fox (Cold Spring and Frostfin), Bald Eagle (legendaries x2), Grizzly Cub (reel +25%, tension -15%), Octopus (fish fight 20% less), Pirate Parrot (treasure x4, finds coins) |
+  | Legendary | 18,000 | Baby Dragon (+30% coins, 15% Double Catch), Celestial Peacock (half of lost fish caught anyway), Kraken Spawn (sea legendaries x3), Unicorn (rare +50%, half your bait saved), Spirit Koi (reel, bites and XP) |
+
+  Pets and abilities live in `shared/pets.js`; `combineBonuses()` merges a pet with armour and `server/fishing.js` applies the result.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
@@ -247,6 +258,7 @@ shared/         Imported by BOTH server and browser (plain ES modules)
   levels.js     XP curve (50 levels, ~40 hours) and XP rewards
   armour.js     Armour sets, pieces, level requirements and set effects
   chum.js       Chum buckets: price, duration, and what each rarity turns into
+  pets.js       Pets, their abilities, and the Travelling Zoo's schedule and stock
   version.js    Game version + in-game changelog (keep package.json and CHANGELOG.md in sync)
   duel.js       Duel rules: length, prize, matched tackle
   voyage.js     The boat's schedule and route, sea locations, events, missions, the sea world

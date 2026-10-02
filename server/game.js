@@ -10,6 +10,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shar
 import { ARMOUR, NO_ARMOUR, SETS, computeArmour } from '../shared/armour.js';
 import { levelFor, levelUpCoins } from '../shared/levels.js';
 import { CHUM, rollChum } from '../shared/chum.js';
+import { PETS, ZOO, combineBonuses, petPrice, zooAt } from '../shared/pets.js';
 import { isWalkable } from '../shared/world.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
@@ -45,7 +46,8 @@ export class Game {
    *   snapshot()                  extra fields for every state snapshot
    *   playerExtras(player)        extra fields for a player's snapshot entry
    */
-  constructor({ world, kind = 'lake', ids = idSource(), maxPlayers = 50, rng = Math.random, onProfileChange = () => {}, hooks = {} }) {
+  constructor({ world, kind = 'lake', ids = idSource(), maxPlayers = 50, rng = Math.random, onProfileChange = () => {}, hooks = {}, now = () => Date.now() }) {
+    this.now = now;
     this.world = world;
     this.kind = kind;
     this.ids = ids;
@@ -86,7 +88,7 @@ export class Game {
       line: newLine(),
       profile, // persistent: score, coins, tackle, achievements, index, history
       stats: computeStats(profile.equipped),
-      armourStats: computeArmour(profile.armour),
+      armourStats: combineBonuses(computeArmour(profile.armour), profile.pet),
       gear: null, // tackle override (duels); profile.equipped is never changed by it
       duel: null,
       aboard: false, // waiting on the boat at the lake
@@ -158,12 +160,14 @@ export class Game {
         break;
       case MSG.BUY:
         if (msg.item === 'chum') { this.buyChum(player, msg.packs === 5 ? 5 : 1); return; }
+        if (Object.hasOwn(PETS, String(msg.item))) { this.buyPet(player, msg.item); return; }
         if (Object.hasOwn(ARMOUR, String(msg.item))) { this.buyArmour(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
         this.buy(player, msg.item, msg.packs === BULK_PACKS ? BULK_PACKS : 1);
         break;
       case MSG.EQUIP:
         if (Object.hasOwn(ARMOUR, String(msg.item))) { this.wearArmour(player, msg.item); return; }
+        if (Object.hasOwn(PETS, String(msg.item))) { this.choosePet(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
         this.equip(player, msg.item);
         break;
@@ -290,9 +294,48 @@ export class Game {
     this.armourChanged(player);
   }
 
+  // ---- pets and the Travelling Zoo -------------------------------------------------
+
+  /** The zoo right now (only at the lake). */
+  zoo() {
+    return this.kind === 'lake' ? zooAt(this.now() / 1000) : null;
+  }
+
+  buyPet(player, petId) {
+    const { profile } = player;
+    const zoo = this.zoo();
+    const pet = PETS[petId];
+    const price = petPrice(petId);
+    let message = null;
+    if (!zoo || Math.hypot(player.x - zoo.x, player.y - zoo.y) > ZOO.range) message = 'Pets are sold at the Travelling Zoo.';
+    else if (!zoo.stock.includes(petId)) message = `The zoo doesn't have a ${pet.name} right now.`;
+    else if (profile.pets.includes(petId)) message = `You already have a ${pet.name}.`;
+    else if (profile.coins < price) message = `You need ${price - profile.coins} more coins for the ${pet.name}.`;
+    if (message) {
+      this.emitTo(player, { kind: 'shop', ok: false, message });
+      return;
+    }
+    profile.coins -= price;
+    profile.pets.push(petId);
+    profile.pet = petId;
+    this.emitTo(player, { kind: 'shop', ok: true, message: `You adopted a ${pet.name}! ${pet.ability}: ${pet.desc}` });
+    this.emitAll({ kind: 'petAdopted', playerId: player.id, name: player.name, pet: pet.name, rarity: pet.rarity });
+    this.armourChanged(player);
+    this.checkAchievements(player);
+    this.profileChanged(player);
+  }
+
+  /** Take a pet you own along (or send it home if it's already with you). */
+  choosePet(player, petId) {
+    const { profile } = player;
+    if (!profile.pets.includes(petId)) return;
+    profile.pet = profile.pet === petId ? null : petId;
+    this.armourChanged(player);
+  }
+
   armourChanged(player) {
     const before = player.armourStats?.set;
-    player.armourStats = computeArmour(player.profile.armour);
+    player.armourStats = combineBonuses(computeArmour(player.profile.armour), player.profile.pet);
     const set = player.armourStats.set;
     if (set && set !== before) {
       const e = SETS[set].effect;
@@ -378,6 +421,7 @@ export class Game {
   /** A fish took the bait: use one up. Out of it? Back to the free starter bait. */
   useBait(player) {
     if (player.gear) return; // duels use matched tackle, on the house
+    if (this.rng() < this.armourOf(player).baitSave) return; // a pet saved it
     const { profile } = player;
     const id = profile.equipped.bait;
     if (!isConsumable(id)) return;
@@ -435,6 +479,8 @@ export class Game {
       xp: p.xp,
       armourOwned: p.armourOwned,
       armour: p.armour,
+      pets: p.pets,
+      pet: p.pet,
       achievements: p.achievements,
       counters: p.counters,
       index: p.index,
@@ -549,6 +595,7 @@ export class Game {
       s.lv = levelFor(p.profile.xp);
       const worn = p.profile.armour;
       if (worn.head || worn.body || worn.legs || worn.feet) s.ar = [worn.head, worn.body, worn.legs, worn.feet];
+      if (p.profile.pet && !p.duel) s.pt = p.profile.pet;
       if (p.aboard) s.ab = 1;
       if (p.duel) Object.assign(s, this.duels.snapshotFor(p));
       if (line.state !== FishingState.IDLE) {
@@ -568,6 +615,7 @@ export class Game {
       players,
       hotspots: this.hotspots.map((h) => ({ id: h.id, x: r1(h.x), y: r1(h.y), r: h.r, life: r1(h.life) })),
       chums: this.chums.map((c) => ({ id: c.id, o: c.ownerId, n: c.name, x: r1(c.x), y: r1(c.y), l: Math.ceil(c.life), f: c.fish })),
+      ...(this.kind === 'lake' ? { zoo: (({ stock, x, y, area, left }) => ({ stock, x, y, area, tl: Math.ceil(left) }))(this.zoo()) } : {}),
       ...this.hooks.snapshot?.(),
     };
   }

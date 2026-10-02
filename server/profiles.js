@@ -16,6 +16,7 @@ import path from 'node:path';
 import { ITEMS, STARTER, isConsumable, starterInventory } from '../shared/gear.js';
 import { newCounters } from '../shared/achievements.js';
 import { ARMOUR, ARMOUR_SLOTS, emptyArmour } from '../shared/armour.js';
+import { PETS } from '../shared/pets.js';
 import { SPECIES } from '../shared/fish.js';
 import {
   TOKEN_RE, checkPassword, checkUsername, hashPassword, hashToken, newToken, verifyPassword,
@@ -42,6 +43,8 @@ export function newProfile(name = 'Angler') {
     xp: 0, // total XP; your level comes from this (shared/levels.js)
     armourOwned: [], // armour piece ids (shared/armour.js)
     armour: emptyArmour(), // slot -> piece id or null
+    pets: [], // pet ids you own (shared/pets.js)
+    pet: null, // the pet with you
     equipped: { ...STARTER }, // slot -> item id
     achievements: {}, // achievement id -> time earned
     counters: newCounters(), // lifetime stats that achievements measure
@@ -96,6 +99,8 @@ export function normalize(saved) {
     if (id && (ARMOUR[id]?.slot !== slot || !p.armourOwned.includes(id))) p.armour[slot] = null;
   }
   p.chum = Math.max(0, p.chum | 0);
+  p.pets = [...new Set((p.pets || []).filter((id) => PETS[id]))];
+  if (!p.pets.includes(p.pet)) p.pet = null;
   p.bait = { ...p.bait };
   for (const id of Object.keys(p.bait)) if (!isConsumable(id) || !(p.bait[id] > 0)) delete p.bait[id];
   for (const [slot, id] of Object.entries(STARTER)) {

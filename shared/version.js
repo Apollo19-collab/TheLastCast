@@ -2,9 +2,21 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.11.0';
+export const VERSION = '0.12.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.12.0',
+    date: '2026-10-02',
+    title: 'Pets & the Travelling Zoo',
+    changes: [
+      'Pets! 25 companions, 5 of each rarity (Common, Uncommon, Rare, Epic, Legendary), each with its own ability: finding coins, saving bait, Double Catches, longer casts, rescuing lost fish, legendary-hunting and more.',
+      'The Travelling Zoo sells them. Its wagon moves around the lake every 15 minutes (on the quarter hour) and brings 3 new animals each time. Rarer pets turn up less often. Press E at the wagon to adopt.',
+      'Pets menu (P): see every pet and its ability, what the zoo has right now and where it is, and pick which pet comes with you.',
+      'Your pet follows you around the lake and out to sea. Everyone can see it. Pets stay home during duels.',
+      'New achievements: Zookeeper (own 5 pets) and Menagerie (own all 25).',
+    ],
+  },
   {
     version: '0.11.0',
     date: '2026-10-02',

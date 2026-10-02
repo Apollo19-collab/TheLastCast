@@ -86,7 +86,9 @@ export function emptyArmour() {
 /** Bonuses that do nothing: no armour, or armour switched off (duels). */
 export const NO_ARMOUR = Object.freeze({
   coins: 1, xp: 1, bite: 1, rare: 1, tension: 1, reel: 1, weight: 1,
-  double: 0, snapSave: 0, sea: 1, legendary: 1, zoneBite: null, set: null, pieces: 0,
+  double: 0, snapSave: 0, sea: 1, legendary: 1, zoneBites: [], set: null, pieces: 0,
+  // pet abilities (see combineBonuses in pets.js)
+  fight: 1, hotspot: 1, affinity: null, baitSave: 0, rescue: 0, find: null, biteWindow: 0, castRange: 0, hold: 1, pet: null,
 });
 
 /** The combined effect of what someone is wearing ({ head: 'clover_head', ... }). */
@@ -116,7 +118,7 @@ export function computeArmour(worn) {
     snapSave: e.snapSave || 0,
     sea: 1 + (e.sea || 0),
     legendary: 1 + (e.legendary || 0),
-    zoneBite: e.zoneBite ? { zones: e.zones, mult: 1 + e.zoneBite } : null,
+    zoneBites: e.zoneBite ? [{ zones: e.zones, mult: 1 + e.zoneBite }] : [],
     set: setId,
     pieces,
   };
