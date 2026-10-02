@@ -80,7 +80,7 @@ export class Renderer {
   /**
    * frame: { time, players, hotspots, meId, aim }
    * players: interpolated snapshot entries, plus optional `castStart` (ms).
-   * aim: null or { x, y, angle, power } for the local player's cast preview.
+   * aim: null or { x, y, angle, power, range } for the local player's cast preview.
    */
   draw(frame) {
     const { ctx, canvas, camera: c } = this;
@@ -334,7 +334,7 @@ export class Renderer {
 
   drawAim(aim) {
     const { ctx, world } = this;
-    const dist = castDistance(aim.power);
+    const dist = castDistance(aim.power, aim.range);
     const tx = aim.x + Math.cos(aim.angle) * dist;
     const ty = aim.y + Math.sin(aim.angle) * dist;
     const zone = zoneAt(world, tx, ty);

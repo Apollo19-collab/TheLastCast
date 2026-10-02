@@ -3,6 +3,7 @@
 
 import { FishingState, MSG, castDistance } from '/shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS, zoneAt } from '/shared/world.js';
+import { gearStats } from '/shared/gear.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
@@ -10,18 +11,28 @@ import { Renderer } from './renderer.js';
 import { UI } from './ui.js';
 
 const CHARGE_PERIOD_MS = 1100; // time for the power meter to go 0 -> 1
+const TOKEN_KEY = 'lastcast.token';
+
+// The token identifies this browser's saved profile (progress, gear, fish index).
+function loadToken() {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+}
+function saveToken(token) {
+  try { localStorage.setItem(TOKEN_KEY, token); } catch { /* private mode: progress lasts this session only */ }
+}
 
 const canvas = document.getElementById('game');
 let world = LOCATIONS[DEFAULT_LOCATION];
 let renderer = new Renderer(canvas, world);
-const ui = new UI();
 const net = new Connection();
+const ui = new UI({ world, onBuy: (slot) => net.send({ t: MSG.BUY, slot }) });
 const buffer = new SnapshotBuffer(100);
 
 let meId = null;
 let input = null;
 let charge = null; // { start } while the cast button is held
 let reelSent = false;
+let stats = gearStats(null); // my gear stats, from my latest profile
 const castStarts = new Map(); // player id -> time their current cast began
 const lastStates = new Map(); // player id -> last seen fishing state
 const selfPos = { x: world.spawn.x, y: world.spawn.y, ready: false };
@@ -49,7 +60,7 @@ document.getElementById('join-form').addEventListener('submit', async (e) => {
   button.disabled = true;
   try {
     await net.connect();
-    net.send({ t: MSG.JOIN, name });
+    net.send({ t: MSG.JOIN, name, token: loadToken() });
   } catch (err) {
     ui.showJoin(err.message);
     button.disabled = false;
@@ -58,18 +69,30 @@ document.getElementById('join-form').addEventListener('submit', async (e) => {
 
 net.on(MSG.WELCOME, (msg) => {
   meId = msg.id;
+  if (msg.token) saveToken(msg.token);
   if (LOCATIONS[msg.locationId] && LOCATIONS[msg.locationId] !== world) {
     world = LOCATIONS[msg.locationId];
     renderer = new Renderer(canvas, world);
   }
   ui.showGame();
   ui.feed('Welcome to Mirror Lake! Different waters hold different fish.');
+  if (msg.guest) ui.feed('You are already playing in another tab, so this tab is a guest and its progress is not saved.', '#f9c74f');
   input = new Input(canvas, {
     onMoveChange: (move) => net.send({ t: MSG.INPUT, ...move }),
     onActionDown,
     onActionUp,
     onCancel,
+    onMenu: (tab) => {
+      ui.toggleMenu(tab);
+      if (ui.menuOpen) { charge = null; input.releaseAll(); }
+    },
+    isBlocked: () => ui.menuOpen,
   });
+});
+
+net.on(MSG.PROFILE, (profile) => {
+  stats = gearStats(profile.gear);
+  ui.updateProfile(profile);
 });
 
 net.on(MSG.ERROR, (msg) => ui.showJoin(msg.message));
@@ -92,11 +115,13 @@ function onActionUp() {
   if (!charge) return;
   const power = chargePower(performance.now());
   charge = null;
+  if (ui.menuOpen) return;
   net.send({ t: MSG.CAST, angle: aimAngle(), power });
 }
 
 function onCancel() {
-  if (charge) charge = null;
+  if (ui.menuOpen) ui.closeMenu();
+  else if (charge) charge = null;
   else net.send({ t: MSG.CANCEL });
 }
 
@@ -142,9 +167,16 @@ net.on(MSG.EVENT, (ev) => {
       ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}`, color);
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
       if (p) renderer.addEffect({ type: 'text', text: `${ev.speciesName} +${ev.points}`, x: p.x, y: p.y, color, duration: 2200 });
-      if (mine) ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points`, 3500);
+      if (mine) {
+        const isNew = ev.isNew ? ' NEW species for your Fish Index!' : '';
+        ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points & coins.${isNew}`, 3500);
+      }
       break;
     }
+    case 'shop':
+      ui.flash(ev.message, 2500);
+      ui.feed(ev.message, ev.ok ? '#7bd389' : '#ff8f8f');
+      break;
     case 'snap':
       ui.feed(`${mine ? 'Your' : `${ev.name}'s`} line snapped!`, '#ff6b6b');
       if (mine) ui.flash('SNAP! Too much tension. Let go when the fish pulls.', 3000);
@@ -210,8 +242,8 @@ function frame(now) {
   if (me && input && me.s === FishingState.IDLE) {
     const angle = aimAngle();
     const power = charge ? chargePower(now) : 1;
-    aim = { x: selfPos.x, y: selfPos.y, angle, power };
-    const d = castDistance(power);
+    aim = { x: selfPos.x, y: selfPos.y, angle, power, range: stats.castRange };
+    const d = castDistance(power, stats.castRange);
     aimZone = zoneAt(world, selfPos.x + Math.cos(angle) * d, selfPos.y + Math.sin(angle) * d)?.name ?? null;
     // Face where we aim while standing still.
     const selfDrawn = drawn.find((p) => p.id === meId);

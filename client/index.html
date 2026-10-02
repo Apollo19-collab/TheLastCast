@@ -13,7 +13,13 @@
     <div id="me-panel" class="panel">
       <div id="me-name"></div>
       <div>Score <b id="me-score">0</b> · Catches <b id="me-catches">0</b></div>
+      <div>Coins <b id="me-coins">0</b></div>
       <div id="aim-zone"></div>
+      <div class="menu-buttons">
+        <button data-tab="gear" title="Gear shop (G)">Gear <kbd>G</kbd></button>
+        <button data-tab="index" title="Fish index (I)">Fish Index <kbd>I</kbd></button>
+        <button data-tab="history" title="Catch history (H)">History <kbd>H</kbd></button>
+      </div>
     </div>
 
     <div id="leaderboard" class="panel">
@@ -26,7 +32,19 @@
 
     <div id="help" class="panel">
       <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
-      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in
+      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>G</b> gear · <b>I</b> fish index · <b>H</b> history
+    </div>
+  </div>
+
+  <div id="menu" class="overlay" hidden>
+    <div class="menu-window" role="dialog" aria-label="Menu">
+      <div class="menu-tabs">
+        <button data-tab="gear">Gear</button>
+        <button data-tab="index">Fish Index</button>
+        <button data-tab="history">History</button>
+        <button id="menu-close" aria-label="Close">✕</button>
+      </div>
+      <div id="menu-body"></div>
     </div>
   </div>
 

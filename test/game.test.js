@@ -4,6 +4,11 @@ import { Game, sanitizeName } from '../server/game.js';
 import { pickSpecies } from '../server/fishing.js';
 import { FishingState, MSG } from '../shared/constants.js';
 import { LOCATIONS, isWalkable, isWater, zoneAt } from '../shared/world.js';
+import { GEAR, gearStats } from '../shared/gear.js';
+import { ProfileStore } from '../server/profiles.js';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const world = LOCATIONS.mirrorLake;
 
@@ -105,9 +110,17 @@ test('full loop: bite, hook, reel carefully, catch and score', () => {
   const events = game.drainEvents();
   const caught = events.find((e) => e.kind === 'catch');
   assert.ok(caught, `expected a catch, got ${JSON.stringify(events.map((e) => e.kind))}`);
-  assert.equal(player.catches, 1);
-  assert.equal(player.score, caught.points);
-  assert.ok(player.score > 0);
+  const { profile } = player;
+  assert.equal(profile.catches, 1);
+  assert.equal(profile.score, caught.points);
+  assert.equal(profile.coins, caught.points);
+  assert.ok(profile.score > 0);
+
+  // Fish index and catch history are updated, and the client is told.
+  assert.equal(profile.index[caught.species].count, 1);
+  assert.equal(profile.history[0].species, caught.species);
+  assert.equal(profile.history[0].kg, caught.kg);
+  assert.equal(caught.isNew, true);
 });
 
 test('holding reel the whole time snaps the line on a strong fish', () => {
@@ -120,7 +133,7 @@ test('holding reel the whole time snaps the line on a strong fish', () => {
   run(game, 3);
   assert.equal(player.line.state, FishingState.IDLE);
   assert.ok(game.drainEvents().some((e) => e.kind === 'snap'));
-  assert.equal(player.catches, 0);
+  assert.equal(player.profile.catches, 0);
 });
 
 test('missing the bite window loses the fish', () => {
@@ -174,4 +187,83 @@ test('snapshot exposes state but not hidden fish identity', () => {
   assert.equal(snap.players[0].s, 'bite');
   assert.ok(!json.includes('ghost'));
   assert.equal(snap.hotspots.length, world.hotspots.count);
+});
+
+function catchOne(game, player) {
+  player.line = {
+    state: FishingState.REELING, x: 1000, y: 700, zoneId: 'shallows', hotspot: false,
+    fish: { species: 'bluegill', kg: 0.3 }, progress: 0.99, tension: 0,
+    reeling: true, pulling: false, pullTimer: 5, fight: 0.1,
+  };
+  game.tick(0.1);
+}
+
+test('repeat catches update index counts and keep history capped', () => {
+  const { game, player, inbox } = makeGame();
+  for (let i = 0; i < 55; i++) catchOne(game, player);
+  assert.equal(player.profile.index.bluegill.count, 55);
+  assert.equal(player.profile.history.length, 50);
+  assert.ok(game.drainEvents().filter((e) => e.kind === 'catch').slice(1).every((e) => !e.isNew));
+  assert.equal(inbox.filter((m) => m.t === MSG.PROFILE).at(-1).catches, 55);
+});
+
+test('buying gear: costs coins, upgrades stats, one tier at a time', () => {
+  const { game, player, inbox } = makeGame();
+  game.handleMessage(player, { t: MSG.BUY, slot: 'rod' });
+  assert.equal(player.profile.gear.rod, 0, 'cannot buy without coins');
+  assert.equal(inbox.at(-1).ok, false);
+
+  player.profile.coins = 1000;
+  game.handleMessage(player, { t: MSG.BUY, slot: 'rod' });
+  assert.equal(player.profile.gear.rod, 1);
+  assert.equal(player.profile.coins, 1000 - GEAR.rod.tiers[1].price);
+  assert.equal(player.stats.castRange, GEAR.rod.tiers[1].castRange);
+
+  game.handleMessage(player, { t: MSG.BUY, slot: '__proto__' });
+  game.handleMessage(player, { t: MSG.BUY, slot: 'boat' });
+  assert.deepEqual(Object.keys(player.profile.gear).sort(), ['bait', 'reel', 'rod']);
+
+  for (let i = 0; i < 10; i++) game.handleMessage(player, { t: MSG.BUY, slot: 'reel' });
+  assert.equal(player.profile.gear.reel, GEAR.reel.tiers.length - 1, 'stops at max tier');
+  assert.ok(player.profile.coins >= 0);
+});
+
+test('better rod casts further', () => {
+  const { game, player } = makeGame();
+  player.x = 800; player.y = 395;
+  game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
+  const basic = 395 - player.line.y;
+  game.handleMessage(player, { t: MSG.CANCEL });
+  player.stats = gearStats({ rod: 3 });
+  game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
+  assert.ok(395 - player.line.y > basic);
+});
+
+test('better bait means more rare fish', () => {
+  const zone = world.zones.find((z) => z.id === 'deep');
+  const count = (boost) => {
+    const rng = seeded(3);
+    let rare = 0;
+    for (let i = 0; i < 5000; i++) if (['sturgeon', 'ghost', 'pike'].includes(pickSpecies(rng, zone, false, boost))) rare++;
+    return rare;
+  };
+  assert.ok(count(2) > count(1) * 1.3);
+});
+
+test('profile store saves to disk and restores by token', async () => {
+  const file = path.join(await mkdtemp(path.join(tmpdir(), 'lastcast-')), 'profiles.json');
+  const a = new ProfileStore(file);
+  const { token, profile } = a.getOrCreate(null, 'Saver');
+  profile.coins = 42;
+  profile.gear.rod = 2;
+  a.markDirty();
+  await a.flush();
+
+  const b = new ProfileStore(file);
+  await b.load();
+  const again = b.getOrCreate(token, 'Saver');
+  assert.equal(again.token, token);
+  assert.equal(again.profile.coins, 42);
+  assert.equal(again.profile.gear.rod, 2);
+  assert.notEqual(b.getOrCreate('not-a-token', 'X').token, token);
 });

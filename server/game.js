@@ -4,7 +4,9 @@
 
 import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
+import { GEAR, gearStats, nextTier } from '../shared/gear.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
+import { newProfile } from './profiles.js';
 
 const PLAYER_COLORS = [
   '#e4572e', '#f3a712', '#a8c686', '#669bbc', '#c77dff',
@@ -20,8 +22,13 @@ export function sanitizeName(raw) {
 }
 
 export class Game {
-  constructor({ world, maxPlayers = 50, rng = Math.random }) {
+  /**
+   * onProfileChange(player) is called whenever a player's persistent profile
+   * changes (catch, purchase) so the caller can save it.
+   */
+  constructor({ world, maxPlayers = 50, rng = Math.random, onProfileChange = () => {} }) {
     this.world = world;
+    this.onProfileChange = onProfileChange;
     this.maxPlayers = maxPlayers;
     this.rng = rng;
     this.players = new Map();
@@ -34,27 +41,27 @@ export class Game {
 
   // ---- players -------------------------------------------------------------
 
-  addPlayer(rawName, send) {
+  addPlayer(rawName, send, profile = newProfile()) {
     if (this.players.size >= this.maxPlayers) return null;
     const id = String(this.nextPlayerId++);
     const { spawn } = this.world;
+    profile.name = sanitizeName(rawName) || profile.name || `Angler ${id}`;
     const player = {
       id,
-      name: sanitizeName(rawName) || `Angler ${id}`,
+      name: profile.name,
       color: PLAYER_COLORS[(Number(id) - 1) % PLAYER_COLORS.length],
       x: spawn.x + (this.rng() - 0.5) * 120,
       y: spawn.y + (this.rng() - 0.5) * 40,
       facing: -Math.PI / 2,
       input: { up: false, down: false, left: false, right: false },
       line: newLine(),
-      score: 0,
-      catches: 0,
-      best: null,
-      log: {}, // species id -> count; seed for a future inventory/collection
+      profile, // persistent: score, coins, gear, index, history
+      stats: gearStats(profile.gear),
       send,
     };
     this.players.set(id, player);
     this.emitAll({ kind: 'join', playerId: id, name: player.name });
+    this.profileChanged(player);
     return player;
   }
 
@@ -82,7 +89,46 @@ export class Game {
       case MSG.CANCEL:
         cancel(this, player);
         break;
+      case MSG.BUY:
+        this.buy(player, msg.slot);
+        break;
     }
+  }
+
+  // ---- progression -------------------------------------------------------------
+
+  /** Buy the next tier of a gear slot ('rod', 'reel', 'bait'). */
+  buy(player, slot) {
+    if (!Object.hasOwn(GEAR, slot)) return;
+    const { profile } = player;
+    const tier = nextTier(profile.gear, slot);
+    if (!tier) {
+      this.emitTo(player, { kind: 'shop', ok: false, message: `Your ${GEAR[slot].label.toLowerCase()} is already the best there is.` });
+      return;
+    }
+    if (profile.coins < tier.price) {
+      this.emitTo(player, { kind: 'shop', ok: false, message: `You need ${tier.price - profile.coins} more coins for the ${tier.name}.` });
+      return;
+    }
+    profile.coins -= tier.price;
+    profile.gear[slot] += 1;
+    player.stats = gearStats(profile.gear);
+    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought the ${tier.name}!` });
+    this.profileChanged(player);
+  }
+
+  profileChanged(player) {
+    this.onProfileChange(player);
+    const p = player.profile;
+    player.send({
+      t: MSG.PROFILE,
+      score: p.score,
+      coins: p.coins,
+      catches: p.catches,
+      gear: p.gear,
+      index: p.index,
+      history: p.history,
+    });
   }
 
   // ---- simulation ----------------------------------------------------------
@@ -180,9 +226,9 @@ export class Game {
         y: r1(p.y),
         f: r2(p.facing),
         s: line.state,
-        sc: p.score,
-        c: p.catches,
-        best: p.best,
+        sc: p.profile.score,
+        c: p.profile.catches,
+        best: p.profile.best,
       };
       if (line.state !== FishingState.IDLE) {
         s.bx = r1(line.x);

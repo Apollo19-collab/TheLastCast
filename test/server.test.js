@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const PORT = 4000 + Math.floor(Math.random() * 1000);
 const BASE = `http://localhost:${PORT}`;
@@ -12,7 +15,7 @@ let server;
 
 before(async () => {
   server = spawn(process.execPath, [fileURLToPath(new URL('../server/index.js', import.meta.url))], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), DATA_DIR: await mkdtemp(path.join(tmpdir(), 'lastcast-')) },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((resolve) => server.stdout.once('data', resolve));
@@ -20,16 +23,16 @@ before(async () => {
 
 after(() => server.kill());
 
-function join(name) {
+function join(name, token) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
     const client = { ws, messages: [], id: null };
     ws.on('message', (d) => {
       const msg = JSON.parse(d.toString());
       client.messages.push(msg);
-      if (msg.t === 'welcome') { client.id = msg.id; resolve(client); }
+      if (msg.t === 'welcome') { client.id = msg.id; client.token = msg.token; client.guest = msg.guest; resolve(client); }
     });
-    ws.on('open', () => ws.send(JSON.stringify({ t: 'join', name })));
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'join', name, token })));
     ws.on('error', reject);
   });
 }
@@ -76,4 +79,22 @@ test('two players see each other and each other\'s casts', async () => {
   b.ws.close();
   await waitFor(a, (m) => m.t === 'event' && m.kind === 'leave' && m.name === 'Bob');
   a.ws.close();
+});
+
+test('profiles: token reconnects to the same profile; duplicate tab becomes a guest', async () => {
+  const a = await join('Carol');
+  assert.match(a.token, /^[a-f0-9]{32}$/);
+  assert.ok(a.messages.some((m) => m.t === 'profile' && m.coins === 0));
+
+  const dup = await join('Carol', a.token);
+  assert.equal(dup.guest, true);
+  assert.equal(dup.token, null);
+  dup.ws.close();
+
+  a.ws.close();
+  await new Promise((r) => setTimeout(r, 200));
+  const back = await join('Carol', a.token);
+  assert.equal(back.token, a.token);
+  assert.equal(back.guest, false);
+  back.ws.close();
 });

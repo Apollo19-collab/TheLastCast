@@ -8,7 +8,7 @@ export const PLAYER_RADIUS = 12;
 export const MAX_NAME_LENGTH = 16;
 
 export const MIN_CAST_DISTANCE = 50;
-export const MAX_CAST_DISTANCE = 300;
+export const DEFAULT_CAST_RANGE = 240; // the starter rod; better rods reach further (see gear.js)
 export const CAST_FLIGHT_TIME = 0.6; // seconds the bobber is in the air
 export const BITE_WINDOW = 1.3; // seconds to hook a fish after it bites
 
@@ -31,15 +31,17 @@ export const MSG = Object.freeze({
   HOOK: 'hook',
   REEL: 'reel',
   CANCEL: 'cancel',
+  BUY: 'buy',
   // server -> client
   WELCOME: 'welcome',
   STATE: 'state',
+  PROFILE: 'profile', // private: coins, gear, fish index, catch history
   EVENT: 'event',
   ERROR: 'error',
 });
 
-/** Cast distance for a power value in [0, 1]. */
-export function castDistance(power) {
+/** Cast distance for a power value in [0, 1] with a rod of the given range. */
+export function castDistance(power, maxRange = DEFAULT_CAST_RANGE) {
   const p = Math.max(0, Math.min(1, power));
-  return MIN_CAST_DISTANCE + p * (MAX_CAST_DISTANCE - MIN_CAST_DISTANCE);
+  return MIN_CAST_DISTANCE + p * (maxRange - MIN_CAST_DISTANCE);
 }

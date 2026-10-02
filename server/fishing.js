@@ -3,7 +3,11 @@
 // idle -> casting -> waiting -> bite -> reeling -> (catch | snap | escape) -> idle
 //
 // Every function takes a `ctx` (the Game) that provides: world, rng(),
-// hotspotAt(x, y), countBobbersNear(player, x, y, r), emitTo(player, ev), emitAll(ev).
+// hotspotAt(x, y), countBobbersNear(player, x, y, r), emitTo(player, ev),
+// emitAll(ev), profileChanged(player).
+//
+// Gear modifies the line through `player.stats` (see shared/gear.js):
+// castRange, lineStrength, reelSpeed, biteSpeed, rareBoost.
 
 import {
   BITE_WINDOW,
@@ -13,6 +17,7 @@ import {
   castDistance,
 } from '../shared/constants.js';
 import { SPECIES, scoreCatch } from '../shared/fish.js';
+import { HISTORY_LIMIT } from './profiles.js';
 import { zoneAt } from '../shared/world.js';
 
 const { IDLE, CASTING, WAITING, BITE, REELING } = FishingState;
@@ -39,7 +44,7 @@ export function tryCast(ctx, player, angle, power) {
   if (player.line.state !== IDLE) return;
   if (!Number.isFinite(angle) || !Number.isFinite(power)) return;
 
-  const dist = castDistance(power);
+  const dist = castDistance(power, player.stats.castRange);
   const x = player.x + Math.cos(angle) * dist;
   const y = player.y + Math.sin(angle) * dist;
   player.facing = angle;
@@ -65,6 +70,8 @@ export function hook(ctx, player) {
     pulling: false,
     pullTimer: 0.5 + ctx.rng(),
     fight: Math.min(1, s.fight * (0.85 + 0.3 * sizeFrac)),
+    reelSpeed: player.stats.reelSpeed,
+    lineStrength: player.stats.lineStrength,
   });
   ctx.emitTo(player, { kind: 'hooked' });
 }
@@ -110,7 +117,8 @@ function land(ctx, player) {
   const hotspot = ctx.hotspotAt(line.x, line.y);
   const crowd = ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
 
-  const rate = (zone.biteRate * (hotspot ? HOTSPOT_BITE_BOOST : 1)) / (1 + CROWD_PENALTY * crowd);
+  const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1))
+    / (1 + CROWD_PENALTY * crowd);
   line.state = WAITING;
   line.timer = (4 + ctx.rng() * 8) / rate;
   line.hotspot = !!hotspot;
@@ -120,7 +128,7 @@ function land(ctx, player) {
 function bite(ctx, player) {
   const line = player.line;
   const zone = zoneById(ctx.world, line.zoneId);
-  const species = pickSpecies(ctx.rng, zone, line.hotspot);
+  const species = pickSpecies(ctx.rng, zone, line.hotspot, player.stats.rareBoost);
   const s = SPECIES[species];
   // Squared roll skews towards smaller fish; trophies are uncommon.
   const kg = s.minKg + (s.maxKg - s.minKg) * ctx.rng() ** 2;
@@ -130,9 +138,18 @@ function bite(ctx, player) {
   ctx.emitTo(player, { kind: 'bite' });
 }
 
-export function pickSpecies(rng, zone, hotspot) {
+// Better bait shifts odds away from junk and towards rarer fish.
+function baitBoost(rarity, rareBoost) {
+  if (rarity === 'rare' || rarity === 'legendary') return rareBoost;
+  if (rarity === 'uncommon') return (1 + rareBoost) / 2;
+  if (rarity === 'junk') return 1 / rareBoost;
+  return 1;
+}
+
+export function pickSpecies(rng, zone, hotspot, rareBoost = 1) {
   const entries = Object.entries(zone.fish).map(([id, w]) => {
-    const boost = hotspot ? HOTSPOT_RARITY_BOOST[SPECIES[id].rarity] : 1;
+    const { rarity } = SPECIES[id];
+    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost);
     return [id, w * boost];
   });
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -150,6 +167,8 @@ export function pickSpecies(rng, zone, hotspot) {
 function fight(ctx, player, dt) {
   const line = player.line;
   const f = line.fight;
+  const reelSpeed = line.reelSpeed ?? 1;
+  const lineStrength = line.lineStrength ?? 1;
 
   line.pullTimer -= dt;
   if (line.pullTimer <= 0) {
@@ -158,8 +177,8 @@ function fight(ctx, player, dt) {
   }
 
   if (line.reeling) {
-    line.progress += dt * (line.pulling ? 0.05 : 0.32 - 0.12 * f);
-    line.tension += dt * (line.pulling ? 0.35 + 0.9 * f : 0.08);
+    line.progress += dt * (line.pulling ? 0.05 : 0.32 - 0.12 * f) * reelSpeed;
+    line.tension += (dt * (line.pulling ? 0.35 + 0.9 * f : 0.08)) / lineStrength;
   } else {
     line.progress -= dt * (line.pulling ? 0.04 + 0.12 * f : 0.015);
     line.tension = Math.max(0, line.tension - dt * 0.7);
@@ -182,14 +201,25 @@ function landCatch(ctx, player) {
   const points = scoreCatch(fish.species, fish.kg, hotspot ? HOTSPOT_SCORE_BONUS : 1);
   const zone = zoneById(ctx.world, zoneId);
 
-  player.score += points;
-  player.catches += 1;
-  player.log[fish.species] = (player.log[fish.species] || 0) + 1;
-  if (!player.best || points > player.best.points) {
-    player.best = { species: fish.species, kg: fish.kg, points };
+  const profile = player.profile;
+  profile.score += points;
+  profile.coins += points;
+  profile.catches += 1;
+  if (!profile.best || points > profile.best.points) {
+    profile.best = { species: fish.species, kg: fish.kg, points };
   }
+  const entry = profile.index[fish.species];
+  const isNew = !entry;
+  profile.index[fish.species] = {
+    count: (entry?.count ?? 0) + 1,
+    bestKg: Math.max(entry?.bestKg ?? 0, fish.kg),
+    firstAt: entry?.firstAt ?? Date.now(),
+  };
+  profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
+  if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
 
   resetLine(player);
+  ctx.profileChanged(player);
   ctx.emitAll({
     kind: 'catch',
     playerId: player.id,
@@ -201,5 +231,6 @@ function landCatch(ctx, player) {
     points,
     zone: zone.name,
     hotspot: !!hotspot,
+    isNew,
   });
 }

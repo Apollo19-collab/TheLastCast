@@ -1,20 +1,32 @@
 // Entry point: HTTP server for the client + WebSocket server for gameplay.
 
 import http from 'node:http';
+import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { MSG, TICK_RATE } from '../shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
 import { SPECIES } from '../shared/fish.js';
 import { Game } from './game.js';
+import { ProfileStore, newProfile } from './profiles.js';
 import { serveStatic } from './static.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 50;
 const MAX_MESSAGES_PER_SECOND = 60;
+// Where player profiles are saved. On Railway, mount a volume here.
+const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
+
+const store = new ProfileStore(path.join(DATA_DIR, 'profiles.json'));
+await store.load();
 
 const world = LOCATIONS[DEFAULT_LOCATION];
-const game = new Game({ world, maxPlayers: MAX_PLAYERS });
+const game = new Game({ world, maxPlayers: MAX_PLAYERS, onProfileChange: () => store.markDirty() });
+
+function profileInUse(profile) {
+  for (const p of game.players.values()) if (p.profile === profile) return true;
+  return false;
+}
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -54,14 +66,23 @@ wss.on('connection', (ws) => {
 
     if (!player) {
       if (msg.t !== MSG.JOIN) return;
-      player = game.addPlayer(msg.name, (payload) => sendJson(ws, payload));
-      if (!player) {
+      if (game.players.size >= MAX_PLAYERS) {
         sendJson(ws, { t: MSG.ERROR, message: 'The lake is full. Try again soon.' });
         ws.close();
         return;
       }
+      let { token, profile } = store.getOrCreate(msg.token, msg.name);
+      let guest = false;
+      // Same profile already playing (e.g. a second tab): play as an unsaved guest.
+      if (profileInUse(profile)) {
+        profile = newProfile(msg.name);
+        token = null;
+        guest = true;
+      }
+      // addPlayer sends the private PROFILE message; the client accepts it before WELCOME.
+      player = game.addPlayer(msg.name, (payload) => sendJson(ws, payload), profile);
       ws.playerId = player.id;
-      sendJson(ws, { t: MSG.WELCOME, id: player.id, locationId: world.id, species: SPECIES });
+      sendJson(ws, { t: MSG.WELCOME, id: player.id, locationId: world.id, species: SPECIES, token, guest });
       return;
     }
     game.handleMessage(player, msg);
@@ -100,12 +121,16 @@ setInterval(() => {
 }, 30000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`The Last Cast running at http://localhost:${PORT} (max ${MAX_PLAYERS} players)`);
+  console.log(`The Last Cast running at http://localhost:${PORT} (max ${MAX_PLAYERS} players, data in ${DATA_DIR})`);
 });
 
-function shutdown() {
+// Save periodically as a safety net, and on shutdown.
+setInterval(() => store.flush(), 30000).unref();
+
+async function shutdown() {
   console.log('Shutting down...');
   for (const ws of wss.clients) ws.close(1001, 'Server restarting');
+  await store.flush();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000).unref();
 }
