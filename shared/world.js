@@ -57,8 +57,8 @@ export const LOCATIONS = {
         decor: 'current',
         // Fresh, moving water draws in fish running up from the lake.
         fish: {
-          boot: 2, mooneye: 25, smallmouth: 18, walleye: 15, trout: 15,
-          steelhead: 10, chinook: 7, riverking: 0.5,
+          boot: 2, mooneye: 25, chub: 12, sucker: 10, smallmouth: 18, walleye: 15, trout: 15,
+          sauger: 10, redhorse: 10, steelhead: 10, chinook: 7, paddlefish: 3, riverking: 0.5,
         },
       },
       // ---- Pine Point (north) ----
@@ -69,8 +69,8 @@ export const LOCATIONS = {
         biteRate: 0.8,
         // A spring under the point keeps this water cold all year.
         fish: {
-          boot: 2, cisco: 15, brooktrout: 30, trout: 15, whitefish: 15,
-          laketrout: 10, burbot: 8, frostfin: 0.5,
+          boot: 2, cisco: 15, brooktrout: 30, trout: 15, whitefish: 15, grayling: 15,
+          laketrout: 10, burbot: 8, goldentrout: 3, frostfin: 0.5, aurora: 0.03,
         },
       },
       {
@@ -79,7 +79,7 @@ export const LOCATIONS = {
         rect: { x: 860, y: 260, w: 440, h: 520 },
         biteRate: 1.1,
         decor: 'reeds',
-        fish: { boot: 4, perch: 25, bluegill: 15, pickerel: 20, bass: 15, pike: 10, muskie: 3 },
+        fish: { boot: 4, perch: 25, bluegill: 15, rockbass: 12, pickerel: 20, bass: 15, pike: 10, muskie: 3, emeraldjaw: 0.5 },
       },
       // ---- Lily Marsh (west) ----
       {
@@ -90,7 +90,7 @@ export const LOCATIONS = {
         decor: 'lilies',
         fish: {
           boot: 5, bullhead: 30, crappie: 20, pumpkinseed: 15, pickerel: 12,
-          bowfin: 12, gar: 5, marshqueen: 0.5,
+          bowfin: 12, gar: 5, alligatorgar: 2, marshqueen: 0.5,
         },
       },
       // ---- the middle of the lake: reach it from the Pine Point jetty ----
@@ -101,7 +101,7 @@ export const LOCATIONS = {
         biteRate: 0.55,
         fish: {
           boot: 1, cisco: 20, whitefish: 15, catfish: 12, laketrout: 18,
-          burbot: 12, sturgeon: 15, pike: 5, ghost: 1.2,
+          burbot: 12, sturgeon: 15, pike: 5, paddlefish: 4, ghost: 1.2, lakewyrm: 0.03,
         },
       },
       // ---- South Beach ----
@@ -113,7 +113,7 @@ export const LOCATIONS = {
         // Cold, deep fish. Reachable from the end of the South Beach dock.
         fish: {
           boot: 2, cisco: 25, whitefish: 20, carp: 8, catfish: 18, walleye: 10,
-          laketrout: 15, burbot: 12, pike: 6, sturgeon: 12, ghost: 0.5,
+          sauger: 6, laketrout: 15, burbot: 12, pike: 6, sturgeon: 12, ghost: 0.5, lakewyrm: 0.03,
         },
       },
       {
@@ -123,7 +123,7 @@ export const LOCATIONS = {
         label: false, // the dock covers the middle of this zone
         biteRate: 1.1,
         // Fish that hide under structure.
-        fish: { boot: 4, bluegill: 25, crappie: 30, perch: 20, catfish: 12, bass: 10, walleye: 3 },
+        fish: { boot: 4, bluegill: 25, crappie: 30, rockbass: 15, perch: 20, catfish: 12, bass: 10, walleye: 3, dockmaster: 0.5 },
       },
       {
         id: 'reeds',
@@ -133,7 +133,7 @@ export const LOCATIONS = {
         decor: 'reeds',
         // Weedy ambush hunters.
         fish: {
-          boot: 4, shiner: 15, rudd: 25, perch: 25, bluegill: 10, tench: 15,
+          boot: 4, shiner: 15, chub: 10, rudd: 25, perch: 25, bluegill: 10, tench: 15,
           bowfin: 10, bass: 12, pike: 10, muskie: 4, mossback: 0.5,
         },
       },
@@ -144,7 +144,7 @@ export const LOCATIONS = {
         biteRate: 0.9,
         // The lake bed falls away steeply here, so deep-water fish come in close.
         fish: {
-          boot: 3, perch: 12, smallmouth: 30, trout: 25, walleye: 18, bass: 12,
+          boot: 3, perch: 12, rockbass: 15, smallmouth: 30, trout: 25, walleye: 18, sauger: 8, bass: 12,
           burbot: 7, laketrout: 7, sturgeon: 2, stonejaw: 0.5,
         },
       },
@@ -153,7 +153,7 @@ export const LOCATIONS = {
         name: 'Shallows',
         rect: { x: 700, y: 1860, w: 1600, h: 140 },
         biteRate: 1.3,
-        fish: { boot: 8, bluegill: 35, pumpkinseed: 30, shiner: 25, perch: 20, carp: 12, bass: 3, koi: 2 },
+        fish: { boot: 8, bluegill: 35, pumpkinseed: 30, shiner: 25, chub: 10, perch: 20, carp: 12, bass: 3, koi: 2, emberkoi: 0.012 },
       },
       {
         id: 'open',
@@ -162,7 +162,7 @@ export const LOCATIONS = {
         biteRate: 0.9,
         fish: {
           boot: 5, crappie: 22, bluegill: 15, perch: 15, carp: 22, trout: 12,
-          walleye: 10, gar: 8, catfish: 8, pike: 4,
+          walleye: 10, gar: 8, catfish: 8, pike: 4, sucker: 12, redhorse: 6, alligatorgar: 1,
         },
       },
     ],

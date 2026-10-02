@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.13.1** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.14.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -27,12 +27,14 @@ Mirror Lake is a big lake with a shore you can walk all the way around. The came
 
 | Location | Waters | Signature fish |
 | --- | --- | --- |
-| **South Beach** (start) | Shallows, Dock Shade, Deep Water (from the end of the dock), Reed Bed, Rocky Drop-off | Pumpkinseed, Crappie, Rudd, Smallmouth; rare *Escaped Koi*, *Muskellunge*; legendaries *Old Mossback*, *Stonejaw* |
-| **Pine Point** (north) | Weedy Cove (west of the point), Cold Spring (east of the point), Deep Basin (from the end of the jetty) | Chain Pickerel, Brook Trout, Lake Trout, Sturgeon; legendaries *Frostfin*, *The Pale Ghost* |
-| **River Mouth** (east) | River Mouth, including the river channel under the bridge | Mooneye, Steelhead, Chinook Salmon; legendary *The River King* |
-| **Lily Marsh** (west) | Lily Marsh (fish it from the boardwalk) | Brown Bullhead, Bowfin, Chain Pickerel; legendary *The Marsh Queen* |
+| **South Beach** (start) | Shallows, Dock Shade, Deep Water (from the end of the dock), Reed Bed, Rocky Drop-off | Pumpkinseed, Crappie, Rudd, Smallmouth; rare *Escaped Koi*, *Muskellunge*; legendaries *Old Mossback*, *Stonejaw*, *The Dockmaster*; mythic *The Ember Koi* |
+| **Pine Point** (north) | Weedy Cove (west of the point), Cold Spring (east of the point), Deep Basin (from the end of the jetty) | Chain Pickerel, Brook Trout, Lake Trout, Sturgeon; legendaries *Frostfin*, *The Pale Ghost*, *Emerald Jaw*; mythics *Aurora Trout*, *The Lake Wyrm* |
+| **River Mouth** (east) | River Mouth, including the river channel under the bridge | Mooneye, Sauger, Steelhead, Chinook Salmon, Paddlefish; legendary *The River King* |
+| **Lily Marsh** (west) | Lily Marsh (fish it from the boardwalk) | Brown Bullhead, Bowfin, Alligator Gar; legendary *The Marsh Queen* |
 
-The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. There are 36 lake species, plus 21 more out at sea. The Fish Index shows where each one lives.
+The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. There are 50 lake species, plus 26 more out at sea. The Fish Index shows where each one lives.
+
+**Rarities:** Junk, Common, Uncommon, Rare, Legendary and **Mythic**. The five mythic fish are the rarest of all (about 1 in 1,000+ catches even with good bait, a few hundred with the best gear), fight harder than any legendary and need endgame tackle to land. When anyone lands one, the whole lake hears about it.
 
 **Where you stand and cast matters:**
 
@@ -70,7 +72,7 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   | Abyssal Trench | Leviathan Rising | **The Leviathan** can bite (only now), better rare odds |
   | Moonlit Reef | Glowtide | Bites 2× faster, rare fish 2× as likely |
 
-- **Sea fish:** herring, mackerel, cod, sea bass and signature fish for each location (sheephead, parrotfish, bluefin tuna, grouper, swordfish, flounder, oarfish, opah). Each location also has a **legendary** that mostly bites during its event.
+- **Sea fish:** herring, mackerel, cod, sea bass and signature fish for each location (sheephead, parrotfish, bluefin tuna, grouper, swordfish, flounder, oarfish, opah). Each location also has a **legendary** that mostly bites during its event, and one of two **mythics** (*The Abyssal King* or *Tidemother*) at tiny odds, better during the event.
 - **The boss:** after the last stop, one of four sea monsters rises: **The Kraken**, **Megalodon**, **The Sea Serpent** or **The Ghost Whale**. The crew has 2 minutes to drive it off by fishing. Every fish landed deals its points as damage, and fish caught in the boss's glowing red **weak spot** (it moves every 15 seconds) bite faster and deal **double damage**. The boss warns before each attack: **Thrash** (line tension spikes, so ease off), **Ink Cloud** (bites half as fast) and **Whirlpool** (fish fight 40% harder). Below 30% health it attacks more often. Its health is `(80 + 260 × crew) ×` the boss's multiplier: a new player alone has about even odds, and mid-level tackle wins comfortably (a test checks this). Win: everyone gets 400 coins, plus 15% of their damage as coins, plus 800 XP, with +250 coins for the MVP. If it escapes: 100 coins and 200 XP.
 - **Rewards:** sea fish pay coins and score as normal. The voyage also keeps a **points table**, and the crew shares **3 missions** (e.g. "Catch 20 fish", "Land 2 rare or legendary fish"). At the end everyone gets bonus coins: 25% of their voyage points, plus 100 per completed mission, plus 300/150/75 for the top three. Then the boat brings you back to the dock.
 
@@ -78,7 +80,7 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
 
 - **Coins.** Every catch earns 1.25 coins per point (`COINS_PER_POINT` in `shared/constants.js`). Score is never spent and drives the leaderboard; coins are what you spend.
 - **Bait Shop.** Bait and lures are consumables: each bite uses one, whether you hook the fish or not, and casting without a bite costs nothing. Buy them in packs at the **Bait Shop** stall on South Beach (press `E` next to it), or from the deckhand by the wheelhouse on a voyage. Five packs at once are 10% cheaper. **Bread Crumbs** are free and never run out, and you switch back to them automatically when your bait runs out. Prices run from about 1 coin a bite (Earthworms) to 50 (the Mythic Fly), well below what the fish they attract pay. Duels use matched tackle for free.
-- **Tackle** (`G`). 38 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
+- **Tackle** (`G`). 50 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
   - **Rods:** cast range and power. Power multiplies line strength.
   - **Reels:** reel speed, and drag (how fast tension eases).
   - **Lines:** strength, but strong lines can make fish shy. Fluorocarbon and stealth leaders get more bites.
@@ -87,7 +89,7 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   - **Unlocks:** 16 items are available from the start. The other 22, most of the late-game tackle and bait, unlock through achievements. Rods, reels and lines are bought once; bait is bought in packs.
 - **Achievements** (`T`). 27 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, duels, voyages, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
 - **Chum buckets.** Sold at the Bait Shop (60 coins). Press `C` to put one down where you stand; it lasts 10 minutes or 30 fish, and you can have one out at a time. Each fish you land within range of your bucket has a chance to turn into random bait for your bag. Rarer fish give better bait (common fish: worms, corn, nightcrawlers; rare fish: spinners, minnows, Golden Lures...; legendaries can make a Mythic Fly), and only bait you've unlocked can come out. The chum also makes everyone's bobbers near a bucket bite 15% faster. A bucket returns roughly 1-1.5x its price in bait early on and about 2x late game; a test keeps it in that range (`shared/chum.js`).
-- **Levels.** Every catch gives XP (1 per point, plus armour bonuses). Finishing a voyage and playing duels give XP too. There are 50 levels: early ones take minutes, the last ones over an hour, and level 50 takes about 40 hours (`shared/levels.js`; a test checks this against simulated fishing). Each level up pays `level × 20` coins. Levels never change your tackle.
+- **Levels.** Every catch gives XP (1 per point, plus armour bonuses). Finishing a voyage and playing duels give XP too. There are 75 levels: early ones take minutes, the last ones a couple of hours. Level 50 takes about 40 hours and level 75 about 85 (`shared/levels.js`; a test checks this against simulated fishing). Each level up pays `level × 20` coins. Levels never change your tackle.
 - **Armour** (`R`). Four slots (hat, jacket, waders, boots), separate from tackle. Higher levels unlock better sets, bought with coins. Every piece gives a small bonus. Wear all four pieces of one set for its **set effect**:
 
   | Set | Level | Full-set effect |
@@ -102,9 +104,14 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   | Grand Mariner | 38 | Scholar of the Deep: +25% XP, bites 15% faster |
   | Legend's Regalia | 44 | Fortune's Favourite: 20% Double Catch, rare odds ×1.3 |
   | Golden Angler | 50 | Golden Touch: 25% Double Catch, +25% coins and XP, legendaries ×1.5 |
+  | Abyssal Diver | 55 | Pressure Proof: tension 25% slower, fish 20% bigger |
+  | Tidecaller | 60 | Call of the Tide: bites 20% faster, +30% at sea |
+  | Emberforged | 65 | Rise from the Ashes: 40% chance a snapping line holds, reel 20% faster |
+  | Celestial | 70 | Starlit: 25% Double Catch, +30% XP, rare odds ×1.3 |
+  | Mythweaver | 75 | Myth Made Real: 30% Double Catch, +30% coins and XP, legendaries ×1.5, mythics ×2 |
 
   Armour shows on your angler and is switched off in duels. Sets live in `shared/armour.js`, and their effects are applied in `server/fishing.js`.
-- **Pets** (`P`). 25 pets, 5 per rarity, each with a unique ability. They're sold by the **Travelling Zoo**: its wagon moves between South Beach, Pine Point, Lily Marsh and the River Mouth every 15 minutes (on the quarter hour) with 3 new animals. Stock is picked from the clock, so everyone sees the same zoo, and rarer pets turn up less often. Walk up to the wagon (purple on the minimap) and press `E` to adopt. One pet comes with you at a time (it follows you, visible to everyone) and its ability stacks with your armour. Pets stay home during duels.
+- **Pets** (`P`). 30 pets, 5 per rarity, each with a unique ability. They're sold by the **Travelling Zoo**: its wagon moves between South Beach, Pine Point, Lily Marsh and the River Mouth every 15 minutes (on the quarter hour) with 3 new animals. Stock is picked from the clock, so everyone sees the same zoo, and rarer pets turn up less often. Walk up to the wagon (purple on the minimap) and press `E` to adopt. One pet comes with you at a time (it follows you, visible to everyone) and its ability stacks with your armour. Pets stay home during duels.
 
   | Rarity | Price | Pets |
   | --- | --- | --- |
@@ -113,6 +120,7 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   | Rare | 3,000 | Raccoon (finds 20-60 coins), Barn Owl (rare fish +25%), Beaver (fish slip away 40% slower), Penguin (8% Double Catch), Seal Pup (+25% at sea) |
   | Epic | 7,500 | Snow Fox (Cold Spring and Frostfin), Bald Eagle (legendaries x2), Grizzly Cub (reel +25%, tension -15%), Octopus (fish fight 20% less), Pirate Parrot (treasure x4, finds coins) |
   | Legendary | 18,000 | Baby Dragon (+30% coins, 15% Double Catch), Celestial Peacock (half of lost fish caught anyway), Kraken Spawn (sea legendaries x3), Unicorn (rare +50%, half your bait saved), Spirit Koi (reel, bites and XP) |
+  | Mythic | 45,000 | Phoenix Chick (75% of lost fish caught anyway), Leviathan Hatchling (mythics x3, +30% at sea), Qilin (+50% coins, 25% Double Catch), Moon Moth (bites, rare odds and XP), Star Whale (legendaries and mythics x2, 60% bait saved) |
 
   Pets and abilities live in `shared/pets.js`; `combineBonuses()` merges a pet with armour and `server/fishing.js` applies the result.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
@@ -256,7 +264,7 @@ shared/         Imported by BOTH server and browser (plain ES modules)
   fish.js       Species, rarity and scoring
   gear.js       Tackle catalog (36 items), loadout -> stats, specialties
   achievements.js  Achievements, their goals/rewards, and progress from lifetime counters
-  levels.js     XP curve (50 levels, ~40 hours) and XP rewards
+  levels.js     XP curve (75 levels, ~85 hours) and XP rewards
   armour.js     Armour sets, pieces, level requirements and set effects
   chum.js       Chum buckets: price, duration, and what each rarity turns into
   pets.js       Pets, their abilities, and the Travelling Zoo's schedule and stock

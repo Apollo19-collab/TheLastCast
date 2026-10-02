@@ -32,7 +32,7 @@ import { zoneAt } from '../shared/world.js';
 const { IDLE, CASTING, WAITING, BITE, REELING } = FishingState;
 
 // How much a hotspot multiplies the odds of each rarity.
-const HOTSPOT_RARITY_BOOST = { junk: 0.3, common: 1, uncommon: 1.5, rare: 3, legendary: 4 };
+const HOTSPOT_RARITY_BOOST = { junk: 0.3, common: 1, uncommon: 1.5, rare: 3, legendary: 4, mythic: 4 };
 const HOTSPOT_BITE_BOOST = 1.8;
 const HOTSPOT_SCORE_BONUS = 1.25;
 const CROWD_PENALTY = 0.6; // each nearby bobber adds this much to the wait divisor
@@ -153,6 +153,7 @@ function bite(ctx, player) {
   const species = pickSpecies(ctx.rng, zone, line.hotspot, {
     rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1) * armour.rare,
     legendaryBoost: armour.legendary,
+    mythicBoost: armour.mythic,
     affinity: mergeAffinity(player.stats.affinity, armour.affinity),
   }, mods.extraFish);
   ctx.useBait?.(player); // the fish took one bait, whether or not you hook it
@@ -187,7 +188,7 @@ export function rollKg(rng, speciesId, weight = 1) {
 
 // Better bait shifts odds away from junk and towards rarer fish.
 function baitBoost(rarity, rareBoost) {
-  if (rarity === 'rare' || rarity === 'legendary') return rareBoost;
+  if (rarity === 'rare' || rarity === 'legendary' || rarity === 'mythic') return rareBoost;
   if (rarity === 'uncommon') return (1 + rareBoost) / 2;
   if (rarity === 'junk') return 1 / rareBoost;
   return 1;
@@ -202,8 +203,8 @@ export function pickSpecies(rng, zone, hotspot, mods = {}, extraFish = null) {
   const fish = extraFish ? { ...zone.fish, ...extraFish } : zone.fish;
   const entries = Object.entries(fish).map(([id, w]) => {
     const { rarity } = SPECIES[id];
-    const legendary = rarity === 'legendary' ? mods.legendaryBoost ?? 1 : 1;
-    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id) * legendary;
+    const special = rarity === 'legendary' ? mods.legendaryBoost ?? 1 : rarity === 'mythic' ? mods.mythicBoost ?? 1 : 1;
+    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id) * special;
     return [id, w * boost];
   });
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -370,6 +371,7 @@ function countCatch(ctx, player, fish, species, zone, hotspot, coins) {
   c.coinsEarned += coins;
   if (hotspot) c.hotspotCatches += 1;
   if (species.rarity === 'legendary') c.legendaryCatches += 1;
+  if (species.rarity === 'mythic') c.mythicCatches = (c.mythicCatches || 0) + 1;
   if (fish.kg >= 10) c.bigFish += 1;
   c.heaviest = Math.max(c.heaviest, fish.kg);
   bump('family', species.family);

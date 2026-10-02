@@ -2,10 +2,11 @@
 // change your tackle.
 //
 // XP comes from landing fish (1 XP per point, plus armour bonuses), finishing
-// boat voyages and duels. The curve is tuned so reaching MAX_LEVEL takes
-// about 40 hours: a typical player earns ~5,000 XP an hour (a test checks this).
+// boat voyages and duels. The curve is tuned so level 50 takes about 40 hours
+// and the maximum, 75, about 85: a typical player earns ~5,000 XP an hour (a
+// test checks this). Levels 51-75 are the endgame, with the best armour.
 
-export const MAX_LEVEL = 50;
+export const MAX_LEVEL = 75;
 export const EXPECTED_XP_PER_HOUR = 5000;
 
 // XP needed to go from level n to n + 1: early levels take minutes, the last

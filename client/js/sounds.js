@@ -13,6 +13,7 @@ const CATCH_NOTES = {
   uncommon: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6],
   rare: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6],
   legendary: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6, NOTE.G6, NOTE.C7],
+  mythic: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.C6, NOTE.E6, NOTE.G6, NOTE.C7, NOTE.G6, NOTE.C7, NOTE.E7],
 };
 
 export const SOUNDS = {

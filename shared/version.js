@@ -2,9 +2,24 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.13.1';
+export const VERSION = '0.14.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.14.0',
+    date: '2026-10-03',
+    title: 'Myths of the deep',
+    changes: [
+      'New rarity: Mythic. Five mythic fish, the rarest and hardest-fighting of all: Aurora Trout (Cold Spring), The Lake Wyrm (Deep Basin and Deep Water), The Ember Koi (Shallows), and at sea The Abyssal King and Tidemother. Landing one is announced to everyone.',
+      '19 new fish in all: Creek Chub, Rock Bass, White Sucker, Sauger, Arctic Grayling, Shorthead Redhorse, Paddlefish, Golden Trout and Alligator Gar at the lake; Sardine, Mahi-Mahi and Blue Marlin at sea; new legendaries Emerald Jaw (Weedy Cove) and The Dockmaster (Dock Shade); plus the five mythics.',
+      'Max level raised from 50 to 75. Level 50 still takes about 40 hours; reaching 75 takes about 85. Nobody loses a level.',
+      'Five endgame armour sets: Abyssal Diver (level 55), Tidecaller (60), Emberforged (65), Celestial (70) and Mythweaver (75), with new diving-helm and halo looks.',
+      '12 new tackle items: Split Bamboo Rod, Levelwind Reel, Copolymer Line, Leeches and Crayfish for everyone; Abyssal Rod, Storm Reel and Kevlar Line for veterans; Stardust Lure (mythic fish 2.5× as likely); and the Starforged Rod, Reel and Line, unlocked by catching your first mythic fish.',
+      'Five Mythic pets at the Travelling Zoo (45,000 coins): Phoenix Chick, Leviathan Hatchling, Qilin, Moon Moth and Star Whale.',
+      'New achievements: Myth Seeker, Myth Hunter, Mythologist, Myth Tamer and Grandmaster Angler. Menagerie now needs all 30 pets.',
+      'Chum buckets can now make Leeches, Crayfish and, from mythic fish, Stardust Lures.',
+    ],
+  },
   {
     version: '0.13.1',
     date: '2026-10-02',

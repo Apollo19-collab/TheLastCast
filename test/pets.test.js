@@ -43,12 +43,13 @@ function reelingLine(player, extra = {}) {
   };
 }
 
-test('pets: 25 of them, 5 per rarity, each with its own ability', () => {
-  assert.equal(PET_IDS.length, 25);
+test('pets: 30 of them, 5 per rarity, each with its own ability', () => {
+  assert.equal(PET_IDS.length, 30);
+  assert.equal(Object.keys(PET_RARITIES).length, 6);
   for (const rarity of Object.keys(PET_RARITIES)) {
     assert.equal(PET_IDS.filter((id) => PETS[id].rarity === rarity).length, 5, rarity);
   }
-  assert.equal(new Set(PET_IDS.map((id) => PETS[id].ability)).size, 25, 'abilities are unique');
+  assert.equal(new Set(PET_IDS.map((id) => PETS[id].ability)).size, 30, 'abilities are unique');
   for (const id of PET_IDS) assert.ok(!ITEMS[id] && !ARMOUR[id] && id !== 'chum', `${id} id clashes with an item`);
   for (const spot of ZOO.spots) assert.ok(isWalkable(world, spot.x, spot.y), `zoo spot ${spot.area}`);
   assert.ok(petPrice('dragon') > petPrice('owl') && petPrice('owl') > petPrice('snail'));
@@ -72,8 +73,8 @@ test('zoo: 3 different pets that change every 15 minutes, the same for everyone'
       byRarity[PETS[id].rarity] = (byRarity[PETS[id].rarity] || 0) + 1;
     }
   }
-  assert.equal(seen.size, 25);
-  assert.ok(byRarity.common > byRarity.uncommon && byRarity.uncommon > byRarity.rare && byRarity.rare > byRarity.epic && byRarity.epic > byRarity.legendary);
+  assert.equal(seen.size, 30);
+  assert.ok(byRarity.common > byRarity.uncommon && byRarity.uncommon > byRarity.rare && byRarity.rare > byRarity.epic && byRarity.epic > byRarity.legendary && byRarity.legendary > byRarity.mythic);
 });
 
 test('zoo: buy only what is in stock, only at the wagon; one pet with you at a time', () => {
@@ -148,4 +149,14 @@ test('pet abilities: cast range, bite window, specialties; off in duels', () => 
   player.duel = { phase: 'live', a: player, b: player, scores: new Map([[player.id, 0]]), timer: 60 };
   assert.equal(game.armourOf(player), NO_ARMOUR);
   assert.equal(game.snapshot().players[0].pt, undefined, 'pets stay home during duels');
+});
+
+test('mythic pets: the rarest and priciest; their boosts stack with armour', () => {
+  const mythic = PET_IDS.filter((id) => PETS[id].rarity === 'mythic');
+  assert.equal(mythic.length, 5);
+  assert.ok(petPrice('starwhale') > petPrice('dragon'));
+  const b = combineBonuses(NO_ARMOUR, 'wyrmling');
+  assert.equal(b.mythic, 3);
+  assert.equal(combineBonuses(NO_ARMOUR, 'starwhale').mythic, 2);
+  assert.equal(combineBonuses(NO_ARMOUR, null).mythic, 1);
 });

@@ -15,6 +15,9 @@ export const ROD_LOOK = {
   sturgeonpole: { color: '#4a2c17', tip: '#7f5539', length: 33, width: 3.8, wraps: '#d4a373' },
   deepsea: { color: '#023e8a', tip: '#90e0ef', length: 30, width: 3.4, wraps: '#ffffff' },
   legendrod: { color: '#3c096c', tip: '#c77dff', length: 37, width: 2.4, wraps: '#ffd166', glow: '#c77dff' },
+  bamboo: { color: '#d4a373', tip: '#e9c46a', length: 31, width: 2.4, wraps: '#6a040f' },
+  abyssrod: { color: '#0b2545', tip: '#7df9ff', length: 34, width: 3.4, wraps: '#e63946', glow: '#7df9ff' },
+  starrod: { color: '#240046', tip: '#ff9ef0', length: 38, width: 2.6, wraps: '#ffd166', glow: '#ff5ce1' },
 };
 
 export const REEL_LOOK = {
@@ -26,6 +29,9 @@ export const REEL_LOOK = {
   centerpin: { body: '#bc6c25', rim: '#fefae0', big: true },
   biggame: { body: '#9d0208', rim: '#ffba08', big: true },
   golden: { body: '#ffd166', rim: '#fff3b0', glow: '#ffe8a3' },
+  levelwind: { body: '#6c757d', rim: '#ced4da', big: true },
+  stormreel: { body: '#3a4a6b', rim: '#4cc9f0', glow: '#4cc9f0', big: true },
+  starreel: { body: '#7209b7', rim: '#ff9ef0', glow: '#ff5ce1' },
 };
 
 export const LINE_LOOK = {
@@ -36,6 +42,9 @@ export const LINE_LOOK = {
   stealth: { color: 'rgba(255,255,255,0.25)', width: 0.6 },
   steel: { color: 'rgba(170,180,190,0.95)', width: 1.1 },
   spectral: { color: 'rgba(170,240,255,0.85)', width: 1, glow: '#bde0fe' },
+  copoly: { color: 'rgba(120,200,180,0.75)', width: 0.9 },
+  kevlar: { color: 'rgba(255,214,10,0.9)', width: 1.2 },
+  starline: { color: 'rgba(255,158,240,0.85)', width: 1, glow: '#ff5ce1' },
 };
 
 // kind: 'float' shows a bobber; 'lure' shows the lure itself on the line.
@@ -52,6 +61,9 @@ export const BAIT_LOOK = {
   glowjig: { kind: 'lure', top: '#b9fbc0', bottom: '#38b000', glow: '#b9fbc0', icon: 'glowjig' },
   squid: { kind: 'float', top: '#ff9f1c', bottom: '#f1faee', icon: 'squid' },
   mythicfly: { kind: 'lure', top: '#e0aaff', bottom: '#7b2cbf', glow: '#e0aaff', icon: 'mythicfly' },
+  leech: { kind: 'float', top: '#344e41', bottom: '#f1faee', icon: 'leech' },
+  crayfish: { kind: 'lure', top: '#bc4749', bottom: '#6a040f', icon: 'crayfish' },
+  stardust: { kind: 'lure', top: '#ff9ef0', bottom: '#3c096c', glow: '#ff5ce1', icon: 'stardust' },
 };
 
 const TABLES = { rod: ROD_LOOK, reel: REEL_LOOK, line: LINE_LOOK, bait: BAIT_LOOK };
@@ -363,6 +375,47 @@ const BAIT_ICONS = {
       g.stroke();
     }
     hook(g, 40, 34);
+  },
+  leech(g) {
+    worm(g, '#4f6b50', 30, 0.3, 8);
+    worm(g, '#65806a', 44, 1.9, 7);
+  },
+  crayfish(g, B) {
+    // Body, tail fan and two big claws.
+    blob(g, 30, 34, 9, B.top, B.bottom, 1.7);
+    g.fillStyle = B.bottom;
+    g.beginPath();
+    g.moveTo(14, 34);
+    g.lineTo(4, 26);
+    g.lineTo(4, 42);
+    g.fill();
+    for (const s of [-1, 1]) {
+      blob(g, 52, 34 + s * 10, 5, B.top, B.bottom, 1.4);
+      g.strokeStyle = B.bottom;
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(42, 34 + s * 3);
+      g.lineTo(48, 34 + s * 9);
+      g.stroke();
+    }
+  },
+  stardust(g, B) {
+    // A star-shaped spoon with a trail of sparkles.
+    g.fillStyle = B.top;
+    g.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
+      const r = k % 2 ? 6 : 15;
+      g.lineTo(28 + Math.cos(a) * r, 28 + Math.sin(a) * r);
+    }
+    g.fill();
+    g.fillStyle = '#ffffff';
+    for (const [x, y, r] of [[48, 18, 2.2], [54, 30, 1.6], [46, 44, 2], [12, 48, 1.5]]) {
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    hook(g, 28, 40);
   },
   mythicfly(g, B) {
     g.fillStyle = B.bottom;

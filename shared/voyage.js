@@ -186,47 +186,49 @@ export const SEA_EVENTS = Object.freeze({
 export const SEA_LOCATIONS = Object.freeze({
   kelpForest: {
     name: 'Kelp Forest', desc: 'Towering kelp sways in the swell.', water: ['#164f40', '#2f7d63'], biteRate: 1.1,
-    fish: { boot: 2, herring: 25, mackerel: 25, cod: 12, seabass: 10, sheephead: 22 },
-    legendary: 'kelpbeard', event: 'frenzy',
+    fish: { boot: 2, herring: 25, mackerel: 25, sardine: 15, cod: 12, seabass: 10, sheephead: 22 },
+    legendary: 'kelpbeard', mythic: 'tidemother', event: 'frenzy',
   },
   coralGardens: {
     name: 'Coral Gardens', desc: 'Warm, clear water over bright coral.', water: ['#0f6d7d', '#2bb3b8'], biteRate: 1.0,
-    fish: { boot: 1, herring: 20, mackerel: 20, seabass: 12, parrotfish: 14, flounder: 8 },
-    legendary: 'prismwrasse', event: 'spectral',
+    fish: { boot: 1, herring: 20, mackerel: 20, sardine: 15, seabass: 12, mahimahi: 8, parrotfish: 14, flounder: 8 },
+    legendary: 'prismwrasse', mythic: 'tidemother', event: 'spectral',
   },
   whaleRoad: {
     name: 'Whale Road', desc: 'Deep blue water where the whales travel.', water: ['#123a66', '#25628f'], biteRate: 0.95,
-    fish: { boot: 1, herring: 30, mackerel: 25, cod: 15, bluefin: 10 },
-    legendary: 'thunderfin', event: 'whalesong',
+    fish: { boot: 1, herring: 30, mackerel: 25, cod: 15, mahimahi: 8, bluefin: 10, marlin: 5 },
+    legendary: 'thunderfin', mythic: 'abyssking', event: 'whalesong',
   },
   sunkenGalleon: {
     name: 'Sunken Galleon', desc: 'A wreck lies just below the surface.', water: ['#183a48', '#2c5d6b'], biteRate: 0.95,
     fish: { boot: 6, herring: 15, cod: 20, seabass: 12, grouper: 12, treasure: 1.5 },
-    legendary: 'drownedcaptain', event: 'treasure',
+    legendary: 'drownedcaptain', mythic: 'abyssking', event: 'treasure',
   },
   stormBanks: {
     name: 'Storm Banks', desc: 'Grey, restless water under heavy clouds.', water: ['#1f3344', '#3b5568'], biteRate: 1.0,
-    fish: { boot: 2, mackerel: 25, cod: 20, seabass: 15, swordfish: 10, bluefin: 5 },
-    legendary: 'stormcaller', event: 'squall',
+    fish: { boot: 2, mackerel: 25, cod: 20, seabass: 15, swordfish: 10, bluefin: 5, marlin: 6 },
+    legendary: 'stormcaller', mythic: 'abyssking', event: 'squall',
   },
   glassShallows: {
     name: 'Glass Shallows', desc: 'So clear you can see the sand below.', water: ['#2a8fa8', '#6fd3d8'], biteRate: 1.15,
-    fish: { boot: 2, herring: 25, mackerel: 15, flounder: 25, seabass: 10, parrotfish: 5 },
-    legendary: 'glasshalibut', event: 'golden',
+    fish: { boot: 2, herring: 25, mackerel: 15, sardine: 20, flounder: 25, seabass: 10, mahimahi: 5, parrotfish: 5 },
+    legendary: 'glasshalibut', mythic: 'tidemother', event: 'golden',
   },
   abyssalTrench: {
     name: 'Abyssal Trench', desc: 'The sea floor drops away into darkness.', water: ['#050f22', '#0f2c4d'], biteRate: 0.8,
     fish: { boot: 1, herring: 10, mackerel: 10, cod: 20, grouper: 6, oarfish: 12 },
-    legendary: 'leviathan', event: 'leviathan', eventOnly: true,
+    legendary: 'leviathan', mythic: 'abyssking', event: 'leviathan', eventOnly: true,
   },
   moonlitReef: {
     name: 'Moonlit Reef', desc: 'A reef that glows faintly after dark.', water: ['#123358', '#1f5b7a'], biteRate: 1.0,
-    fish: { boot: 1, herring: 20, mackerel: 15, flounder: 10, parrotfish: 8, opah: 12 },
-    legendary: 'silvermoon', event: 'glowtide',
+    fish: { boot: 1, herring: 20, mackerel: 15, flounder: 10, mahimahi: 6, parrotfish: 8, opah: 12 },
+    legendary: 'silvermoon', mythic: 'tidemother', event: 'glowtide',
   },
 });
 
 const LEGENDARY_WEIGHT = { base: 0.4, event: 5 };
+// Each location's mythic fish: a tiny chance all stop, better during the event.
+const MYTHIC_WEIGHT = { base: 0.02, event: 0.25 };
 
 /** The fishing zone for a location (fish weights depend on whether its event is on). */
 export function seaZone(locId, eventActive = false) {
@@ -235,6 +237,7 @@ export function seaZone(locId, eventActive = false) {
   const fish = { ...loc.fish };
   const legendaryWeight = eventActive ? LEGENDARY_WEIGHT.event : loc.eventOnly ? 0 : LEGENDARY_WEIGHT.base;
   if (legendaryWeight) fish[loc.legendary] = legendaryWeight;
+  if (loc.mythic) fish[loc.mythic] = eventActive ? MYTHIC_WEIGHT.event : MYTHIC_WEIGHT.base;
   return { id: locId, name: loc.name, rect: null, biteRate: loc.biteRate, fish };
 }
 
@@ -299,7 +302,7 @@ export function bossZone(bossId) {
 // goal = max(min, round(perAngler x crew)).
 export const MISSIONS = Object.freeze([
   { id: 'haul', text: 'Catch {n} fish', perAngler: 6, min: 10 },
-  { id: 'rare', text: 'Land {n} rare or legendary fish', perAngler: 1, min: 2 },
+  { id: 'rare', text: 'Land {n} rare, legendary or mythic fish', perAngler: 1, min: 2 },
   { id: 'event', text: 'Catch {n} fish during special events', perAngler: 2, min: 4 },
   { id: 'heavy', text: 'Land {n} fish of 10 kg or more', perAngler: 1, min: 2 },
   { id: 'variety', text: 'Catch {n} different species', perAngler: 0, min: 9 },
@@ -317,6 +320,6 @@ export function missionText(mission, goal) {
 /** Where a sea species can be caught, for the Fish Index. */
 export function seaLocationsFor(speciesId) {
   return Object.values(SEA_LOCATIONS)
-    .filter((l) => l.fish[speciesId] || l.legendary === speciesId)
+    .filter((l) => l.fish[speciesId] || l.legendary === speciesId || l.mythic === speciesId)
     .map((l) => (l.legendary === speciesId ? `${l.name} (during ${SEA_EVENTS[l.event].name})` : l.name));
 }

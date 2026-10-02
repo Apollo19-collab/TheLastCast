@@ -16,9 +16,11 @@
 
 import { ITEMS } from './gear.js';
 import { SPECIES } from './fish.js';
-import { levelFor } from './levels.js';
+import { MAX_LEVEL, levelFor } from './levels.js';
+import { PETS, PET_IDS } from './pets.js';
 
 const SPECIES_COUNT = Object.keys(SPECIES).length;
+const MYTHIC_COUNT = Object.values(SPECIES).filter((s) => s.rarity === 'mythic').length;
 
 export const ACHIEVEMENTS = [
   { id: 'first_catch', name: 'First Catch', desc: 'Land your very first fish.', metric: 'catches', goal: 1, coins: 10 },
@@ -44,6 +46,9 @@ export const ACHIEVEMENTS = [
   { id: 'collector', name: 'Collector', desc: 'Discover 40 species for your Fish Index.', metric: 'species', goal: 40, coins: 800 },
   { id: 'ghost_hunter', name: 'Ghost Hunter', desc: 'Catch The Pale Ghost.', metric: 'index.ghost', goal: 1, coins: 1000 },
   { id: 'living_legend', name: 'Living Legend', desc: 'Catch 3 legendary fish.', metric: 'legendaryCatches', goal: 3, coins: 1500 },
+  { id: 'myth_seeker', name: 'Myth Seeker', desc: 'Catch 10 legendary fish.', metric: 'legendaryCatches', goal: 10, coins: 3000 },
+  { id: 'mythic_hunter', name: 'Myth Hunter', desc: 'Catch a mythic fish.', metric: 'mythicCatches', goal: 1, coins: 5000 },
+  { id: 'mythologist', name: 'Mythologist', desc: `Discover all ${MYTHIC_COUNT} mythic fish.`, metric: 'rarity.mythic', goal: MYTHIC_COUNT, coins: 20000 },
   { id: 'completionist', name: 'Completionist', desc: `Discover all ${SPECIES_COUNT} species, lake and sea.`, metric: 'species', goal: SPECIES_COUNT, coins: 5000 },
   { id: 'trash_collector', name: 'One Angler\'s Trash', desc: 'Reel in 50 old boots.', metric: 'index.boot', goal: 50, coins: 250 },
   { id: 'lessons_learned', name: 'Lessons Learned', desc: 'Snap your line 25 times.', metric: 'snaps', goal: 25, coins: 100 },
@@ -55,10 +60,12 @@ export const ACHIEVEMENTS = [
   { id: 'old_salt', name: 'Old Salt', desc: 'Catch 300 fish at sea.', metric: 'seaCatches', goal: 300, coins: 800 },
   { id: 'current_rider', name: 'Current Rider', desc: 'Catch 40 fish during special events at sea.', metric: 'eventCatches', goal: 40, coins: 600 },
   { id: 'rising_star', name: 'Rising Star', desc: 'Reach level 10.', metric: 'level', goal: 10, coins: 300 },
-  { id: 'master_angler', name: 'Master Angler', desc: 'Reach the maximum level, 50.', metric: 'level', goal: 50, coins: 5000 },
+  { id: 'master_angler', name: 'Master Angler', desc: 'Reach level 50.', metric: 'level', goal: 50, coins: 5000 },
+  { id: 'grandmaster', name: 'Grandmaster Angler', desc: `Reach the maximum level, ${MAX_LEVEL}.`, metric: 'level', goal: MAX_LEVEL, coins: 15000 },
   { id: 'monster_hunter', name: 'Monster Hunter', desc: 'Defeat 5 voyage bosses.', metric: 'bossKills', goal: 5, coins: 1500 },
   { id: 'zookeeper', name: 'Zookeeper', desc: 'Own 5 pets.', metric: 'pets', goal: 5, coins: 1000 },
-  { id: 'menagerie', name: 'Menagerie', desc: 'Own all 25 pets.', metric: 'pets', goal: 25, coins: 15000 },
+  { id: 'menagerie', name: 'Menagerie', desc: `Own all ${PET_IDS.length} pets.`, metric: 'pets', goal: PET_IDS.length, coins: 15000 },
+  { id: 'myth_tamer', name: 'Myth Tamer', desc: 'Adopt a mythic pet.', metric: 'rarity.mythicPet', goal: 1, coins: 5000 },
   { id: 'leviathan_slayer', name: 'Leviathan Slayer', desc: 'Catch The Leviathan in the Abyssal Trench.', metric: 'index.leviathan', goal: 1, coins: 2500 },
 ];
 
@@ -71,7 +78,7 @@ export function unlocksFor(achievementId) {
 
 export function newCounters() {
   return {
-    catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0,
+    catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0, mythicCatches: 0,
     bigFish: 0, heaviest: 0, snaps: 0, family: {}, zone: {}, area: {},
     duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0, bossKills: 0,
   };
@@ -84,6 +91,8 @@ function read(profile, path) {
   if (path === 'pets') return profile.pets?.length || 0;
   const [group, key] = path.split('.');
   if (group === 'index') return profile.index?.[key]?.count || 0;
+  if (path === 'rarity.mythicPet') return (profile.pets || []).filter((id) => PETS[id]?.rarity === 'mythic').length;
+  if (group === 'rarity') return Object.keys(profile.index || {}).filter((id) => SPECIES[id]?.rarity === key).length;
   const c = profile.counters || {};
   return (key ? c[group]?.[key] : c[group]) || 0;
 }

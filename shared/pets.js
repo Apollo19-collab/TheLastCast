@@ -1,4 +1,4 @@
-// Pets: companions with one unique ability each. 25 pets, 5 per rarity.
+// Pets: companions with one unique ability each. 30 pets, 5 per rarity.
 // They're sold by the Travelling Zoo, which moves around the lake and brings
 // 3 new animals every 15 minutes (the same for everyone; it follows the
 // clock). Own as many as you like, have one with you at a time. Pets are
@@ -6,7 +6,7 @@
 //
 // Ability fields (all optional) are combined with armour bonuses by
 // combineBonuses() and applied in server/fishing.js:
-//   bite, rare, legendary, xp, coins, reel, weight: multipliers (1.2 = +20%)
+//   bite, rare, legendary, mythic, xp, coins, reel, weight: multipliers (1.2 = +20%)
 //   tension, fight: multipliers on how fast tension builds / how hard fish fight
 //   zone: { zones: [...], bite }   faster bites in some waters
 //   affinity: { familyOrSpecies: mult }   more of some fish (like tackle)
@@ -24,6 +24,7 @@ export const PET_RARITIES = Object.freeze({
   rare: { label: 'Rare', color: '#5ab0ff', price: 3000, weight: 18 },
   epic: { label: 'Epic', color: '#c77dff', price: 7500, weight: 10 },
   legendary: { label: 'Legendary', color: '#ffb347', price: 18000, weight: 4 },
+  mythic: { label: 'Mythic', color: '#ff5ce1', price: 45000, weight: 3 },
 });
 
 const SEA_LEGENDS = ['kelpbeard', 'prismwrasse', 'thunderfin', 'drownedcaptain', 'stormcaller', 'glasshalibut', 'leviathan', 'silvermoon'];
@@ -61,6 +62,12 @@ export const PETS = Object.freeze({
   kraken: pet('legendary', 'Kraken Spawn', '🦑', 'Call of the Deep', 'Sea legendaries are 3× as likely, and +20% points at sea.', { affinity: Object.fromEntries(SEA_LEGENDS.map((id) => [id, 3])), sea: 1.2 }),
   unicorn: pet('legendary', 'Unicorn', '🦄', 'Lucky Horn', 'Rare fish 50% more likely, and half your bites don\'t use up bait.', { rare: 1.5, baitSave: 0.5 }),
   spiritkoi: pet('legendary', 'Spirit Koi', '🎏', 'Flow State', 'Reel 30% faster, bites 15% faster and +30% XP.', { reel: 1.3, bite: 1.15, xp: 1.3 }),
+  // ---- mythic ----
+  phoenix: pet('mythic', 'Phoenix Chick', '🔥', 'Undying Flame', 'Three quarters of the fish you lose are caught anyway, and 30% chance a snapping line holds on.', { rescue: 0.75, snapSave: 0.3 }),
+  wyrmling: pet('mythic', 'Leviathan Hatchling', '🐉', 'Abyssal Bond', 'Mythic fish 3× as likely, and +30% points, coins and XP at sea.', { mythic: 3, sea: 1.3 }),
+  qilin: pet('mythic', 'Qilin', '🦌', 'Fortune\'s Blessing', '+50% coins and a 25% chance of a Double Catch.', { coins: 1.5, double: 0.25 }),
+  moonmoth: pet('mythic', 'Moon Moth', '🦋', 'Moonlit Path', 'Bites 30% faster, rare fish 40% more likely and +25% XP.', { bite: 1.3, rare: 1.4, xp: 1.25 }),
+  starwhale: pet('mythic', 'Star Whale', '🐋', 'Cosmic Tide', 'Legendary and mythic fish twice as likely, and 60% of bites don\'t use up bait.', { legendary: 2, mythic: 2, baitSave: 0.6 }),
 });
 
 export const PET_IDS = Object.keys(PETS);
@@ -130,6 +137,7 @@ export function combineBonuses(armour, petId) {
     bite: armour.bite * (fx.bite ?? 1),
     rare: armour.rare * (fx.rare ?? 1),
     legendary: armour.legendary * (fx.legendary ?? 1),
+    mythic: armour.mythic * (fx.mythic ?? 1),
     tension: armour.tension * (fx.tension ?? 1),
     reel: armour.reel * (fx.reel ?? 1),
     sea: armour.sea * (fx.sea ?? 1),

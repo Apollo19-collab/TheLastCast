@@ -308,11 +308,11 @@ export class Voyage {
       }
     };
     bump('haul');
-    if (c.rarity === 'rare' || c.rarity === 'legendary') bump('rare');
+    if (c.rarity === 'rare' || c.rarity === 'legendary' || c.rarity === 'mythic') bump('rare');
     if (c.event) bump('event');
     if (c.kg >= 10) bump('heavy');
     bump('variety');
-    if (c.rarity === 'legendary') bump('legend');
+    if (c.rarity === 'legendary' || c.rarity === 'mythic') bump('legend');
   }
 
   onLeave(player) {

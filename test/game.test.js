@@ -275,7 +275,7 @@ test('late-game tackle is locked behind achievements', () => {
   assert.ok(locked.length > Object.keys(ITEMS).length / 2, `${locked.length} of ${Object.keys(ITEMS).length} locked`);
   const ids = new Set(ACHIEVEMENTS.map((a) => a.id));
   for (const it of locked) assert.ok(ids.has(it.unlock), `${it.name} -> ${it.unlock}`);
-  assert.equal(Object.keys(ITEMS).length, 38);
+  assert.equal(Object.keys(ITEMS).length, 50);
   for (const slot of SLOTS) assert.ok(Object.values(ITEMS).some((it) => it.slot === slot && it.price === 0), `free ${slot}`);
 });
 
@@ -323,6 +323,10 @@ test('unlocking achievements are not reachable in the first hour', () => {
     living_legend: 1,
     sea_legs: 4, // a boat every 15 minutes, so at most 4 voyages
     old_salt: 220, // 4 voyages x 10 minutes of fishing, with fast-biting events
+    monster_hunter: 4, // one boss per voyage
+    lake_legend: 20000, // score
+    myth_seeker: 1, // legendaries
+    mythic_hunter: 0,
   };
   const gating = new Set(Object.values(ITEMS).map((it) => it.unlock).filter(Boolean));
   for (const id of gating) {
@@ -690,4 +694,42 @@ test('bait economy: cheap bait pays for itself many times over', () => {
   for (const id of Object.keys(ITEMS).filter(isConsumable)) {
     assert.ok(perUse(id) <= 50, `${id} is not absurdly expensive`);
   }
+});
+
+test('mythic fish: the rarest, hardest fish; endgame tackle lands them', () => {
+  const mythics = Object.keys(SPECIES).filter((id) => SPECIES[id].rarity === 'mythic');
+  assert.equal(mythics.length, 5);
+  assert.ok(fishDifficulty('aurora', 18) > fishDifficulty('ghost', 55), 'mythic > legendary');
+  const mid = { rod: 'carbon', reel: 'baitcaster', line: 'braid', bait: 'spinner' };
+  const star = { rod: 'starrod', reel: 'starreel', line: 'starline', bait: 'stardust' };
+  const landed = (sp, kg, eq) => [1, 2, 3, 4, 5, 6].filter((i) => simulateFight(sp, kg, eq, i * 7919)).length;
+  assert.equal(landed('lakewyrm', 100, mid), 0, 'mid tackle cannot land a mythic');
+  assert.ok(landed('abyssking', 180, star) >= 5, 'Starforged tackle lands even the biggest');
+
+  // Odds: about one in a thousand catches or worse with ordinary top bait,
+  // a few hundred with Starforged tackle and Stardust.
+  const odds = (zoneId, equipped, hotspot) => {
+    const rng = seeded(3);
+    const zone = world.zones.find((z) => z.id === zoneId);
+    const stats = computeStats(equipped);
+    let n = 0;
+    for (let i = 0; i < 200000; i++) if (SPECIES[pickSpecies(rng, zone, hotspot, stats)].rarity === 'mythic') n++;
+    return 200000 / n;
+  };
+  assert.ok(odds('coldSpring', { rod: 'legendrod', reel: 'golden', line: 'spectral', bait: 'mythicfly' }, false) > 1500);
+  const best = odds('shallows', star, true);
+  assert.ok(best > 150 && best < 600, `best case 1 in ${best.toFixed(0)}`);
+});
+
+test('achievements: mythic metrics count catches, species and pets', () => {
+  const p = normalize({ name: 'Myth' });
+  const a = (id) => ACHIEVEMENTS.find((x) => x.id === id);
+  assert.equal(progressOf(p, a('mythologist')).value, 0);
+  p.index = { aurora: { count: 2 }, tidemother: { count: 1 }, ghost: { count: 1 } };
+  assert.equal(progressOf(p, a('mythologist')).value, 2);
+  p.pets = ['snail', 'qilin'];
+  assert.ok(progressOf(p, a('myth_tamer')).done);
+  p.counters.mythicCatches = 1;
+  assert.ok(progressOf(p, a('mythic_hunter')).done);
+  assert.equal(a('grandmaster').goal, 75);
 });

@@ -73,6 +73,37 @@ export const SETS = Object.freeze({
     pieces: { head: 'Golden Crown', body: 'Golden Coat', legs: 'Golden Waders', feet: 'Golden Boots' },
     look: { hat: 'crown', hatColor: '#ffd166', jacket: '#e9b949', boots: '#b8860b', trim: '#fff3b0', glow: '#ffd166' },
   },
+  // ---- the endgame: levels 55-75 ----
+  abyssal: {
+    name: 'Abyssal Diver', level: 55, price: 7000, perk: { tension: 0.04 },
+    effect: { name: 'Pressure Proof', desc: 'Line tension builds 25% slower and fish run 20% bigger.', tension: 0.25, weight: 0.2 },
+    pieces: { head: 'Brass Diving Helm', body: 'Abyssal Suit', legs: 'Weighted Waders', feet: 'Lead Boots' },
+    look: { hat: 'helm', hatColor: '#c9a227', jacket: '#1b3a4b', boots: '#495057', trim: '#c9a227' },
+  },
+  tidecaller: {
+    name: 'Tidecaller', level: 60, price: 9000, perk: { bite: 0.04 },
+    effect: { name: 'Call of the Tide', desc: 'Bites 20% faster everywhere, and +30% points, coins and XP at sea.', bite: 0.2, sea: 0.3 },
+    pieces: { head: 'Tidecaller Hood', body: 'Tidecaller Robe', legs: 'Tidecaller Waders', feet: 'Coral Boots' },
+    look: { hat: 'souwester', hatColor: '#2ec4b6', jacket: '#118ab2', boots: '#073b4c', trim: '#cbf3f0', glow: '#2ec4b6' },
+  },
+  emberforged: {
+    name: 'Emberforged', level: 65, price: 12000, perk: { reel: 0.05 },
+    effect: { name: 'Rise from the Ashes', desc: '40% chance a snapping line holds on, and reel 20% faster.', snapSave: 0.4, reel: 0.2 },
+    pieces: { head: 'Ember Crown', body: 'Ember Mail', legs: 'Ember Greaves', feet: 'Ember Boots' },
+    look: { hat: 'crown', hatColor: '#ff7b00', jacket: '#9d0208', boots: '#370617', trim: '#ffba08', glow: '#ff7b00' },
+  },
+  celestial: {
+    name: 'Celestial', level: 70, price: 15000, perk: { xp: 0.05 },
+    effect: { name: 'Starlit', desc: '25% chance of a Double Catch, +30% XP and rare odds ×1.3.', double: 0.25, xp: 0.3, rare: 0.3 },
+    pieces: { head: 'Celestial Halo', body: 'Starweave Robe', legs: 'Starweave Waders', feet: 'Comet Boots' },
+    look: { hat: 'halo', hatColor: '#bde0fe', jacket: '#3a0ca3', boots: '#10002b', trim: '#bde0fe', glow: '#a2d2ff' },
+  },
+  mythweaver: {
+    name: 'Mythweaver', level: 75, price: 20000, perk: { rare: 0.05 },
+    effect: { name: 'Myth Made Real', desc: '30% chance of a Double Catch, +30% coins and XP, legendary fish 1.5× and mythic fish 2× as likely.', double: 0.3, coins: 0.3, xp: 0.3, legendary: 0.5, mythic: 1 },
+    pieces: { head: 'Mythweaver Halo', body: 'Mythweaver Mantle', legs: 'Mythweaver Waders', feet: 'Mythweaver Boots' },
+    look: { hat: 'halo', hatColor: '#ff5ce1', jacket: '#7209b7', boots: '#3c096c', trim: '#ff9ef0', glow: '#ff5ce1' },
+  },
 });
 
 // Every piece: id "<set>_<slot>", e.g. "clover_head".
@@ -86,7 +117,7 @@ export function emptyArmour() {
 /** Bonuses that do nothing: no armour, or armour switched off (duels). */
 export const NO_ARMOUR = Object.freeze({
   coins: 1, xp: 1, bite: 1, rare: 1, tension: 1, reel: 1, weight: 1,
-  double: 0, snapSave: 0, sea: 1, legendary: 1, zoneBites: [], set: null, pieces: 0,
+  double: 0, snapSave: 0, sea: 1, legendary: 1, mythic: 1, zoneBites: [], set: null, pieces: 0,
   // pet abilities (see combineBonuses in pets.js)
   fight: 1, hotspot: 1, affinity: null, baitSave: 0, rescue: 0, find: null, biteWindow: 0, castRange: 0, hold: 1, pet: null,
 });
@@ -112,12 +143,13 @@ export function computeArmour(worn) {
     bite: r(1 + add.bite + (e.bite || 0)),
     rare: r(1 + add.rare + (e.rare || 0)),
     tension: r(1 / (1 + add.tension + (e.tension || 0))), // multiplier on how fast tension builds
-    reel: r(1 + add.reel),
+    reel: r(1 + add.reel + (e.reel || 0)),
     weight: r(1 + add.weight + (e.weight || 0)),
     double: e.double || 0,
     snapSave: e.snapSave || 0,
     sea: 1 + (e.sea || 0),
     legendary: 1 + (e.legendary || 0),
+    mythic: 1 + (e.mythic || 0),
     zoneBites: e.zoneBite ? [{ zones: e.zones, mult: 1 + e.zoneBite }] : [],
     set: setId,
     pieces,

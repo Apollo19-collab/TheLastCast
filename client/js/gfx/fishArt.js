@@ -53,6 +53,9 @@ export const FISH_ART = {
   carp: A('carp', '#a77c2d', '#eed9a0', { fin: '#8c5a2b', barbels: true, scales: true }),
   bullhead: A('catfish', '#5b4a32', '#d9c9a3', { fin: '#4a3b28', whiskers: true }),
   mooneye: A('minnow', '#a9b8c4', '#f4f7f9', { fin: '#c9d3db', bigEye: true }),
+  chub: A('minnow', '#6b6f5a', '#ece8d8', { fin: '#8a8a70', stripe: '#3a3d30', tall: 1.1 }),
+  rockbass: A('sunfish', '#5a4a32', '#d8c8a0', { pattern: 'spots', patternColor: 'rgba(30,20,10,0.6)', fin: '#4a3b28', redEye: true, tall: 0.85 }),
+  sucker: A('carp', '#6a6250', '#efe9da', { fin: '#8a8270', tall: 0.75 }),
   trout: A('trout', '#6f8c5a', '#f2ede4', { pattern: 'spots', patternColor: '#2d3a2a', stripe: '#e56b8a', fin: '#90a07a' }),
   bass: A('bass', '#5b7a3a', '#eef0d0', { stripe: '#2f4420', fin: '#6a8a48', bigMouth: true }),
   smallmouth: A('bass', '#8a6a3a', '#efe3c0', { pattern: 'bars', patternColor: 'rgba(60,40,20,0.45)', fin: '#9a7a4a', bigMouth: true, redEye: true }),
@@ -64,6 +67,9 @@ export const FISH_ART = {
   gar: A('gar', '#6e7a4f', '#e6e2c8', { pattern: 'spots', patternColor: '#2d3320', fin: '#7a8a50' }),
   pickerel: A('pike', '#5f7a3a', '#efe8c0', { pattern: 'chain', patternColor: '#2b3a1a', fin: '#7a8a4a' }),
   brooktrout: A('trout', '#3f5a3a', '#f08a4b', { pattern: 'spots', patternColor: '#e9d16a', haloSpots: '#e63946', fin: '#e07a3f', finEdge: '#ffffff' }),
+  sauger: A('perch', '#7a6a3a', '#ece4c4', { pattern: 'mottled', patternColor: 'rgba(50,40,15,0.55)', fin: '#8a7a4a', glassyEye: true, tall: 0.8 }),
+  grayling: A('trout', '#6f7f95', '#eef0f4', { pattern: 'spots', patternColor: '#2a3040', fin: '#7d5ba6', finEdge: '#ff8fab', tall: 0.95 }),
+  redhorse: A('carp', '#9a8a6a', '#f1ece0', { fin: '#d1495b', scales: true, tall: 0.85 }),
   pike: A('pike', '#4f6b3a', '#efe9c4', { pattern: 'spots', patternColor: '#e7e3b0', fin: '#8a5a2b' }),
   burbot: A('catfish', '#6b5a3a', '#d9cfa8', { pattern: 'mottled', patternColor: 'rgba(40,30,15,0.6)', fin: '#5b4a2e', whiskers: 'chin' }),
   laketrout: A('trout', '#4f5f6a', '#ece9e2', { pattern: 'spots', patternColor: '#d8dccf', fin: '#5d6e7a', finEdge: '#ffffff' }),
@@ -72,16 +78,27 @@ export const FISH_ART = {
   sturgeon: A('sturgeon', '#5d5a50', '#d9d4c4', { fin: '#4e4b42', scutes: true, whiskers: 'chin' }),
   steelhead: A('trout', '#5d7a8c', '#f3f1ec', { pattern: 'spots', patternColor: '#2a3440', stripe: '#d9547a', fin: '#7d93a3' }),
   chinook: A('trout', '#4d6a7a', '#eef0f0', { pattern: 'spots', patternColor: '#1e2a33', fin: '#5a7686', tall: 1.12 }),
+  paddlefish: A('sturgeon', '#5a6f80', '#e6ecef', { fin: '#4a5f70', pattern: 'mottled', patternColor: 'rgba(30,40,50,0.35)' }),
+  goldentrout: A('trout', '#c9a227', '#ff6b6b', { pattern: 'spots', patternColor: '#3a2a10', stripe: '#e63946', fin: '#ffd166', finEdge: '#ffffff' }),
+  alligatorgar: A('gar', '#4f5a3a', '#d9d4b0', { pattern: 'spots', patternColor: '#262b1a', fin: '#5f6a40', tall: 1.35 }),
   mossback: A('pike', '#3e5a2a', '#c9cf8a', { pattern: 'mottled', patternColor: 'rgba(120,160,60,0.6)', fin: '#5a7a3a', legendary: '#9be564' }),
   stonejaw: A('trout', '#6b6f75', '#c9ccd1', { pattern: 'mottled', patternColor: 'rgba(40,42,46,0.6)', fin: '#55595f', legendary: '#cfd8e3', hookJaw: true, tall: 1.1 }),
   ghost: A('sturgeon', '#dfeaf0', '#ffffff', { fin: '#cfe3ec', legendary: '#bde0fe', translucent: true, scutes: true, whiskers: 'chin' }),
   frostfin: A('trout', '#a8dadc', '#f1faff', { pattern: 'spots', patternColor: '#ffffff', fin: '#caf0f8', finEdge: '#ffffff', legendary: '#90e0ef' }),
   marshqueen: A('bowfin', '#2d4a2a', '#b9b26a', { fin: '#3a5a2a', tailSpot: '#ffd166', legendary: '#ffd166', crown: true }),
   riverking: A('trout', '#7a2e2e', '#e9d8c9', { pattern: 'spots', patternColor: '#2a1515', fin: '#8a3a3a', legendary: '#ff7b54', hookJaw: true, tall: 1.15 }),
+  emeraldjaw: A('bass', '#127a4a', '#c8f7dc', { stripe: '#0b4d2e', fin: '#1fa463', legendary: '#2dd881', bigMouth: true, redEye: true }),
+  dockmaster: A('catfish', '#3d4650', '#d6dbe0', { pattern: 'spots', patternColor: '#1b2128', fin: '#2e353d', legendary: '#9ad1ff', whiskers: true, crown: true, tall: 1.2 }),
+  // mythic: a glow plus rainbow sparkles
+  aurora: A('trout', '#2a9d8f', '#e0fbfc', { pattern: 'rainbow', fin: '#7df9ff', finEdge: '#ff5ce1', legendary: '#7df9ff', mythic: true, tall: 1.1 }),
+  lakewyrm: A('eel', '#1b4332', '#95d5b2', { pattern: 'spots', patternColor: '#d8f3dc', fin: '#ff5ce1', legendary: '#ff5ce1', mythic: true, redEye: true, crown: true, tall: 1.6 }),
+  emberkoi: A('carp', '#ff7b00', '#ffe8a3', { pattern: 'koi', patternColor: '#9d0208', fin: '#ffba08', legendary: '#ff7b00', mythic: true, barbels: true }),
 
   // ---- sea fish ----
   herring: A('minnow', '#3f6f99', '#eef3f7', { fin: '#9fb7cc', scales: true }),
   mackerel: A('tuna', '#2a6f5a', '#f1f5f2', { pattern: 'bars', patternColor: 'rgba(10,35,30,0.6)', fin: '#4f8a76', tall: 0.75 }),
+  sardine: A('minnow', '#3d6f8f', '#f4f7f9', { pattern: 'spots', patternColor: 'rgba(20,40,60,0.5)', fin: '#8fb3c9', scales: true }),
+  mahimahi: A('tuna', '#2a9d4a', '#f9e04b', { pattern: 'spots', patternColor: '#1d6fa3', fin: '#1d6fa3', tall: 1.2 }),
   cod: A('trout', '#7a6f4f', '#ece6d0', { pattern: 'mottled', patternColor: 'rgba(70,60,30,0.45)', fin: '#8a7f5f', whiskers: 'chin', tall: 1.15 }),
   seabass: A('bass', '#55606e', '#eef1f3', { pattern: 'stripes', patternColor: 'rgba(30,38,48,0.75)', fin: '#6b7787' }),
   sheephead: A('bass', '#c44536', '#f3a68f', { pattern: 'ends', patternColor: '#1d1d1f', fin: '#2a2a2a', redEye: true }),
@@ -92,6 +109,7 @@ export const FISH_ART = {
   swordfish: A('sword', '#4a4e69', '#d8d8e0', { fin: '#3c3f58' }),
   oarfish: A('eel', '#c9d6df', '#f4f7f9', { fin: '#e63946', pattern: 'spots', patternColor: 'rgba(60,70,90,0.5)' }),
   opah: A('opah', '#c85a54', '#f4a7a0', { pattern: 'spots', patternColor: '#fff4f0', fin: '#e63946', bigEye: true }),
+  marlin: A('sword', '#1d4e89', '#e8f1f8', { pattern: 'bars', patternColor: 'rgba(120,190,255,0.5)', fin: '#14365f' }),
   treasure: { shape: 'chest' },
   kelpbeard: A('grouper', '#3e5a2a', '#b9c48a', { pattern: 'mottled', patternColor: 'rgba(120,160,60,0.6)', fin: '#4a6a2a', legendary: '#9be564', whiskers: true, bigMouth: true }),
   prismwrasse: A('grouper', '#5a3fd6', '#f1e6ff', { pattern: 'rainbow', fin: '#ff8fab', legendary: '#e0aaff', scales: true, tall: 0.85 }),
@@ -101,6 +119,8 @@ export const FISH_ART = {
   glasshalibut: A('flat', '#cfeff3', '#ffffff', { fin: '#e0fbfc', legendary: '#e0fbfc', translucent: true, pattern: 'spots', patternColor: 'rgba(150,200,210,0.5)' }),
   leviathan: A('eel', '#0b2545', '#3c5a80', { fin: '#e63946', pattern: 'spots', patternColor: '#90e0ef', legendary: '#ff4d6d', redEye: true, tall: 1.3 }),
   silvermoon: A('opah', '#b8c0cc', '#eef2f7', { pattern: 'spots', patternColor: '#ffffff', fin: '#ff6b6b', legendary: '#e0e7ff', bigEye: true }),
+  abyssking: A('grouper', '#10002b', '#5a189a', { pattern: 'spots', patternColor: '#7df9ff', fin: '#3c096c', legendary: '#7df9ff', mythic: true, crown: true, bigMouth: true, redEye: true, tall: 1.15 }),
+  tidemother: A('opah', '#0077b6', '#caf0f8', { pattern: 'rainbow', fin: '#ff5ce1', legendary: '#ff5ce1', mythic: true, bigEye: true, crown: true }),
 };
 
 const cache = new Map();
@@ -321,6 +341,7 @@ function drawFish(g, art, rnd) {
   drawHead(g, art, sh, X, top, bot, cy, BL, HB);
 
   if (art.legendary) sparkles(g, art.legendary, rnd);
+  if (art.mythic) for (const c of ['#ff5ce1', '#7df9ff', '#ffd166']) sparkles(g, c, rnd);
 }
 
 function drawFin(g, art, X, edge, s, e, height, spiny, finFill) {

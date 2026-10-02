@@ -283,6 +283,36 @@ function drawHat(ctx, st) {
       ctx.arc(1, 0, 1.8, 0, Math.PI * 2);
       ctx.fill();
       break;
+    case 'helm': // brass diving helmet with a round window
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(1, 0, 8.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = shade(c, -45);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.fillStyle = '#7df9ff';
+      ctx.beginPath();
+      ctx.arc(5.5, 0, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = shade(c, -30);
+      ctx.stroke();
+      break;
+    case 'halo': // a glowing ring floating above the head
+      ctx.fillStyle = shade(c, -55);
+      ctx.beginPath();
+      ctx.arc(1, 0, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.save();
+      ctx.shadowColor = c;
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.ellipse(1, 0, 9.5, 9.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      break;
     case 'bucket':
       ctx.fillStyle = shade(c, -20);
       ctx.beginPath();

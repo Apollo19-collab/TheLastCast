@@ -23,10 +23,11 @@ export const CHUM = Object.freeze({
 // baits (weights). Locked baits are skipped (their weight goes to the rest).
 export const CHUM_TABLE = Object.freeze({
   junk: { chance: 0, uses: [0, 0], bait: {} },
-  common: { chance: 0.6, uses: [2, 4], bait: { worms: 5, corn: 3, nightcrawler: 2 } },
-  uncommon: { chance: 0.55, uses: [2, 3], bait: { nightcrawler: 3, spinner: 2, roe: 2, frog: 1 } },
-  rare: { chance: 0.45, uses: [1, 2], bait: { spinner: 3, frog: 2, minnow: 2, goldlure: 1, glowjig: 1, squid: 1 } },
+  common: { chance: 0.6, uses: [2, 4], bait: { worms: 5, corn: 3, nightcrawler: 2, leech: 1 } },
+  uncommon: { chance: 0.55, uses: [2, 3], bait: { nightcrawler: 3, spinner: 2, roe: 2, frog: 1, leech: 1, crayfish: 1 } },
+  rare: { chance: 0.45, uses: [1, 2], bait: { spinner: 3, frog: 2, minnow: 2, crayfish: 1, goldlure: 1, glowjig: 1, squid: 1 } },
   legendary: { chance: 1, uses: [1, 3], bait: { goldlure: 3, minnow: 2, glowjig: 2, mythicfly: 1 } },
+  mythic: { chance: 1, uses: [2, 4], bait: { goldlure: 2, mythicfly: 3, stardust: 2 } },
 });
 
 /**

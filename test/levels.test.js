@@ -45,14 +45,17 @@ function wearSet(profile, setId) {
   }
 }
 
-test('level curve: quick early levels, max level takes about 40 hours', () => {
+test('level curve: quick early levels, level 50 in about 40 hours, the max in about 85', () => {
   assert.equal(levelFor(0), 1);
   assert.equal(levelFor(xpForLevel(MAX_LEVEL)), MAX_LEVEL);
   assert.equal(levelFor(xpForLevel(MAX_LEVEL) * 10), MAX_LEVEL);
   for (let l = 2; l <= MAX_LEVEL; l++) assert.equal(levelFor(xpForLevel(l)), l);
   assert.ok((xpToNext(1) / EXPECTED_XP_PER_HOUR) * 60 < 10, 'level 2 in under 10 minutes');
+  const hours50 = xpForLevel(50) / EXPECTED_XP_PER_HOUR;
+  assert.ok(hours50 >= 38 && hours50 <= 42, `level 50 in ${hours50.toFixed(1)} hours`);
+  assert.equal(MAX_LEVEL, 75);
   const hours = xpForLevel(MAX_LEVEL) / EXPECTED_XP_PER_HOUR;
-  assert.ok(hours >= 38 && hours <= 42, `max level in ${hours.toFixed(1)} hours`);
+  assert.ok(hours >= 80 && hours <= 95, `max level in ${hours.toFixed(1)} hours`);
 });
 
 test('the expected XP rate matches what fishing actually pays', () => {
@@ -163,4 +166,18 @@ test('existing players start with XP from their score', () => {
   assert.deepEqual(p.armour, { head: null, body: null, legs: null, feet: null });
   const q = normalize({ name: 'Cheat', xp: 10, armourOwned: ['nope'], armour: { head: 'golden_head' } });
   assert.equal(q.armour.head, null, 'cannot wear unowned armour');
+});
+
+test('endgame armour: a new set every 5 levels from 55 to 75, ending with Mythweaver', () => {
+  const levels = Object.values(SETS).map((s) => s.level);
+  for (const l of [55, 60, 65, 70, 75]) assert.ok(levels.includes(l), `a set at level ${l}`);
+  assert.ok(Math.max(...levels) === MAX_LEVEL);
+  const prices = Object.values(SETS).map((s) => s.price);
+  assert.deepEqual(prices, [...prices].sort((a, b) => a - b), 'better sets cost more');
+  const myth = computeArmour(Object.fromEntries(ARMOUR_SLOTS.map((s) => [s, `mythweaver_${s}`])));
+  assert.equal(myth.set, 'mythweaver');
+  assert.equal(myth.mythic, 2);
+  assert.equal(NO_ARMOUR.mythic, 1);
+  const ember = computeArmour(Object.fromEntries(ARMOUR_SLOTS.map((s) => [s, `emberforged_${s}`])));
+  assert.ok(ember.reel > 1.2 && ember.snapSave === 0.4, 'set effects can boost reeling');
 });

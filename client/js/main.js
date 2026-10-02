@@ -374,7 +374,8 @@ net.on(MSG.EVENT, (ev) => {
       const tag = ev.duel ? ' (duel)' : '';
       ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}${tag}`, color);
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
-      const big = ev.rarity === 'rare' || ev.rarity === 'legendary';
+      const big = ev.rarity === 'rare' || ev.rarity === 'legendary' || ev.rarity === 'mythic';
+      if (ev.rarity === 'mythic' && !ev.duel) ui.banner('MYTHIC CATCH!', `${mine ? 'You' : ev.name} landed ${ev.speciesName}!`, color, 4500);
       if (p) renderer.addEffect({ type: 'fishPop', species: ev.species, big, text: `+${ev.points}`, x: p.x, y: p.y, color, duration: 2600 });
       if (mine && !ev.double) ui.showCatch(ev);
       if (mine) audio.play('catch', { rarity: ev.rarity, isNew: ev.isNew });

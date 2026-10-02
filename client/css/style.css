@@ -221,7 +221,7 @@ table.controls td:first-child { opacity: 0.6; width: 90px; }
 .catch-meta { position: relative; font-size: 13px; opacity: 0.85; margin-top: 2px; }
 .catch-rarity { color: var(--rarity); font-weight: 700; }
 .catch-rays { display: none; }
-.rarity-rare .catch-rays, .rarity-legendary .catch-rays {
+.rarity-rare .catch-rays, .rarity-legendary .catch-rays, .rarity-mythic .catch-rays {
   display: block;
   position: absolute;
   inset: -60%;
@@ -230,6 +230,16 @@ table.controls td:first-child { opacity: 0.6; width: 90px; }
 }
 .rarity-legendary { border-width: 3px; }
 .rarity-legendary .catch-name { text-shadow: 0 0 12px var(--rarity); }
+.rarity-mythic { border-width: 3px; box-shadow: 0 0 24px color-mix(in srgb, var(--rarity) 60%, transparent); }
+.rarity-mythic .catch-name {
+  background: linear-gradient(90deg, #ff5ce1, #7df9ff, #ffd166, #ff5ce1);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mythic-shift 3s linear infinite;
+}
+@keyframes mythic-shift { to { background-position: 300% 0; } }
 @keyframes catch-spin { to { transform: rotate(360deg); } }
 
 /* fish pictures in the Fish Index and history */

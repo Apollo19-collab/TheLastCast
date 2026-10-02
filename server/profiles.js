@@ -122,6 +122,7 @@ function backfillCounters(p) {
     if (!s) continue;
     c.family[s.family] = (c.family[s.family] || 0) + e.count;
     if (s.rarity === 'legendary') c.legendaryCatches += e.count;
+    if (s.rarity === 'mythic') c.mythicCatches += e.count;
     c.heaviest = Math.max(c.heaviest, e.bestKg || 0);
     if ((e.bestKg || 0) >= 10) c.bigFish += 1; // at least the best one
   }

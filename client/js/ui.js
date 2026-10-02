@@ -648,7 +648,7 @@ export class UI {
     el.style.animation = '';
     el.onclick = () => { el.hidden = true; };
     clearTimeout(this.catchTimer);
-    this.catchTimer = setTimeout(() => { el.hidden = true; }, ev.rarity === 'legendary' ? 5500 : 3400);
+    this.catchTimer = setTimeout(() => { el.hidden = true; }, ev.rarity === 'legendary' || ev.rarity === 'mythic' ? 5500 : 3400);
   }
 
   showGame() {
