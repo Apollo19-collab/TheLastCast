@@ -2,7 +2,7 @@
 // The client only sends intentions; the server decides every outcome.
 
 import { FishingState, MSG, castDistance } from '/shared/constants.js';
-import { DEFAULT_LOCATION, LOCATIONS, zoneAt } from '/shared/world.js';
+import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
 import { gearStats } from '/shared/gear.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
@@ -18,9 +18,9 @@ const canvas = document.getElementById('game');
 let world = LOCATIONS[DEFAULT_LOCATION];
 let renderer = new Renderer(canvas, world);
 const net = new Connection();
-const ui = new UI({ world, onBuy: (slot) => net.send({ t: MSG.BUY, slot }) });
-const buffer = new SnapshotBuffer(100);
 const audio = new AudioEngine();
+const ui = new UI({ world, audio, onBuy: (slot) => net.send({ t: MSG.BUY, slot }) });
+const buffer = new SnapshotBuffer(100);
 ui.setSoundButton(audio.muted, () => ui.setSoundButton(audio.toggleMute()));
 
 // Browsers only allow sound after the player interacts with the page.
@@ -308,7 +308,7 @@ function frame(now) {
     const pulling = me.s === FishingState.REELING && me.pl;
     if (pulling) text = 'It\'s pulling! Ease off or the line will snap!';
     ui.status(text, pulling || me.s === FishingState.BITE);
-    ui.updateMe(me, aimZone);
+    ui.updateMe(me, aimZone, areaAt(world, selfPos.x, selfPos.y)?.name ?? world.name);
   }
 
   audio.listener = selfPos;
@@ -316,7 +316,7 @@ function frame(now) {
     ? { reeling: !!input?.actionHeld && !ui.menuOpen, pulling: me.pl, tension: me.tn, progress: me.pg }
     : null);
 
-  renderer.updateCamera(selfPos.x, selfPos.y, dt);
+  renderer.updateCamera(selfPos.x, selfPos.y);
   renderer.draw({
     time: now,
     players: drawn,

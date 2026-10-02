@@ -25,6 +25,8 @@ export const SPECIES = Object.freeze({
   crappie: { name: 'Black Crappie', rarity: 'common', minKg: 0.2, maxKg: 1.5, points: 9, fight: 0.3 },
   cisco: { name: 'Cisco', rarity: 'common', minKg: 0.3, maxKg: 1.5, points: 10, fight: 0.35 },
   carp: { name: 'Common Carp', rarity: 'common', minKg: 1, maxKg: 9, points: 12, fight: 0.5 },
+  bullhead: { name: 'Brown Bullhead', rarity: 'common', minKg: 0.3, maxKg: 2, points: 9, fight: 0.35 },
+  mooneye: { name: 'Mooneye', rarity: 'common', minKg: 0.3, maxKg: 1, points: 10, fight: 0.4 },
 
   // Uncommon
   trout: { name: 'Rainbow Trout', rarity: 'uncommon', minKg: 0.5, maxKg: 4, points: 20, fight: 0.55 },
@@ -36,6 +38,8 @@ export const SPECIES = Object.freeze({
   walleye: { name: 'Walleye', rarity: 'uncommon', minKg: 1, maxKg: 6, points: 30, fight: 0.6 },
   catfish: { name: 'Channel Catfish', rarity: 'uncommon', minKg: 2, maxKg: 15, points: 30, fight: 0.65 },
   gar: { name: 'Longnose Gar', rarity: 'uncommon', minKg: 2, maxKg: 10, points: 34, fight: 0.7 },
+  pickerel: { name: 'Chain Pickerel', rarity: 'uncommon', minKg: 0.5, maxKg: 3, points: 25, fight: 0.65 },
+  brooktrout: { name: 'Brook Trout', rarity: 'uncommon', minKg: 0.3, maxKg: 3, points: 26, fight: 0.55 },
 
   // Rare
   pike: { name: 'Northern Pike', rarity: 'rare', minKg: 2, maxKg: 12, points: 45, fight: 0.75 },
@@ -44,11 +48,16 @@ export const SPECIES = Object.freeze({
   koi: { name: 'Escaped Koi', rarity: 'rare', minKg: 1, maxKg: 10, points: 65, fight: 0.55 },
   muskie: { name: 'Muskellunge', rarity: 'rare', minKg: 5, maxKg: 25, points: 70, fight: 0.85 },
   sturgeon: { name: 'Lake Sturgeon', rarity: 'rare', minKg: 10, maxKg: 40, points: 80, fight: 0.85 },
+  steelhead: { name: 'Steelhead', rarity: 'rare', minKg: 2, maxKg: 9, points: 55, fight: 0.85 },
+  chinook: { name: 'Chinook Salmon', rarity: 'rare', minKg: 4, maxKg: 20, points: 70, fight: 0.9 },
 
-  // Legendary: one per special zone
+  // Legendary: one per special zone or location
   mossback: { name: 'Old Mossback', rarity: 'legendary', minKg: 20, maxKg: 35, points: 250, fight: 0.95 },
   stonejaw: { name: 'Stonejaw', rarity: 'legendary', minKg: 15, maxKg: 40, points: 260, fight: 0.95 },
   ghost: { name: 'The Pale Ghost', rarity: 'legendary', minKg: 20, maxKg: 60, points: 300, fight: 0.95 },
+  frostfin: { name: 'Frostfin', rarity: 'legendary', minKg: 8, maxKg: 15, points: 240, fight: 0.9 },
+  marshqueen: { name: 'The Marsh Queen', rarity: 'legendary', minKg: 12, maxKg: 25, points: 250, fight: 0.95 },
+  riverking: { name: 'The River King', rarity: 'legendary', minKg: 25, maxKg: 45, points: 280, fight: 0.97 },
 });
 
 /** Score for a fish of a given weight, plus any bonus multiplier. */

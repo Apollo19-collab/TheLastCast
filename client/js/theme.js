@@ -12,9 +12,16 @@ export const THEME = {
     reeds: 'rgba(60, 110, 60, 0.18)',
     rocks: 'rgba(30, 40, 60, 0.2)',
     dockShade: 'rgba(10, 30, 40, 0.22)',
+    basin: 'rgba(5, 20, 50, 0.5)',
+    coldSpring: 'rgba(180, 230, 255, 0.12)',
+    weedyCove: 'rgba(60, 110, 60, 0.2)',
+    marsh: 'rgba(70, 90, 40, 0.3)',
+    river: 'rgba(90, 140, 120, 0.22)',
     shallows: 'rgba(120, 200, 210, 0.18)',
   },
   zoneLabel: 'rgba(255,255,255,0.18)',
+  areaLabel: { font: '800 34px system-ui, sans-serif', color: 'rgba(255,255,255,0.75)', shadow: 'rgba(0,0,0,0.35)' },
+  minimap: { border: 'rgba(255,255,255,0.35)', view: 'rgba(255,255,255,0.8)', hotspot: '#ffe066' },
 
   land: {
     sand: '#d9c48f',
@@ -25,8 +32,13 @@ export const THEME = {
 
   dock: '#8a5a33',
   dockPlank: '#6e4526',
+  bridge: '#9a7a52',
+  bridgeRail: '#5b4127',
 
   reed: '#6f9c4a',
+  lilyPad: '#4c8a3c',
+  lilyFlower: '#f6c3d5',
+  current: 'rgba(255,255,255,0.18)',
   tree: '#2f5a2a',
   treeDark: '#24461f',
   stone: '#5f6269',

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Game, sanitizeName } from '../server/game.js';
 import { pickSpecies } from '../server/fishing.js';
 import { FishingState, MSG } from '../shared/constants.js';
-import { LOCATIONS, isWalkable, isWater, zoneAt } from '../shared/world.js';
+import { LOCATIONS, areaAt, isWalkable, isWater, zoneAt } from '../shared/world.js';
 import { GEAR, gearStats } from '../shared/gear.js';
 import { ProfileStore } from '../server/profiles.js';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -34,12 +34,12 @@ function run(game, seconds, dt = 0.05) {
 
 test('world geometry: spawn is walkable, zones resolve', () => {
   assert.ok(isWalkable(world, world.spawn.x, world.spawn.y));
-  assert.equal(zoneAt(world, 800, 200).id, 'deep');
-  assert.equal(zoneAt(world, 300, 400).id, 'reeds');
-  assert.equal(zoneAt(world, 1000, 700).id, 'shallows');
-  assert.equal(zoneAt(world, 1000, 500).id, 'open');
-  assert.equal(zoneAt(world, 800, 600), null, 'dock is not water');
-  assert.ok(!isWater(world, 500, 900), 'beach is not water');
+  assert.equal(zoneAt(world, 1500, 1450).id, 'deep');
+  assert.equal(zoneAt(world, 500, 1600).id, 'reeds');
+  assert.equal(zoneAt(world, 1000, 1900).id, 'shallows');
+  assert.equal(zoneAt(world, 2200, 1200).id, 'open');
+  assert.equal(zoneAt(world, 1600, 1800), null, 'dock is not water');
+  assert.ok(!isWater(world, 1000, 2100), 'beach is not water');
 });
 
 test('names are sanitized', () => {
@@ -50,18 +50,18 @@ test('names are sanitized', () => {
 
 test('players cannot walk into the water', () => {
   const { game, player } = makeGame();
-  player.x = 500;
-  player.y = 805;
+  player.x = 1000;
+  player.y = 2005;
   game.handleMessage(player, { t: MSG.INPUT, up: true });
   run(game, 3);
   assert.ok(isWalkable(world, player.x, player.y));
-  assert.ok(player.y >= 800);
+  assert.ok(player.y >= 2000);
 });
 
 test('cast onto land is rejected; cast into water starts fishing', () => {
   const { game, player, inbox } = makeGame();
-  player.x = 500;
-  player.y = 900;
+  player.x = 1000;
+  player.y = 2100;
   game.handleMessage(player, { t: MSG.CAST, angle: Math.PI / 2, power: 0 }); // straight down onto sand
   assert.equal(player.line.state, FishingState.IDLE);
   assert.equal(inbox.at(-1).kind, 'castFail');
@@ -82,7 +82,10 @@ test('invalid cast payloads are ignored', () => {
 
 test('players cannot move while their line is out', () => {
   const { game, player } = makeGame();
+  player.x = 1000;
+  player.y = 2100;
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.5 });
+  assert.equal(player.line.state, FishingState.CASTING);
   const { x, y } = player;
   game.handleMessage(player, { t: MSG.INPUT, left: true });
   run(game, 0.5);
@@ -91,8 +94,8 @@ test('players cannot move while their line is out', () => {
 
 test('full loop: bite, hook, reel carefully, catch and score', () => {
   const { game, player } = makeGame();
-  player.x = 500;
-  player.y = 900;
+  player.x = 1000;
+  player.y = 2100;
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.5 });
 
   // Wait for the bite.
@@ -151,7 +154,7 @@ test('crowded spots slow bites; hotspots speed them up', () => {
     game.hotspots = [];
     game.fillHotspots = () => {};
     setup(game);
-    player.x = 800; player.y = 395; // end of the dock
+    player.x = 1600; player.y = 1615; // end of the South Beach dock
     game.rng = () => 0.5;
     game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.4 });
     run(game, 0.7);
@@ -161,10 +164,10 @@ test('crowded spots slow bites; hotspots speed them up', () => {
   const crowded = waitFor((game) => {
     for (let i = 0; i < 2; i++) {
       const other = game.addPlayer(`Other${i}`, () => {});
-      other.line = { state: FishingState.WAITING, x: 800, y: 270, timer: 99 };
+      other.line = { state: FishingState.WAITING, x: 1600, y: 1490, timer: 99 };
     }
   });
-  const hot = waitFor((game) => { game.hotspots = [{ id: 1, x: 800, y: 270, r: 80, life: 99 }]; });
+  const hot = waitFor((game) => { game.hotspots = [{ id: 1, x: 1600, y: 1490, r: 80, life: 99 }]; });
   assert.ok(crowded > alone * 1.5, `crowded ${crowded} vs alone ${alone}`);
   assert.ok(hot < alone, `hotspot ${hot} vs alone ${alone}`);
 });
@@ -231,13 +234,13 @@ test('buying gear: costs coins, upgrades stats, one tier at a time', () => {
 
 test('better rod casts further', () => {
   const { game, player } = makeGame();
-  player.x = 800; player.y = 395;
+  player.x = 1600; player.y = 1615;
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
-  const basic = 395 - player.line.y;
+  const basic = 1615 - player.line.y;
   game.handleMessage(player, { t: MSG.CANCEL });
   player.stats = gearStats({ rod: 3 });
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
-  assert.ok(395 - player.line.y > basic);
+  assert.ok(1615 - player.line.y > basic);
 });
 
 test('better bait means more rare fish', () => {
@@ -327,7 +330,7 @@ test('version 1 save files are migrated', async () => {
 });
 
 test('each zone has its own fish; drop-off gets deep-water species', () => {
-  assert.equal(zoneAt(world, 750, 500).id, 'dockShade');
+  assert.equal(zoneAt(world, 1555, 1700).id, 'dockShade');
   const fishIn = (id) => Object.keys(world.zones.find((z) => z.id === id).fish);
   for (const deepFish of ['laketrout', 'burbot', 'sturgeon']) {
     assert.ok(fishIn('deep').includes(deepFish));
@@ -339,4 +342,38 @@ test('each zone has its own fish; drop-off gets deep-water species', () => {
   // Every species is catchable somewhere and every zone entry is a real species.
   const all = new Set(world.zones.flatMap((z) => Object.keys(z.fish)));
   assert.deepEqual([...all].sort(), Object.keys(SPECIES).sort());
+});
+
+test('the big lake: three new locations, all reachable on foot', () => {
+  // New fishing waters around the lake.
+  assert.equal(zoneAt(world, 1800, 500).id, 'coldSpring');
+  assert.equal(zoneAt(world, 1000, 500).id, 'weedyCove');
+  assert.equal(zoneAt(world, 400, 700).id, 'marsh');
+  assert.equal(zoneAt(world, 2700, 1000).id, 'river');
+  assert.equal(zoneAt(world, 2980, 1000).id, 'river', 'the river channel past the shore');
+  assert.equal(zoneAt(world, 1450, 1250).id, 'basin');
+  assert.equal(areaAt(world, 1800, 500).name, 'Pine Point');
+  assert.equal(areaAt(world, 2700, 1000).name, 'River Mouth');
+  assert.equal(areaAt(world, 400, 700).name, 'Lily Marsh');
+  assert.equal(areaAt(world, world.spawn.x, world.spawn.y).name, 'South Beach');
+
+  // Flood-fill the walkable ground from the spawn point.
+  const step = 20;
+  const key = (x, y) => `${x},${y}`;
+  const start = [Math.round(world.spawn.x / step) * step, Math.round(world.spawn.y / step) * step];
+  const seen = new Set([key(...start)]);
+  const queue = [start];
+  while (queue.length) {
+    const [x, y] = queue.pop();
+    for (const [dx, dy] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+      const n = [x + dx, y + dy];
+      if (!seen.has(key(...n)) && isWalkable(world, ...n)) { seen.add(key(...n)); queue.push(n); }
+    }
+  }
+  const reachable = (x, y) => seen.has(key(Math.round(x / step) * step, Math.round(y / step) * step));
+  assert.ok(reachable(1440, 1160), 'end of the Pine Point jetty');
+  assert.ok(reachable(560, 900), 'end of the Lily Marsh boardwalk');
+  assert.ok(reachable(3060, 1000), 'bridge over the river');
+  assert.ok(reachable(3100, 400), 'east shore north of the river');
+  assert.ok(reachable(1600, 1620), 'end of the South Beach dock');
 });

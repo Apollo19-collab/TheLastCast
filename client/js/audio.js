@@ -8,7 +8,10 @@
 import { SOUNDS } from './sounds.js';
 
 const MUTE_KEY = 'lastcast.muted';
-const MASTER_VOLUME = 0.8;
+const VOLUME_KEY = 'lastcast.volume';
+// Player-facing volume channels, 0-100.
+export const VOLUME_CHANNELS = { master: 'Master', effects: 'Effects', ambience: 'Lake ambience' };
+const DEFAULT_VOLUME = { master: 80, effects: 100, ambience: 70 };
 const HEARING_RANGE = 900; // world units: sounds further away than this are silent
 const PAN_RANGE = 500; // world units to the side for a fully panned sound
 
@@ -19,10 +22,22 @@ function readMuted() {
   try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
 }
 
+function readVolume() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(VOLUME_KEY) || '{}');
+    const out = { ...DEFAULT_VOLUME };
+    for (const k of Object.keys(out)) if (Number.isFinite(saved[k])) out[k] = clamp(saved[k], 0, 100);
+    return out;
+  } catch {
+    return { ...DEFAULT_VOLUME };
+  }
+}
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
     this.muted = readMuted();
+    this.volume = readVolume();
     this.listener = { x: 0, y: 0 }; // usually the local player
     this.nextClick = 0;
     this.strain = null;
@@ -41,17 +56,35 @@ export class AudioEngine {
   toggleMute() {
     this.muted = !this.muted;
     try { localStorage.setItem(MUTE_KEY, this.muted ? '1' : '0'); } catch { /* not saved */ }
-    if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : MASTER_VOLUME, this.ctx.currentTime, 0.05);
+    this.applyVolume();
     return this.muted;
+  }
+
+  /** Set a channel ('master', 'effects', 'ambience') to 0-100 and remember it. */
+  setVolume(channel, value) {
+    if (!(channel in DEFAULT_VOLUME)) return;
+    this.volume[channel] = clamp(Math.round(Number(value) || 0), 0, 100);
+    try { localStorage.setItem(VOLUME_KEY, JSON.stringify(this.volume)); } catch { /* not saved */ }
+    this.applyVolume();
+  }
+
+  applyVolume() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const v = this.volume;
+    this.master.gain.setTargetAtTime(this.muted ? 0 : v.master / 100, now, 0.05);
+    this.sfx.gain.setTargetAtTime(v.effects / 100, now, 0.05);
+    this.ambience.gain.setTargetAtTime(v.ambience / 100, now, 0.05);
   }
 
   // ---- graph -------------------------------------------------------------------
 
   build() {
     const ctx = this.ctx;
-    this.master = this.gainNode(this.muted ? 0 : MASTER_VOLUME, ctx.destination);
-    this.sfx = this.gainNode(1, this.master);
-    this.ambience = this.gainNode(0.9, this.master);
+    const v = this.volume;
+    this.master = this.gainNode(this.muted ? 0 : v.master / 100, ctx.destination);
+    this.sfx = this.gainNode(v.effects / 100, this.master);
+    this.ambience = this.gainNode(v.ambience / 100, this.master);
     // A long, soft reverb gives the feeling of open water.
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = this.impulse(2.8);
@@ -122,7 +155,9 @@ export class AudioEngine {
       panner.pan.value = pan;
       out.connect(panner).connect(bus);
     } else out.connect(bus);
-    const wet = this.gainNode(volume, this.reverb);
+    // The reverb is shared, so scale this sound's send by its own channel's volume.
+    const channel = bus === this.ambience ? this.volume.ambience : this.volume.effects;
+    const wet = this.gainNode(volume * (channel / 100), this.reverb);
     recipe(this.kit(out, wet), opts);
     setTimeout(() => { out.disconnect(); panner?.disconnect(); wet.disconnect(); }, 6000);
   }
@@ -180,7 +215,7 @@ export class AudioEngine {
 
   /** Call every frame with the local player's line: { reeling, pulling, tension, progress }. */
   updateReel(line) {
-    if (!this.ctx || this.muted) return this.setStrain(0);
+    if (!this.ctx || this.muted || this.volume.effects === 0) return this.setStrain(0);
     const now = this.ctx.currentTime;
     if (line && (line.pulling || line.reeling) && now >= this.nextClick) {
       // The fish pulling line off the drag buzzes fast; reeling in clicks steadily.

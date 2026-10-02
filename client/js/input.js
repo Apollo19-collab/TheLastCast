@@ -2,7 +2,7 @@
 // an "action" button (Space or left mouse) used for cast / hook / reel.
 // While `isBlocked()` is true (a menu is open) gameplay input is ignored.
 
-const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history' };
+const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options' };
 
 const MOVE_KEYS = {
   KeyW: 'up', ArrowUp: 'up',
@@ -32,8 +32,8 @@ export class Input {
     this.releaseAll = () => { releaseMoves(); setAction(false); };
 
     window.addEventListener('keydown', (e) => {
-      if (e.target instanceof HTMLInputElement) return;
       if (e.code === 'Escape') { onCancel(); return; }
+      if (e.target instanceof HTMLInputElement) return;
       if (MENU_KEYS[e.code] && !e.repeat) { onMenu(MENU_KEYS[e.code]); return; }
       if (e.code === 'KeyM' && !e.repeat) { onMute(); return; }
       if (isBlocked()) return;

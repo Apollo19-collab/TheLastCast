@@ -88,8 +88,9 @@ canvas#game { display: block; cursor: crosshair; }
 #join-error { margin: 0; color: #ff8f8f; min-height: 1.2em; }
 
 @media (max-width: 800px) {
-  #status { top: 116px; max-width: calc(100vw - 24px); font-size: 13px; }
-  #feed { bottom: 12px; font-size: 12px; }
+  /* Status sits above the feed; the feed leaves room for the minimap (140px). */
+  #status { top: auto; bottom: 180px; max-width: calc(100vw - 24px); font-size: 13px; }
+  #feed { bottom: 12px; font-size: 12px; width: calc(100vw - 188px); max-height: 150px; }
   #leaderboard { width: 170px; font-size: 12px; }
   #help { display: none; }
 }
@@ -172,3 +173,16 @@ table.history td { padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255
   color: #a9d6e5;
   cursor: pointer;
 }
+
+/* ---- options tab ---- */
+#me-location { color: #ffe9a8; font-size: 12px; font-weight: 600; }
+.option-heading { margin: 4px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
+.option-heading:not(:first-child) { margin-top: 18px; }
+.option-row { display: grid; grid-template-columns: 120px 1fr 48px; align-items: center; gap: 10px; padding: 6px 0; }
+.option-row input[type=range] { width: 100%; accent-color: #3a86a8; }
+.option-value { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.85; }
+.option-check { display: flex; gap: 8px; cursor: pointer; }
+table.controls { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.controls td { padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+table.controls td:first-child { opacity: 0.6; width: 90px; }
+@media (max-width: 500px) { .option-row { grid-template-columns: 90px 1fr 40px; } }

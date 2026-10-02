@@ -71,7 +71,7 @@ test('two players see each other and each other\'s casts', async () => {
   await waitFor(b, (m) => m.t === 'state' && m.players.some((p) => p.name === 'Alice'));
 
   // Alice casts straight up from the beach into the shallows.
-  a.ws.send(JSON.stringify({ t: 'cast', angle: -Math.PI / 2, power: 0.5 }));
+  a.ws.send(JSON.stringify({ t: 'cast', angle: -Math.PI / 2, power: 1 }));
   const seen = await waitFor(b, (m) => m.t === 'state' && m.players.some((p) => p.id === a.id && p.s !== 'idle'));
   const alice = seen.players.find((p) => p.id === a.id);
   assert.ok(Number.isFinite(alice.bx) && Number.isFinite(alice.by));

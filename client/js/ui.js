@@ -3,6 +3,7 @@
 
 import { RARITY, SPECIES } from '/shared/fish.js';
 import { GEAR, GEAR_SLOTS, nextTier } from '/shared/gear.js';
+import { VOLUME_CHANNELS } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_FEED = 8;
@@ -35,10 +36,14 @@ function statLine(slot, tier) {
 }
 
 export class UI {
-  /** world: location data (for fish-index hints). onBuy(slot): purchase callback. */
-  constructor({ world, onBuy }) {
+  /**
+   * world: location data (for fish-index hints). onBuy(slot): purchase callback.
+   * audio: the AudioEngine, for the Options tab.
+   */
+  constructor({ world, onBuy, audio }) {
     this.world = world;
     this.onBuy = onBuy;
+    this.audio = audio;
     this.flashUntil = 0;
     this.lastBoard = '';
     this.profile = null;
@@ -79,6 +84,7 @@ export class UI {
 
   updateProfile(profile) {
     this.profile = profile;
+    if (this.menuTab === 'options') { this.setStats(profile); return; }
     $('me-coins').textContent = profile.coins;
     $('me-score').textContent = profile.score;
     $('me-catches').textContent = profile.catches;
@@ -87,9 +93,52 @@ export class UI {
 
   renderMenu() {
     const body = $('menu-body');
-    if (!this.profile) { body.replaceChildren(h('p', {}, 'Loading...')); return; }
+    if (!this.profile && this.menuTab !== 'options') { body.replaceChildren(h('p', {}, 'Loading...')); return; }
+    if (this.menuTab === 'options') { body.replaceChildren(...this.renderOptions()); return; }
     const render = { gear: () => this.renderGear(), index: () => this.renderIndex(), history: () => this.renderHistory() };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
+  }
+
+  setStats(profile) {
+    $('me-coins').textContent = profile.coins;
+    $('me-score').textContent = profile.score;
+    $('me-catches').textContent = profile.catches;
+  }
+
+  renderOptions() {
+    const { audio } = this;
+    const sliders = Object.entries(VOLUME_CHANNELS).map(([channel, label]) => {
+      const value = h('span', { class: 'option-value' }, `${audio.volume[channel]}%`);
+      const input = h('input', {
+        type: 'range', min: 0, max: 100, step: 1, value: audio.volume[channel], 'aria-label': `${label} volume`,
+        oninput: (e) => {
+          audio.setVolume(channel, e.target.value);
+          value.textContent = `${audio.volume[channel]}%`;
+        },
+      });
+      return h('label', { class: 'option-row' }, h('span', { class: 'option-label' }, label), input, value);
+    });
+    const mute = h('input', {
+      type: 'checkbox', checked: audio.muted,
+      onchange: () => { this.setSoundButton(audio.toggleMute()); mute.checked = audio.muted; },
+    });
+    this.optionsMute = mute;
+    return [
+      h('h4', { class: 'option-heading' }, 'Sound'),
+      ...sliders,
+      h('label', { class: 'option-row option-check' }, mute, h('span', {}, 'Mute all sound '), h('kbd', {}, 'M')),
+      h('h4', { class: 'option-heading' }, 'Controls'),
+      h('table', { class: 'controls' }, h('tbody', {}, [
+        ['Move', 'WASD / arrow keys'],
+        ['Aim', 'Mouse'],
+        ['Cast', 'Hold Space or left mouse, release to cast'],
+        ['Hook', 'Space / click when the bobber dips'],
+        ['Reel', 'Hold; release when the fish pulls'],
+        ['Reel in', 'Esc, E or right-click'],
+        ['Menus', 'G gear · I fish index · H history · O options'],
+        ['Sound', 'M mute'],
+      ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
+    ];
   }
 
   renderGear() {
@@ -163,6 +212,7 @@ export class UI {
     const btn = $('sound-toggle');
     btn.firstChild.textContent = muted ? 'Sound off ' : 'Sound on ';
     btn.classList.toggle('off', muted);
+    if (this.optionsMute) this.optionsMute.checked = muted;
     if (onClick && !btn.onclick) btn.onclick = () => { onClick(); btn.blur(); };
   }
 
@@ -192,8 +242,9 @@ export class UI {
     $('join-error').textContent = message;
   }
 
-  updateMe(me, zoneName) {
+  updateMe(me, zoneName, areaName) {
     if (!me) return;
+    $('me-location').textContent = `📍 ${areaName}`;
     $('me-name').textContent = me.name;
     $('me-score').textContent = me.sc;
     $('me-catches').textContent = me.c;

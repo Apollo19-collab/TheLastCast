@@ -3,7 +3,7 @@
 
 export const TICK_RATE = 20; // server simulation ticks per second
 
-export const PLAYER_SPEED = 170; // world units per second
+export const PLAYER_SPEED = 210; // world units per second
 export const PLAYER_RADIUS = 12;
 export const MAX_NAME_LENGTH = 16;
 
