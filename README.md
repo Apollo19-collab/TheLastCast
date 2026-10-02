@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.12.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.13.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -56,7 +56,7 @@ Walk up to another angler at the lake and press `E` to challenge them. They have
 
 Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth**, under the bridge and across the lake, and docks beside the **South Beach dock**. Walk up to it and press `E` to board. You have **2 minutes**, and you can step off again (`E`) before it leaves. Then it sails back out with everyone aboard.
 
-- **The voyage:** a trawler visits **4 of 8 sea locations**, picked at random, from Morning through Afternoon and Sunset to Night. You fish for 2½ minutes at each stop and sail between them. Walk around the deck and cast over the rail.
+- **The voyage:** a trawler visits **4 of 8 sea locations**, picked at random, from Morning through Afternoon and Sunset to Night. You fish for 2¼ minutes at each stop and sail between them, then face the boss. The whole trip is back before the next boat docks. Walk around the deck and cast over the rail.
 - **Special events:** once per stop, that location's event kicks in for 50 seconds:
 
   | Location | Event | Effect |
@@ -71,6 +71,7 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   | Moonlit Reef | Glowtide | Bites 2× faster, rare fish 2× as likely |
 
 - **Sea fish:** herring, mackerel, cod, sea bass and signature fish for each location (sheephead, parrotfish, bluefin tuna, grouper, swordfish, flounder, oarfish, opah). Each location also has a **legendary** that mostly bites during its event.
+- **The boss:** after the last stop, one of four sea monsters rises: **The Kraken**, **Megalodon**, **The Sea Serpent** or **The Ghost Whale**. The crew has 2 minutes to drive it off by fishing. Every fish landed deals its points as damage, and fish caught in the boss's glowing red **weak spot** (it moves every 15 seconds) bite faster and deal **double damage**. The boss warns before each attack: **Thrash** (line tension spikes, so ease off), **Ink Cloud** (bites half as fast) and **Whirlpool** (fish fight 40% harder). Below 30% health it attacks more often. Its health is `(80 + 260 × crew) ×` the boss's multiplier: a new player alone has about even odds, and mid-level tackle wins comfortably (a test checks this). Win: everyone gets 400 coins, plus 15% of their damage as coins, plus 800 XP, with +250 coins for the MVP. If it escapes: 100 coins and 200 XP.
 - **Rewards:** sea fish pay coins and score as normal. The voyage also keeps a **points table**, and the crew shares **3 missions** (e.g. "Catch 20 fish", "Land 2 rare or legendary fish"). At the end everyone gets bonus coins: 25% of their voyage points, plus 100 per completed mission, plus 300/150/75 for the top three. Then the boat brings you back to the dock.
 
 ### Progression

@@ -613,7 +613,7 @@ export class Game {
     return {
       t: MSG.STATE,
       players,
-      hotspots: this.hotspots.map((h) => ({ id: h.id, x: r1(h.x), y: r1(h.y), r: h.r, life: r1(h.life) })),
+      hotspots: this.hotspots.map((h) => ({ id: h.id, x: r1(h.x), y: r1(h.y), r: h.r, life: r1(h.life), ...(h.boss ? { b: 1 } : {}) })),
       chums: this.chums.map((c) => ({ id: c.id, o: c.ownerId, n: c.name, x: r1(c.x), y: r1(c.y), l: Math.ceil(c.life), f: c.fish })),
       ...(this.kind === 'lake' ? { zoo: (({ stock, x, y, area, left }) => ({ stock, x, y, area, tl: Math.ceil(left) }))(this.zoo()) } : {}),
       ...this.hooks.snapshot?.(),

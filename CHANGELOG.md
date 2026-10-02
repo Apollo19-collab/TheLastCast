@@ -2,6 +2,15 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.13.0 - Voyage bosses (2026-10-02)
+
+- Boss fight at the end of every voyage: after the last stop, The Kraken, Megalodon, The Sea Serpent or The Ghost Whale rises from the deep.
+- The crew fights it together by fishing: every fish you land deals its points as damage. Cast into the glowing red weak spot (it moves every 15 seconds) for faster bites and double damage. You have 2 minutes.
+- The boss fights back with warned attacks: Thrash spikes your line tension, Ink Cloud slows bites, and Whirlpool makes fish fight harder. Below 30% health it attacks more often.
+- Boss health scales with the crew. Win and everyone gets 400 coins, 15% of their damage in coins and 800 XP, with a bonus for the MVP. If it escapes, you still get a little.
+- Stops are slightly shorter (2:15) so the whole voyage, boss included, is back before the next boat.
+- New achievement: Monster Hunter (defeat 5 bosses).
+
 ## 0.12.0 - Pets & the Travelling Zoo (2026-10-02)
 
 - Pets! 25 companions, 5 of each rarity (Common, Uncommon, Rare, Epic, Legendary), each with its own ability: finding coins, saving bait, Double Catches, longer casts, rescuing lost fish, legendary-hunting and more.

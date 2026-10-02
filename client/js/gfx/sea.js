@@ -7,7 +7,7 @@
 
 import { Terrain } from './terrain.js';
 import { seeded } from './noise.js';
-import { SEA_EVENTS, SEA_LOCATIONS } from '/shared/voyage.js';
+import { BOSSES, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS } from '/shared/voyage.js';
 
 const TILE = 900; // scenery repeats every TILE world units as the sea scrolls by
 
@@ -93,6 +93,107 @@ export class SeaScene {
     ctx.globalAlpha = 1;
 
     if (state.event) this.drawEventWater(ctx, view, time, state.event);
+    if (state.boss && !state.boss.r) this.drawBoss(ctx, time, state.boss, state.phase);
+  }
+
+  /**
+   * The boss circling the trawler under the surface. It rises as the fight
+   * goes on (more visible), and flashes when hit.
+   */
+  drawBoss(ctx, time, boss, phase) {
+    const b = BOSSES[boss.id];
+    if (!b) return;
+    const cx = SEA_BOAT.x;
+    const cy = SEA_BOAT.y;
+    const rising = phase === 'bossIntro' ? 0.4 : 0.55 + 0.35 * (1 - boss.hp / Math.max(1, boss.mx));
+    const angle = time / 6000;
+    const bx = cx + Math.cos(angle) * 430;
+    const by = cy + Math.sin(angle) * 300;
+    const heading = angle + Math.PI / 2;
+    const hit = this.lastHp != null && boss.hp < this.lastHp;
+    if (hit) this.hitFlash = time;
+    this.lastHp = boss.hp;
+    const flash = this.hitFlash && time - this.hitFlash < 250 ? 1 : 0;
+    ctx.save();
+    ctx.globalAlpha = 0.35 * rising + 0.25 * flash;
+    ctx.fillStyle = flash ? '#ffffff' : b.color;
+    switch (boss.id) {
+      case 'kraken': {
+        // A huge mantle, and tentacles curling up around the boat.
+        ctx.beginPath();
+        ctx.ellipse(bx, by, 150, 110, heading, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = ctx.fillStyle;
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + time / 2500;
+          const r = 340 + Math.sin(time / 700 + i) * 30;
+          const tx = cx + Math.cos(a) * r;
+          const ty = cy + Math.sin(a) * r * 0.75;
+          ctx.lineWidth = 26;
+          ctx.beginPath();
+          ctx.moveTo(tx, ty);
+          ctx.quadraticCurveTo(tx + Math.sin(time / 400 + i) * 60, ty - 80, tx + Math.cos(a) * 60, ty + Math.sin(a) * 60 - 140);
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'serpent': {
+        // Coils breaking the surface along a winding path.
+        for (let i = 0; i < 9; i++) {
+          const t = angle - i * 0.18;
+          const x = cx + Math.cos(t) * 440;
+          const y = cy + Math.sin(t) * 310 + Math.sin(time / 300 + i) * 20;
+          ctx.beginPath();
+          ctx.ellipse(x, y, 60 - i * 3, 34 - i * 2, t + Math.PI / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      default: {
+        // A great body with a tail: the Megalodon and the Ghost Whale.
+        ctx.translate(bx, by);
+        ctx.rotate(heading);
+        const len = boss.id === 'ghostwhale' ? 340 : 300;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, len / 2, len / 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        const flick = Math.sin(time / 300) * 30;
+        ctx.moveTo(-len / 2 + 10, 0);
+        ctx.lineTo(-len / 2 - 80, -70 + flick);
+        ctx.lineTo(-len / 2 - 60, 0);
+        ctx.lineTo(-len / 2 - 80, 70 + flick);
+        ctx.closePath();
+        ctx.fill();
+        if (boss.id === 'megalodon') {
+          ctx.beginPath(); // dorsal fin cutting the surface
+          ctx.moveTo(-10, -len / 6);
+          ctx.lineTo(30, -len / 6 - 60);
+          ctx.lineTo(60, -len / 6);
+          ctx.closePath();
+          ctx.globalAlpha = 0.75;
+          ctx.fill();
+        } else {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.2 + 0.1 * Math.sin(time / 500);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, len / 2 + 30, len / 6 + 30, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    // Glowing eyes.
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.6 * rising;
+    ctx.fillStyle = boss.id === 'ghostwhale' ? '#e0fbfc' : '#ffd166';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(bx + Math.cos(heading) * 70 + Math.cos(heading + Math.PI / 2) * side * 22, by + Math.sin(heading) * 70 + Math.sin(heading + Math.PI / 2) * side * 22, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   /** Call fn(item, x, y) for every copy of a tiled item inside the view. */
@@ -313,6 +414,11 @@ export class SeaScene {
   drawSky(ctx, width, height, time, state) {
     const light = DAYLIGHT[state.time] ?? DAYLIGHT.Afternoon;
     let dark = light.dark;
+    if (state.boss && !state.boss.r) dark += 0.15; // the sky darkens for the boss
+    if (state.boss?.e === 'ink') {
+      ctx.fillStyle = 'rgba(10,5,20,0.35)';
+      ctx.fillRect(0, 0, width, height);
+    }
     if (state.loc === 'stormBanks') dark += 0.18;
     if (state.loc === 'abyssalTrench') dark += 0.12;
     if (dark > 0) {

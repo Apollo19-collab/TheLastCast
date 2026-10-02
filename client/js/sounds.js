@@ -129,6 +129,13 @@ export const SOUNDS = {
     k.noise({ dur: 1.2, gain: 0.08, filter: 'highpass', freq: 4000, attack: 0.3, reverb: 0.6 });
   },
 
+  // A sea monster roars from the deep.
+  bossRoar(k) {
+    k.tone({ freq: 70, to: 45, dur: 1.6, gain: 0.3, attack: 0.15, type: 'sawtooth', reverb: 0.9 });
+    k.tone({ freq: 105, to: 60, dur: 1.4, gain: 0.15, attack: 0.2, type: 'square', reverb: 0.9 });
+    k.noise({ dur: 1.5, gain: 0.2, filter: 'lowpass', freq: 400, to: 120, attack: 0.2, reverb: 0.8 });
+  },
+
   // A crew mission is complete.
   mission(k) {
     k.tone({ freq: NOTE.G5, dur: 0.2, gain: 0.14, type: 'triangle' });

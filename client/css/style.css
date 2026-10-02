@@ -496,3 +496,14 @@ table.controls td:first-child { opacity: 0.6; width: 90px; }
 .pet-ability { font-size: 12px; color: #ffe9a8; font-weight: 700; }
 .pet-desc { font-size: 12px; opacity: 0.85; }
 .pet-card .btn { margin-top: 4px; }
+
+/* ---- voyage boss ---- */
+.boss-block { margin-top: 6px; }
+.boss-bar { position: relative; height: 16px; border-radius: 8px; background: rgba(0, 0, 0, 0.5); overflow: hidden; border: 1px solid rgba(255, 77, 109, 0.6); }
+.boss-bar > div { height: 100%; background: linear-gradient(90deg, #ff4d6d, #f8961e); transition: width 0.3s; }
+.boss-bar > span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; font-weight: 800; text-shadow: 0 1px 2px #000; }
+.boss-warn { margin-top: 5px; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; background: rgba(248, 150, 30, 0.25); border: 1px solid #f8961e; animation: ep-glow 0.6s ease-in-out infinite; }
+.boss-effect { margin-top: 4px; font-size: 12px; color: #ffb4a2; }
+.boss-result { font-weight: 800; font-size: 15px; }
+.boss-result.won { color: #7bd389; }
+.boss-result.lost { color: #8d99ae; }

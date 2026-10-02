@@ -444,6 +444,40 @@ export class Renderer {
   drawHotspot(h, time) {
     const { ctx } = this;
     if (!this.onScreen(h.x, h.y, h.r)) return;
+    if (h.b) {
+      // The boss's weak spot: a pulsing red target.
+      const pulse = 0.5 + 0.5 * Math.sin(time / 180);
+      ctx.save();
+      const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+      g.addColorStop(0, `rgba(255,60,60,${0.35 + 0.2 * pulse})`);
+      g.addColorStop(1, 'rgba(255,60,60,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ff4d4d';
+      ctx.lineWidth = 2.5;
+      for (const r of [h.r * 0.95, h.r * 0.55]) {
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(h.x - h.r, h.y);
+      ctx.lineTo(h.x + h.r, h.y);
+      ctx.moveTo(h.x, h.y - h.r);
+      ctx.lineTo(h.x, h.y + h.r);
+      ctx.stroke();
+      ctx.font = '900 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeText('WEAK SPOT ×2', h.x, h.y - h.r - 6);
+      ctx.fillStyle = '#ffb4b4';
+      ctx.fillText('WEAK SPOT ×2', h.x, h.y - h.r - 6);
+      ctx.restore();
+      return;
+    }
     const H = THEME.hotspot;
     const fade = clamp(h.life / 5, 0, 1);
     ctx.save();

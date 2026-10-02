@@ -551,6 +551,38 @@ net.on(MSG.EVENT, (ev) => {
       ui.toast({ title: 'Crew mission complete', name: ev.text, detail: `+${ev.reward} bonus coins for everyone` });
       audio.play('mission');
       break;
+    case 'bossIncoming':
+      ui.banner('Something is rising...', ev.desc, '#ff4d6d', 4000);
+      ui.feed(`⚠ Lines in! ${ev.name} is rising from the deep!`, '#ff4d6d');
+      audio.play('bossRoar');
+      break;
+    case 'bossStart':
+      ui.banner(ev.name, 'Fish together to drive it off! Cast into the red weak spot for double damage.', '#ff4d6d', 4500);
+      ui.feed(`⚔ ${ev.name} attacks the trawler! Every fish you land hurts it. You have ${Math.round(ev.seconds / 60)} minutes.`, '#ff4d6d');
+      audio.play('bossRoar');
+      break;
+    case 'bossWarn':
+      ui.banner(`${ev.name}!`, ev.desc, '#f8961e', ev.seconds * 1000);
+      audio.play('error');
+      break;
+    case 'bossAttack':
+      audio.play(ev.attack === 'thrash' ? 'snap' : 'bossRoar', { volume: 0.6 });
+      break;
+    case 'bossHit': {
+      const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
+      if (p) renderer.addEffect({ type: 'text', text: `-${ev.damage}${ev.weak ? ' WEAK SPOT!' : ''}`, x: p.x, y: p.y - 30, color: ev.weak ? '#ff6b6b' : '#ffd166', duration: 1600 });
+      if (ev.weak || ev.damage >= 100) ui.feed(`⚔ ${mine ? 'You' : ev.name} hit the boss for ${ev.damage}${ev.weak ? ' (weak spot!)' : ''}.`, '#ffb4a2');
+      break;
+    }
+    case 'bossEnd':
+      if (ev.won) {
+        ui.banner('Victory!', `${ev.name} has been driven off!`, '#7bd389', 4500);
+        audio.play('duelWin');
+      } else {
+        ui.banner(`${ev.name} escaped`, 'It slipped back into the deep...', '#8d99ae', 4000);
+        audio.play('lose');
+      }
+      break;
     case 'voyageResults':
       ui.showVoyageResults(ev);
       audio.play(ev.rank === 1 ? 'duelWin' : 'achievement');
@@ -607,6 +639,8 @@ function updateVoyagePanel(me, snap) {
     crew: vy.crew,
     missions: voyage.missions.map((m, i) => ({ text: m.text, goal: m.goal, progress: vy.ms[i] ?? 0 })),
     myPoints: me?.vp ?? 0,
+    myDamage: me?.bd ?? 0,
+    boss: vy.bs ?? null,
     rank: Math.max(1, ranked.findIndex((p) => p.id === meId) + 1),
     crewSize: snap.players.length,
   });
@@ -646,7 +680,7 @@ function frame(now) {
   const myStats = currentStats(me);
   let aim = null;
   let aimZone = null;
-  const canAim = me && input && me.s === FishingState.IDLE && !me.ab && !(room === 'voyage' && snap?.vy?.ph !== 'fishing');
+  const canAim = me && input && me.s === FishingState.IDLE && !me.ab && !(room === 'voyage' && !['fishing', 'boss'].includes(snap?.vy?.ph));
   if (canAim) {
     const angle = aimAngle();
     const power = charge ? chargePower(now) : 1;
@@ -662,7 +696,8 @@ function frame(now) {
     syncReel(me);
     let text = STATUS_TEXT[me.s] ?? '';
     if (me.s === FishingState.IDLE && charge) text = `Power ${Math.round(chargePower(now) * 100)}%. Release to cast.`;
-    if (me.s === FishingState.IDLE && room === 'voyage' && snap?.vy?.ph !== 'fishing') text = 'Lines in while the boat is moving. Get ready for the next stop!';
+    if (me.s === FishingState.IDLE && room === 'voyage' && !['fishing', 'boss'].includes(snap?.vy?.ph)) text = 'Lines in while the boat is moving. Get ready for the next stop!';
+    if (me.s === FishingState.IDLE && snap?.vy?.ph === 'boss') text = 'Fish to hurt the boss! Cast into the red weak spot for double damage.';
     if (me.ab) text = snap?.boat?.ph === 'docked' ? 'Waiting aboard the boat. It sails when boarding closes.' : 'Sailing out to sea...';
     const pulling = me.s === FishingState.REELING && me.pl;
     if (pulling) text = 'It\'s pulling! Ease off or the line will snap!';
@@ -699,7 +734,9 @@ function frame(now) {
       loc: vy.loc,
       time: voyage?.stops[Math.max(0, vy.st)]?.time ?? 'Morning',
       event: vy.ev,
-      sailing: vy.ph !== 'fishing',
+      sailing: vy.ph !== 'fishing' && vy.ph !== 'boss',
+      phase: vy.ph,
+      boss: vy.bs ?? null,
     } : null,
   });
 }

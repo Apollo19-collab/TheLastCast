@@ -6,9 +6,11 @@ import { Game } from '../server/game.js';
 import { Hub } from '../server/hub.js';
 import { FishingState, MSG } from '../shared/constants.js';
 import { LOCATIONS, isWalkable, isWater } from '../shared/world.js';
+import { pickSpecies, rollKg } from '../server/fishing.js';
+import { fishDifficulty, scoreCatch } from '../shared/fish.js';
 import { computeStats } from '../shared/gear.js';
 import { DUEL } from '../shared/duel.js';
-import { BOAT, SEA_LOCATIONS, VOYAGE, boatState, boatSlot, deckSlot, makeSeaWorld, seaZone } from '../shared/voyage.js';
+import { BOAT, BOSS, BOSSES, BOSS_ATTACKS, SEA_LOCATIONS, VOYAGE, boatState, boatSlot, bossHp, bossZone, deckSlot, makeSeaWorld, seaZone } from '../shared/voyage.js';
 
 const world = LOCATIONS.mirrorLake;
 
@@ -194,7 +196,7 @@ test('boat schedule: docks on the quarter hour; its route stays on the water', (
 });
 
 const FAST = {
-  ...VOYAGE, outbound: 1, fishing: 12, sailing: 1, results: 1, eventEarliest: 2, eventLength: 4,
+  ...VOYAGE, outbound: 1, fishing: 12, sailing: 1, results: 1, eventEarliest: 2, eventLength: 4, bossIntro: 1, boss: 30,
 };
 
 function makeHub() {
@@ -292,15 +294,15 @@ test('voyage: sails 4 random stops with events, then pays out and comes home', (
   assert.ok(a.profile.coins > coins, 'sea fish pay out like normal');
   assert.ok(voyage.scores.get(a.id).points > 0);
 
-  // Through every stop to the results, then home.
-  step((FAST.fishing + FAST.sailing) * 4);
+  // Through every stop and the boss (nobody fights it, so it escapes) to the results, then home.
+  stepUntil(() => inbox.some((m) => m.kind === 'voyageResults'), 500);
   const results = inbox.find((m) => m.kind === 'voyageResults');
+  assert.equal(results.boss.result, 'lost');
   assert.ok(results, 'results arrive');
   assert.equal(results.rank, 1);
   assert.ok(results.bonus >= FAST.rankBonus[0]);
   assert.equal(a.profile.counters.voyages, 1);
-  step(FAST.results + 0.5);
-  assert.equal(hub.voyages.size, 0);
+  stepUntil(() => hub.voyages.size === 0, 10);
   assert.equal(a.room, hub.lake);
   assert.equal(inbox.filter((m) => m.t === MSG.ROOM).at(-1).room, 'lake');
   assert.ok(isWalkable(world, a.x, a.y), 'back on the dock');
@@ -321,4 +323,116 @@ test('voyage: the Leviathan only bites during its event; an empty boat stops', (
   hub.removePlayer(a);
   step(0.1);
   assert.equal(hub.voyages.size, 0, 'nobody left aboard');
+});
+
+// ---- the boss at the end of a voyage ----------------------------------------------------
+
+/** Sail a fresh voyage with these crew names right up to the boss fight. */
+function toBoss(names = ['Alice']) {
+  const h = makeHub();
+  const crew = names.map((n) => h.join(n));
+  for (const c of crew) h.hub.handleMessage(c.p, { t: MSG.BOARD });
+  h.stepUntil(() => h.hub.voyages.size === 1);
+  const voyage = [...h.hub.voyages][0];
+  h.stepUntil(() => voyage.phase === 'boss', 500);
+  return { ...h, crew, voyage };
+}
+
+test('voyage timing: the whole trip, boss included, is back before the next boat', () => {
+  const t = VOYAGE;
+  const total = t.outbound + t.stops * t.fishing + (t.stops - 1) * t.sailing + t.bossIntro + t.boss + t.results;
+  // It sets sail when the boat finishes leaving and must be home before the next one docks.
+  assert.ok(BOAT.board + BOAT.depart + total <= BOAT.interval, `voyage takes ${total}s`);
+});
+
+test('boss: crew damage it by fishing; the weak spot hits twice as hard; defeat pays out', () => {
+  const { voyage, crew, step } = toBoss(['Alice', 'Bob']);
+  const [a, b] = crew;
+  assert.equal(voyage.boss.max, bossHp(voyage.boss.id, 2), 'health scales with the crew');
+  assert.equal(voyage.game.world.zones[0].id, 'boss');
+  const weak = voyage.game.hotspots[0];
+  assert.ok(weak.boss, 'the weak spot is out');
+
+  const hit = (player, inWeakSpot) => {
+    player.p.line = {
+      state: FishingState.REELING, x: inWeakSpot ? weak.x : 100, y: inWeakSpot ? weak.y : 100, zoneId: 'boss', hotspot: inWeakSpot,
+      fish: { species: 'cod', kg: 5 }, progress: 0.999, tension: 0, reeling: true, pulling: false, pullTimer: 99, fight: 0.2, reelSpeed: 1, lineStrength: 1, drag: 1,
+    };
+    const before = voyage.boss.hp;
+    step(0.05);
+    return before - voyage.boss.hp;
+  };
+  const normal = hit(a, false);
+  const doubled = hit(b, true);
+  assert.ok(normal > 0);
+  assert.ok(doubled > normal * 1.9, 'weak spot doubles the damage (on top of the hotspot bonus)');
+
+  const coins = a.p.profile.coins;
+  voyage.boss.hp = 1;
+  hit(a, false);
+  assert.equal(voyage.boss.result, 'won');
+  const results = a.inbox.find((m) => m.kind === 'voyageResults');
+  assert.equal(results.boss.result, 'won');
+  assert.ok(results.breakdown.boss >= BOSS.win.coins);
+  assert.ok(a.p.profile.coins - coins >= BOSS.win.coins);
+  assert.equal(a.p.profile.counters.bossKills, 1);
+  assert.ok(['Alice', 'Bob'].includes(results.boss.mvp), 'the top damage dealer is MVP');
+});
+
+test('boss: telegraphed attacks; Thrash spikes tension, Ink slows bites', () => {
+  const { voyage, crew, step } = toBoss(['Alice']);
+  const [a] = crew;
+  voyage.boss.nextAttack = 0;
+  // Force a Thrash with a fish on the line.
+  voyage.boss.attack = null;
+  voyage.rng = () => 0; // first attack in the list
+  const first = BOSSES[voyage.boss.id].attacks[0];
+  a.p.line = {
+    state: FishingState.REELING, x: 100, y: 100, zoneId: 'boss', fish: { species: 'cod', kg: 5 },
+    progress: 0.5, tension: 0.1, reeling: false, pulling: false, pullTimer: 99, fight: 0.5, reelSpeed: 1, lineStrength: 1, drag: 0,
+  };
+  step(0.05);
+  assert.equal(voyage.boss.attack.id, first);
+  assert.ok(voyage.game.events.some((e) => e.kind === 'bossWarn'), 'players get a warning first');
+  step(BOSS.warning + 0.1);
+  assert.ok(voyage.game.events.some((e) => e.kind === 'bossAttack'));
+  const atk = BOSS_ATTACKS[first];
+  if (atk.tension) assert.ok(a.p.line.state !== FishingState.REELING || a.p.line.tension > 0.1 + atk.tension * 0.8);
+  if (atk.mods) assert.deepEqual(voyage.game.mods, atk.mods);
+});
+
+test('boss: escapes if the crew runs out of time', () => {
+  const { voyage, crew, stepUntil } = toBoss(['Alice']);
+  stepUntil(() => voyage.phase !== 'boss', 100);
+  assert.equal(voyage.boss.result, 'lost');
+  assert.equal(crew[0].p.profile.counters.bossKills, 0);
+  assert.ok(crew[0].inbox.find((m) => m.kind === 'voyageResults').breakdown.boss === BOSS.lose.coins);
+});
+
+test('boss balance: a coin flip for a new player alone, comfortable with mid-level tackle', () => {
+  // Expected damage one angler deals in the fight, casting into the weak
+  // spot half the time, with 20% downtime (warnings, missed fish).
+  const damage = (bossId, equipped) => {
+    const rng = seeded(11);
+    const zone = bossZone(bossId);
+    const st = computeStats(equipped);
+    let dmg = 0;
+    let time = 0;
+    for (let i = 0; i < 2000; i++) {
+      const weak = rng() < 0.5;
+      const sp = pickSpecies(rng, zone, weak, st);
+      const kg = rollKg(rng, sp);
+      const d = fishDifficulty(sp, kg);
+      time += 8 / (zone.biteRate * st.biteSpeed * (weak ? 1.8 : 1)) + 6.1 + 5 * d;
+      if (rng() > Math.max(0, (d - st.lineStrength * 1.1) / 2)) dmg += scoreCatch(sp, kg, weak ? 1.25 : 1) * (weak ? 2 : 1);
+    }
+    return (dmg / time) * VOYAGE.boss * 0.8;
+  };
+  for (const id of Object.keys(BOSSES)) {
+    const starter = damage(id, {}) / bossHp(id, 1);
+    const mid = damage(id, { rod: 'carbon', reel: 'baitcaster', line: 'braid', bait: 'spinner' }) / bossHp(id, 1);
+    assert.ok(starter > 0.7 && starter < 1.2, `${id}: starter solo deals ${starter.toFixed(2)}x its health`);
+    assert.ok(mid > 1.1 && mid < 2, `${id}: mid tackle solo deals ${mid.toFixed(2)}x its health`);
+  }
+  assert.ok(BOSS.perAngler < 300, 'each extra angler adds less health than they deal');
 });

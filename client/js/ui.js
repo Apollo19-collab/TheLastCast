@@ -7,7 +7,7 @@ import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
 import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
-import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
+import { BOSSES, BOSS_ATTACKS, SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
 import { CHUM } from '/shared/chum.js';
 import { PETS, PET_IDS, PET_RARITIES, petPrice } from '/shared/pets.js';
@@ -807,6 +807,9 @@ export class UI {
     if (v.phase === 'fishing') {
       title = `Stop ${v.stopIndex + 1}/${v.stops.length} · ${loc.name}`;
       time = clock(v.timeLeft);
+    } else if (v.phase === 'bossIntro' || v.phase === 'boss') {
+      title = `Boss: ${BOSSES[v.boss?.id]?.name ?? '???'}`;
+      time = v.phase === 'boss' ? clock(v.timeLeft) : 'Rising...';
     } else if (v.phase === 'results') {
       title = 'Voyage complete';
       time = 'Heading home';
@@ -824,6 +827,7 @@ export class UI {
         title: `${SEA_LOCATIONS[s.loc].name} (${s.time})`,
       }, `${SEA_LOCATIONS[s.loc].name}`, h('small', {}, s.time)))),
       ev ? h('div', { class: 'ep-event' }, h('b', {}, `${ev.name}! `), `${clock(v.eventLeft)} left · ${ev.desc}`) : null,
+      v.boss && (v.phase === 'boss' || v.phase === 'bossIntro') ? this.bossBlock(v) : null,
       !ev && v.phase === 'fishing' ? h('div', { class: 'ep-note' }, `${loc.desc} Special event here: ${SEA_EVENTS[loc.event].name}.`) : null,
       h('div', { class: 'ep-stats' }, `You: ${num(v.myPoints)} pts (#${v.rank} of ${v.crewSize}) · Crew: ${num(v.crew)} pts`),
       h('div', { class: 'missions' }, v.missions.map((m) => h('div', { class: `mission${m.progress >= m.goal ? ' done' : ''}` },
@@ -831,6 +835,20 @@ export class UI {
         h('span', { class: 'mission-count' }, `${Math.min(m.progress, m.goal)}/${m.goal}`)))),
     );
     el.hidden = false;
+  }
+
+  /** Boss health bar, incoming attack and your damage. */
+  bossBlock(v) {
+    const b = v.boss;
+    const frac = b.mx ? b.hp / b.mx : 1;
+    const warn = b.w ? BOSS_ATTACKS[b.w] : null;
+    const effect = b.e ? BOSS_ATTACKS[b.e] : null;
+    return h('div', { class: 'boss-block' },
+      h('div', { class: 'boss-bar' }, h('div', { style: { width: `${Math.max(0, frac * 100)}%` } }),
+        h('span', {}, b.mx ? `${num(b.hp)} / ${num(b.mx)}` : '')),
+      warn ? h('div', { class: 'boss-warn' }, `⚠ ${warn.name} in ${b.wl}... ${warn.desc}`) : null,
+      effect ? h('div', { class: 'boss-effect' }, `${effect.name}: ${effect.desc}`) : null,
+      h('div', { class: 'ep-stats' }, `Your damage: ${num(v.myDamage)} · Red weak spot = double damage`));
   }
 
   hidePanel(kind) {
@@ -856,15 +874,17 @@ export class UI {
   /** End-of-voyage summary. */
   showVoyageResults(r) {
     const rows = r.ranking.map((x) => h('tr', { class: x.me ? 'me' : '' },
-      h('td', {}, `#${x.rank}`), h('td', {}, x.name), h('td', {}, num(x.points)), h('td', {}, String(x.catches))));
+      h('td', {}, `#${x.rank}`), h('td', {}, x.name), h('td', {}, num(x.points)), h('td', {}, String(x.catches)), h('td', {}, num(x.damage || 0))));
     const b = r.breakdown;
     this.showResults([
       h('h2', {}, '⛴ Voyage complete!'),
       h('p', { class: 'results-big' }, `You placed #${r.rank} and earned `, h('b', {}, `${num(r.bonus)} bonus coins`), '.'),
       h('p', { class: 'menu-note' },
-        `${num(b.points)} for your points · ${num(b.missions)} for crew missions${b.rank ? ` · ${num(b.rank)} for your placing` : ''}`),
+        `${num(b.points)} for your points · ${num(b.missions)} for crew missions${b.rank ? ` · ${num(b.rank)} for your placing` : ''}${b.boss ? ` · ${num(b.boss)} from the boss fight` : ''} · +${num(r.xp ?? 0)} XP`),
+      r.boss ? h('p', { class: `boss-result ${r.boss.result}` },
+        r.boss.result === 'won' ? `⚔ ${r.boss.name} defeated!${r.boss.mvp ? ` MVP: ${r.boss.mvp}` : ''}` : `${r.boss.name} escaped.`) : null,
       h('table', { class: 'history results-table' },
-        h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Angler'), h('th', {}, 'Points'), h('th', {}, 'Fish'))),
+        h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Angler'), h('th', {}, 'Points'), h('th', {}, 'Fish'), h('th', {}, 'Boss dmg'))),
         h('tbody', {}, rows)),
       h('p', {}, `Crew total: `, h('b', {}, `${num(r.crewTotal)} pts`)),
       h('div', { class: 'missions' }, r.missions.map((m) => h('div', { class: `mission${m.done ? ' done' : ''}` }, m.done ? '✓ ' : '✗ ', m.text))),

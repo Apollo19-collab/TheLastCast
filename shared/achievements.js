@@ -56,6 +56,7 @@ export const ACHIEVEMENTS = [
   { id: 'current_rider', name: 'Current Rider', desc: 'Catch 40 fish during special events at sea.', metric: 'eventCatches', goal: 40, coins: 600 },
   { id: 'rising_star', name: 'Rising Star', desc: 'Reach level 10.', metric: 'level', goal: 10, coins: 300 },
   { id: 'master_angler', name: 'Master Angler', desc: 'Reach the maximum level, 50.', metric: 'level', goal: 50, coins: 5000 },
+  { id: 'monster_hunter', name: 'Monster Hunter', desc: 'Defeat 5 voyage bosses.', metric: 'bossKills', goal: 5, coins: 1500 },
   { id: 'zookeeper', name: 'Zookeeper', desc: 'Own 5 pets.', metric: 'pets', goal: 5, coins: 1000 },
   { id: 'menagerie', name: 'Menagerie', desc: 'Own all 25 pets.', metric: 'pets', goal: 25, coins: 15000 },
   { id: 'leviathan_slayer', name: 'Leviathan Slayer', desc: 'Catch The Leviathan in the Abyssal Trench.', metric: 'index.leviathan', goal: 1, coins: 2500 },
@@ -72,7 +73,7 @@ export function newCounters() {
   return {
     catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0,
     bigFish: 0, heaviest: 0, snaps: 0, family: {}, zone: {}, area: {},
-    duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0,
+    duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0, bossKills: 0,
   };
 }
 

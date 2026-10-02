@@ -339,7 +339,7 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus })
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, coins);
-  ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event });
+  ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event, hotspot: !!hotspot });
   ctx.chumCatch?.(player, s.rarity);
   ctx.gainXp?.(player, xp);
 
