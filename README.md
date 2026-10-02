@@ -80,11 +80,11 @@ See `.env.example`. None are required locally.
 
 ## Deploying to Railway
 
-The repo includes `railway.json` (start command `npm start`, health check on `/health`). The Node version comes from `engines` in `package.json`.
+The repo includes `railway.json` (start command `node server/index.js`, run directly rather than through npm so shutdown signals reach the server and it can save profiles; health check on `/health`). The Node version comes from `engines` in `package.json`.
 
 1. Push this repository to GitHub.
 2. In Railway, choose **New Project → Deploy from GitHub repo** and pick `TheLastCast`.
-3. Railway detects Node, runs `npm install`, then `npm start`. You don't need to set `PORT`; Railway injects it.
+3. Railway detects Node, runs `npm install`, then starts the server. You don't need to set `PORT`; Railway injects it.
 4. Open the service's **Settings → Networking** and click **Generate Domain**.
 5. Visit the domain. The client connects automatically to `wss://<your-domain>/ws`.
 
