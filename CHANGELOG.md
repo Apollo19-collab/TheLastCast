@@ -2,6 +2,12 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.7.2 - Every fish is a fight (2026-10-02)
+
+- Early fish take longer to land: fights start further out and reeling in is slower, so even a bluegill takes a few seconds.
+- Small fish now make runs that build line tension, so you need to ease off for them too.
+- Big and legendary fish keep their challenge. Better tackle still makes the biggest difference.
+
 ## 0.7.1 - Fish fight back (2026-10-02)
 
 - Reeling difficulty now depends on the fish: rarer and bigger fish pull longer, surge harder and strip line.

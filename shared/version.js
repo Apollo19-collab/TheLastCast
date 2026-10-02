@@ -2,9 +2,19 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.7.2';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.2',
+    date: '2026-10-02',
+    title: 'Every fish is a fight',
+    changes: [
+      'Early fish take longer to land: fights start further out and reeling in is slower, so even a bluegill takes a few seconds.',
+      'Small fish now make runs that build line tension, so you need to ease off for them too.',
+      'Big and legendary fish keep their challenge. Better tackle still makes the biggest difference.',
+    ],
+  },
   {
     version: '0.7.1',
     date: '2026-10-02',

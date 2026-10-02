@@ -66,7 +66,7 @@ export function hook(ctx, player) {
   const fight = fishDifficulty(line.fish.species, line.fish.kg);
   Object.assign(line, {
     state: REELING,
-    progress: 0.25,
+    progress: 0.1 + 0.07 * Math.min(fight, 2), // weak fish start further out, so even they need reeling in
     tension: 0,
     reeling: false,
     pulling: false,
@@ -194,10 +194,10 @@ function fight(ctx, player, dt) {
 
   if (line.reeling) {
     // During a run, strong fish strip line even while you reel against them.
-    line.progress += dt * (line.pulling ? 0.06 * reelSpeed - 0.03 * d : (0.3 / (0.5 + 0.5 * d)) * reelSpeed);
-    line.tension += (dt * (line.pulling ? 0.3 + 0.65 * d : 0.05 * (0.5 + 0.5 * d))) / lineStrength;
+    line.progress += dt * (line.pulling ? 0.05 * reelSpeed - 0.03 * d : (0.18 / (0.6 + 0.4 * d) + 0.05 * Math.max(0, d - 1)) * reelSpeed);
+    line.tension += (dt * (line.pulling ? 0.45 + 0.6 * d : 0.05 * (0.5 + 0.5 * d))) / lineStrength;
   } else {
-    line.progress -= dt * (line.pulling ? 0.02 + 0.06 * d : 0.01);
+    line.progress -= dt * (line.pulling ? 0.04 + 0.05 * d : 0.01);
     line.tension = Math.max(0, line.tension - dt * 0.7 * drag);
   }
 

@@ -531,6 +531,10 @@ test('the big lake: three new locations, all reachable on foot', () => {
 // Simulated angler with ~0.3 s reaction time who reels while the fish rests
 // and a little into runs, backing off when tension gets high.
 function simulateFight(species, kg, equipped, seed) {
+  return simulateFightTimed(species, kg, equipped, seed).landed;
+}
+
+function simulateFightTimed(species, kg, equipped, seed) {
   const game = new Game({ world, rng: seeded(seed) });
   game.fillHotspots = () => {};
   game.hotspots = [];
@@ -539,13 +543,15 @@ function simulateFight(species, kg, equipped, seed) {
   p.line = { state: FishingState.BITE, x: 1500, y: 1450, zoneId: 'deep', timer: 1, fish: { species, kg } };
   game.handleMessage(p, { t: MSG.HOOK });
   const seen = [];
+  let elapsed = 0;
   for (let t = 0; t < 120 && p.line.state === FishingState.REELING; t += 0.05) {
     seen.push({ pulling: p.line.pulling, tension: p.line.tension });
     const l = seen[Math.max(0, seen.length - 7)];
     game.handleMessage(p, { t: MSG.REEL, on: l.pulling ? l.tension < 0.45 : l.tension < 0.75 });
     game.tick(0.05);
+    elapsed += 0.05;
   }
-  return game.drainEvents().some((e) => e.kind === 'catch');
+  return { landed: game.drainEvents().some((e) => e.kind === 'catch'), seconds: elapsed };
 }
 
 test('fight difficulty grows with rarity and size', () => {
@@ -573,4 +579,15 @@ test('hooking reports how strong the fish is', () => {
   game.handleMessage(player, { t: MSG.HOOK });
   assert.equal(inbox.find((m) => m.kind === 'hooked').strength, 'Monster');
   assert.equal(game.snapshot().players[0].fd, 4);
+});
+
+test('early fish still put up a fight (no instant catches)', () => {
+  const avg = (sp, kg) => {
+    const runs = [1, 2, 3, 4, 5, 6].map((i) => simulateFightTimed(sp, kg, {}, i * 104729));
+    assert.ok(runs.every((r) => r.landed), `${sp} should be landable on starter tackle`);
+    return runs.reduce((sum, r) => sum + r.seconds, 0) / runs.length;
+  };
+  assert.ok(avg('bluegill', 0.3) >= 4, 'a small bluegill takes a few seconds');
+  assert.ok(avg('carp', 5) >= 6, 'a carp takes a while');
+  assert.ok(avg('bass', 3) >= 8, 'a bass fights for a good while');
 });
