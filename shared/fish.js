@@ -11,16 +11,43 @@ export const RARITY = Object.freeze({
 
 // minKg/maxKg: weight range. points: score for an average-sized catch.
 // fight: 0..1, how hard the fish pulls while you reel it in.
+// Keep ids stable: saved profiles reference them in the fish index.
 export const SPECIES = Object.freeze({
+  // Junk
   boot: { name: 'Old Boot', rarity: 'junk', minKg: 0.4, maxKg: 1.2, points: 1, fight: 0.1 },
+
+  // Common
+  shiner: { name: 'Golden Shiner', rarity: 'common', minKg: 0.05, maxKg: 0.3, points: 4, fight: 0.15 },
+  pumpkinseed: { name: 'Pumpkinseed', rarity: 'common', minKg: 0.1, maxKg: 0.5, points: 5, fight: 0.2 },
   bluegill: { name: 'Bluegill', rarity: 'common', minKg: 0.1, maxKg: 0.6, points: 5, fight: 0.25 },
+  rudd: { name: 'Rudd', rarity: 'common', minKg: 0.2, maxKg: 1.2, points: 7, fight: 0.3 },
   perch: { name: 'Yellow Perch', rarity: 'common', minKg: 0.2, maxKg: 1.0, points: 8, fight: 0.3 },
+  crappie: { name: 'Black Crappie', rarity: 'common', minKg: 0.2, maxKg: 1.5, points: 9, fight: 0.3 },
+  cisco: { name: 'Cisco', rarity: 'common', minKg: 0.3, maxKg: 1.5, points: 10, fight: 0.35 },
   carp: { name: 'Common Carp', rarity: 'common', minKg: 1, maxKg: 9, points: 12, fight: 0.5 },
+
+  // Uncommon
   trout: { name: 'Rainbow Trout', rarity: 'uncommon', minKg: 0.5, maxKg: 4, points: 20, fight: 0.55 },
   bass: { name: 'Largemouth Bass', rarity: 'uncommon', minKg: 0.5, maxKg: 5, points: 22, fight: 0.6 },
+  smallmouth: { name: 'Smallmouth Bass', rarity: 'uncommon', minKg: 0.5, maxKg: 3.5, points: 24, fight: 0.65 },
+  tench: { name: 'Tench', rarity: 'uncommon', minKg: 1, maxKg: 5, points: 24, fight: 0.5 },
+  bowfin: { name: 'Bowfin', rarity: 'uncommon', minKg: 1, maxKg: 6, points: 28, fight: 0.7 },
+  whitefish: { name: 'Lake Whitefish', rarity: 'uncommon', minKg: 1, maxKg: 5, points: 28, fight: 0.5 },
+  walleye: { name: 'Walleye', rarity: 'uncommon', minKg: 1, maxKg: 6, points: 30, fight: 0.6 },
   catfish: { name: 'Channel Catfish', rarity: 'uncommon', minKg: 2, maxKg: 15, points: 30, fight: 0.65 },
+  gar: { name: 'Longnose Gar', rarity: 'uncommon', minKg: 2, maxKg: 10, points: 34, fight: 0.7 },
+
+  // Rare
   pike: { name: 'Northern Pike', rarity: 'rare', minKg: 2, maxKg: 12, points: 45, fight: 0.75 },
+  burbot: { name: 'Burbot', rarity: 'rare', minKg: 1, maxKg: 8, points: 50, fight: 0.7 },
+  laketrout: { name: 'Lake Trout', rarity: 'rare', minKg: 3, maxKg: 20, points: 60, fight: 0.8 },
+  koi: { name: 'Escaped Koi', rarity: 'rare', minKg: 1, maxKg: 10, points: 65, fight: 0.55 },
+  muskie: { name: 'Muskellunge', rarity: 'rare', minKg: 5, maxKg: 25, points: 70, fight: 0.85 },
   sturgeon: { name: 'Lake Sturgeon', rarity: 'rare', minKg: 10, maxKg: 40, points: 80, fight: 0.85 },
+
+  // Legendary: one per special zone
+  mossback: { name: 'Old Mossback', rarity: 'legendary', minKg: 20, maxKg: 35, points: 250, fight: 0.95 },
+  stonejaw: { name: 'Stonejaw', rarity: 'legendary', minKg: 15, maxKg: 40, points: 260, fight: 0.95 },
   ghost: { name: 'The Pale Ghost', rarity: 'legendary', minKg: 20, maxKg: 60, points: 300, fight: 0.95 },
 });
 

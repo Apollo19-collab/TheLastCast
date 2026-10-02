@@ -45,7 +45,8 @@ export class Game {
     if (this.players.size >= this.maxPlayers) return null;
     const id = String(this.nextPlayerId++);
     const { spawn } = this.world;
-    profile.name = sanitizeName(rawName) || profile.name || `Angler ${id}`;
+    // Accounts always play under their username; guests pick a name each time.
+    profile.name = profile.username || sanitizeName(rawName) || profile.name || `Angler ${id}`;
     const player = {
       id,
       name: profile.name,
@@ -122,6 +123,7 @@ export class Game {
     const p = player.profile;
     player.send({
       t: MSG.PROFILE,
+      username: p.username,
       score: p.score,
       coins: p.coins,
       catches: p.catches,

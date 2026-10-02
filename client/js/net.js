@@ -26,6 +26,12 @@ export class Connection {
     });
   }
 
+  /** Connect unless already connected (failed logins keep the socket open). */
+  ensureConnected() {
+    if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve();
+    return this.connect();
+  }
+
   on(type, fn) {
     if (!this.handlers.has(type)) this.handlers.set(type, []);
     this.handlers.get(type).push(fn);

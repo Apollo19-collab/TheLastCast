@@ -158,6 +158,22 @@ export class UI {
     ];
   }
 
+  /** Account line under the player name: log out, or sign up for guests. */
+  setAccount(username, tempGuest, { onLogout, onSignup }) {
+    const action = $('account-action');
+    if (username) {
+      $('account-label').textContent = 'Logged in';
+      action.textContent = 'Log out';
+      action.onclick = onLogout;
+      action.hidden = false;
+    } else {
+      $('account-label').textContent = tempGuest ? 'Guest (not saved)' : 'Guest';
+      action.textContent = 'Sign up';
+      action.onclick = onSignup;
+      action.hidden = tempGuest;
+    }
+  }
+
   showGame() {
     $('join').hidden = true;
     $('hud').hidden = false;

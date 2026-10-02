@@ -12,6 +12,10 @@
   <div id="hud" hidden>
     <div id="me-panel" class="panel">
       <div id="me-name"></div>
+      <div id="account-line">
+        <span id="account-label"></span>
+        <button type="button" id="account-action"></button>
+      </div>
       <div>Score <b id="me-score">0</b> · Catches <b id="me-catches">0</b></div>
       <div>Coins <b id="me-coins">0</b></div>
       <div id="aim-zone"></div>
@@ -49,12 +53,24 @@
   </div>
 
   <div id="join" class="overlay">
-    <form id="join-form">
+    <form id="join-form" novalidate>
       <h1>The Last Cast</h1>
       <p class="tagline">A multiplayer fishing game</p>
-      <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" autofocus>
-      <button type="submit">Start fishing</button>
-      <p id="join-error"></p>
+      <div class="auth-tabs" role="tablist">
+        <button type="button" data-mode="login">Log in</button>
+        <button type="button" data-mode="register">Sign up</button>
+        <button type="button" data-mode="guest">Guest</button>
+      </div>
+      <div id="account-fields" class="auth-fields">
+        <input id="username" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <input id="password" type="password" maxlength="128" placeholder="Password" autocomplete="current-password">
+      </div>
+      <div id="guest-fields" class="auth-fields" hidden>
+        <input id="name" maxlength="16" placeholder="Your name" autocomplete="off">
+      </div>
+      <p id="auth-hint"></p>
+      <button type="submit" id="join-submit">Log in</button>
+      <p id="join-error" role="alert"></p>
     </form>
   </div>
 

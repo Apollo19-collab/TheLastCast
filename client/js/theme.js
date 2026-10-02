@@ -11,6 +11,7 @@ export const THEME = {
     deep: 'rgba(8, 30, 60, 0.45)',
     reeds: 'rgba(60, 110, 60, 0.18)',
     rocks: 'rgba(30, 40, 60, 0.2)',
+    dockShade: 'rgba(10, 30, 40, 0.22)',
     shallows: 'rgba(120, 200, 210, 0.18)',
   },
   zoneLabel: 'rgba(255,255,255,0.18)',

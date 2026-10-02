@@ -16,12 +16,17 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 
 **Where you stand and cast matters:**
 
-- **Water zones.** Each area of the lake has its own fish and bite speed:
-  - **Shallows:** fast bites, small common fish.
-  - **Reed Bed:** perch, bass and pike.
-  - **Rocky Drop-off:** trout and bass.
-  - **Open Lake:** a bit of everything.
-  - **Deep Water:** slow bites but the biggest fish, plus the legendary *Pale Ghost*. You can only reach it from the end of the dock.
+- **Water zones.** Each area of the lake has its own fish (27 species in total) and bite speed:
+
+  | Zone | Bites | Signature fish |
+  | --- | --- | --- |
+  | Shallows | fastest | Pumpkinseed, Golden Shiner, Bluegill; rare *Escaped Koi* |
+  | Dock Shade (the water beside the dock) | fast | Black Crappie, Catfish, Bass hiding under the boards |
+  | Reed Bed | normal | Rudd, Tench, Bowfin, Pike; rare *Muskellunge*; legendary *Old Mossback* |
+  | Rocky Drop-off | slower | Smallmouth Bass, Walleye, Trout. The bottom falls away here, so deep-water fish (*Lake Trout*, *Burbot*, even *Sturgeon*) come in close; legendary *Stonejaw* |
+  | Open Lake | slower | A mix: Crappie, Carp, Walleye, Longnose Gar |
+  | Deep Water (only reachable from the end of the dock) | slowest | Cisco, Lake Whitefish, Lake Trout, Burbot, Sturgeon; legendary *The Pale Ghost* |
+
 - **Hotspots.** Rippling circles that move around the lake. Casting inside one gives faster bites, much better odds of rare fish, and +25% points.
 - **Crowding.** Every other bobber within ~90 units of yours slows your bites. Spread out, or race others to the hotspot.
 
@@ -37,7 +42,21 @@ The aim line previews where your cast will land and which zone it hits.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
-Progress is saved on the server and linked to your browser through a random token stored in `localStorage`. There are no accounts, so clearing site data or switching browsers starts a new profile. If you open a second tab while one is already playing, it joins as an unsaved guest.
+### Accounts
+
+The join screen has three options:
+
+- **Sign up.** Pick a username (3-16 letters, numbers or `_`) and a password (at least 6 characters). Your progress is saved to your account and works on any device. If you were playing as a guest in this browser, that progress moves into the new account.
+- **Log in.** You stay logged in on that browser (for 90 days) until you press **Log out**. An account can only play in one window at a time; logging in somewhere else disconnects the older window.
+- **Guest.** No account needed. Progress is saved on the server but tied to this browser only. You can sign up later from the **Sign up** button under your name without losing anything.
+
+How it's protected:
+- Passwords are hashed with scrypt and a random salt, and are never stored or logged in plain text.
+- Login sessions and guest IDs are random secrets, stored on the server only as SHA-256 hashes.
+- Failed logins are limited to 10 per IP address every 10 minutes, and new accounts to 5 per IP per hour.
+- On Railway everything runs over HTTPS/WSS.
+
+There is no password reset yet, because accounts have no email address.
 
 ## Running locally
 
@@ -117,7 +136,8 @@ server/
   index.js      HTTP server, WebSocket server, fixed 20 Hz game loop, rate limiting
   game.js       Game (one lake): players, movement, hotspots, snapshots, events
   fishing.js    Per-player fishing state machine: cast → wait → bite → reel → catch
-  profiles.js   Saved player profiles (score, coins, gear, fish index, history) in a JSON file
+  profiles.js   Profiles + accounts, login sessions and guest tokens, saved to a JSON file
+  auth.js       Password hashing (scrypt), token hashing, validation, login rate limiting
   static.js     Static file serving for client/ and shared/
 shared/         Imported by BOTH server and browser (plain ES modules)
   constants.js  Tuning values and message types
@@ -127,6 +147,7 @@ shared/         Imported by BOTH server and browser (plain ES modules)
 client/
   index.html, css/style.css
   js/main.js           Wires everything together; sends intentions, never outcomes
+  js/account.js        Join screen (log in / sign up / guest) and saved session/guest tokens
   js/net.js            WebSocket wrapper
   js/input.js          Keyboard / mouse
   js/interpolation.js  Smooths other players between server snapshots
@@ -150,7 +171,8 @@ The first version is deliberately small. Here is where planned features plug in:
 | --- | --- |
 | Better graphics / animations | Replace `draw*` methods in `client/js/renderer.js` with sprites. Colours and sizes are in `theme.js`. Static assets can go in `client/assets/` and are served automatically. |
 | More fishing locations | Add an entry to `LOCATIONS` in `shared/world.js`. Then run one `Game` per location in `server/index.js` (rooms) and let the client pick one in the welcome flow. `welcome` already sends `locationId`. |
-| More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables. |
+| More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables in `shared/world.js`. A test checks that every species lives somewhere. |
+| Password reset / email | Add an `email` field when registering in `ProfileStore.register()` and a reset-token flow. You'd need an email provider. |
 | More gear / new gear slots | Add tiers or slots in `shared/gear.js` and expose any new stat in `gearStats()`. Apply it in `fishing.js`, which reads `player.stats`. |
 | Inventory / selling fish | `profile.history` and `profile.index` already record catches. Add an `inventory` array to `newProfile()` in `server/profiles.js` (old saves are filled in by `normalize()`). |
 | Levels / XP | Derive a level from `profile.score`, or add an `xp` field, and gate gear tiers on it in `Game.buy()`. |

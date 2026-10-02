@@ -155,7 +155,7 @@ export class Renderer {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = THEME.zoneLabel;
     for (const z of world.zones) {
-      if (z.rect) ctx.fillText(z.name.toUpperCase(), z.rect.x + z.rect.w / 2, z.rect.y + z.rect.h / 2);
+      if (z.rect && z.label !== false) ctx.fillText(z.name.toUpperCase(), z.rect.x + z.rect.w / 2, z.rect.y + z.rect.h / 2);
     }
   }
 

@@ -8,6 +8,7 @@ import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
 import { SPECIES } from '../shared/fish.js';
 import { Game } from './game.js';
 import { ProfileStore, newProfile } from './profiles.js';
+import { LoginLimiter } from './auth.js';
 import { serveStatic } from './static.js';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -23,9 +24,49 @@ await store.load();
 const world = LOCATIONS[DEFAULT_LOCATION];
 const game = new Game({ world, maxPlayers: MAX_PLAYERS, onProfileChange: () => store.markDirty() });
 
-function profileInUse(profile) {
-  for (const p of game.players.values()) if (p.profile === profile) return true;
-  return false;
+const online = new Map(); // profile id -> { player, ws }
+const loginLimiter = new LoginLimiter({ max: 10, windowMs: 10 * 60 * 1000 }); // failed logins per IP
+const signupLimiter = new LoginLimiter({ max: 5, windowMs: 60 * 60 * 1000 }); // new accounts per IP
+
+function clientIp(req) {
+  // Railway (and most proxies) put the real client address first in X-Forwarded-For.
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+}
+
+/**
+ * Resolve a JOIN message to a profile. Modes:
+ *   login    { username, password }
+ *   register { username, password, token? }  (token: guest progress to keep)
+ *   session  { session }                     (stay logged in)
+ *   guest    { name, token? }                (default)
+ * Returns { profile, session?, token? } or { error, expired? }.
+ */
+async function authenticate(msg, ip) {
+  switch (msg.mode) {
+    case 'login': {
+      if (loginLimiter.blocked(ip)) return { error: 'Too many failed logins. Try again in a few minutes.' };
+      const result = await store.login(msg.username, msg.password);
+      if (result.error) loginLimiter.fail(ip);
+      else loginLimiter.succeed(ip);
+      return result;
+    }
+    case 'register': {
+      if (signupLimiter.blocked(ip)) return { error: 'Too many new accounts from your network. Try again later.' };
+      const result = await store.register(msg.username, msg.password, msg.token);
+      if (!result.error) signupLimiter.fail(ip);
+      return result;
+    }
+    case 'session': {
+      const profile = store.getSession(msg.session);
+      if (!profile) return { error: 'Your login has expired. Please log in again.', expired: true };
+      return { profile, session: msg.session };
+    }
+    default: {
+      const profile = store.getGuest(msg.token);
+      if (profile && !profile.username) return { profile, token: msg.token };
+      return store.createGuest(msg.name);
+    }
+  }
 }
 
 const server = http.createServer((req, res) => {
@@ -43,14 +84,16 @@ function sendJson(ws, data) {
   if (ws.readyState === ws.OPEN) ws.send(typeof data === 'string' ? data : JSON.stringify(data));
 }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const ip = clientIp(req);
   let player = null;
+  let joining = false;
   let msgCount = 0;
   let windowStart = Date.now();
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
     // Simple per-connection rate limit; excess messages are dropped.
     const now = Date.now();
     if (now - windowStart > 1000) { windowStart = now; msgCount = 0; }
@@ -65,31 +108,69 @@ wss.on('connection', (ws) => {
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return;
 
     if (!player) {
-      if (msg.t !== MSG.JOIN) return;
-      if (game.players.size >= MAX_PLAYERS) {
-        sendJson(ws, { t: MSG.ERROR, message: 'The lake is full. Try again soon.' });
-        ws.close();
+      if (msg.t !== MSG.JOIN || joining) return;
+      joining = true;
+      const result = await authenticate(msg, ip).catch((err) => {
+        console.error('Join failed:', err);
+        return { error: 'Something went wrong. Please try again.' };
+      });
+      joining = false;
+      if (ws.readyState !== ws.OPEN) return;
+      // Failed logins keep the connection open so the player can retry.
+      if (result.error) {
+        sendJson(ws, { t: MSG.ERROR, message: result.error, expired: !!result.expired });
         return;
       }
-      let { token, profile } = store.getOrCreate(msg.token, msg.name);
+      if (game.players.size >= MAX_PLAYERS) {
+        sendJson(ws, { t: MSG.ERROR, message: 'The lake is full. Try again soon.' });
+        return;
+      }
+
+      let { profile } = result;
+      let token = result.token ?? null;
       let guest = false;
-      // Same profile already playing (e.g. a second tab): play as an unsaved guest.
-      if (profileInUse(profile)) {
+      const existing = online.get(profile.id);
+      if (existing && profile.username) {
+        // An account can only fish in one place at a time: the newest login wins.
+        sendJson(existing.ws, { t: MSG.ERROR, message: 'You logged in from another window.', kicked: true });
+        game.removePlayer(existing.player.id);
+        online.delete(profile.id);
+        existing.ws.close();
+      } else if (existing) {
+        // Same guest profile in a second tab: play as a throwaway guest.
         profile = newProfile(msg.name);
         token = null;
         guest = true;
       }
+
       // addPlayer sends the private PROFILE message; the client accepts it before WELCOME.
       player = game.addPlayer(msg.name, (payload) => sendJson(ws, payload), profile);
+      online.set(profile.id, { player, ws });
       ws.playerId = player.id;
-      sendJson(ws, { t: MSG.WELCOME, id: player.id, locationId: world.id, species: SPECIES, token, guest });
+      sendJson(ws, {
+        t: MSG.WELCOME,
+        id: player.id,
+        locationId: world.id,
+        species: SPECIES,
+        username: profile.username,
+        session: result.session ?? null,
+        token,
+        guest,
+      });
+      return;
+    }
+    if (msg.t === MSG.LOGOUT) {
+      store.revokeSession(msg.session);
+      ws.close();
       return;
     }
     game.handleMessage(player, msg);
   });
 
   ws.on('close', () => {
-    if (player) game.removePlayer(player.id);
+    if (!player) return;
+    game.removePlayer(player.id);
+    if (online.get(player.profile.id)?.player === player) online.delete(player.profile.id);
   });
 });
 

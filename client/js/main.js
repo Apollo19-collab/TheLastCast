@@ -9,17 +9,9 @@ import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
 import { Renderer } from './renderer.js';
 import { UI } from './ui.js';
+import { JoinForm, reloadToSignup, saved } from './account.js';
 
 const CHARGE_PERIOD_MS = 1100; // time for the power meter to go 0 -> 1
-const TOKEN_KEY = 'lastcast.token';
-
-// The token identifies this browser's saved profile (progress, gear, fish index).
-function loadToken() {
-  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
-}
-function saveToken(token) {
-  try { localStorage.setItem(TOKEN_KEY, token); } catch { /* private mode: progress lasts this session only */ }
-}
 
 const canvas = document.getElementById('game');
 let world = LOCATIONS[DEFAULT_LOCATION];
@@ -51,25 +43,42 @@ function aimAngle() {
   return Math.atan2(m.y - selfPos.y, m.x - selfPos.x);
 }
 
-// ---- joining -------------------------------------------------------------------
+// ---- joining: log in / sign up / guest -------------------------------------------
 
-document.getElementById('join-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const name = document.getElementById('name').value;
-  const button = e.target.querySelector('button');
-  button.disabled = true;
+let kicked = false;
+
+async function join(msg, busyText) {
+  form.setBusy(true, busyText);
+  form.showError('');
   try {
-    await net.connect();
-    net.send({ t: MSG.JOIN, name, token: loadToken() });
+    await net.ensureConnected();
+    net.send(msg);
   } catch (err) {
-    ui.showJoin(err.message);
-    button.disabled = false;
+    form.showError(err.message);
+    form.setBusy(false);
   }
-});
+}
+
+const form = new JoinForm({ onSubmit: (msg) => join(msg, 'Please wait...') });
+
+// Stay logged in: reuse a saved session automatically.
+if (saved.session()) join({ t: MSG.JOIN, mode: 'session', session: saved.session() }, 'Logging in...');
 
 net.on(MSG.WELCOME, (msg) => {
   meId = msg.id;
-  if (msg.token) saveToken(msg.token);
+  form.clearPassword();
+  if (msg.session) saved.setSession(msg.session);
+  if (msg.username) saved.setToken(null); // guest progress now lives in the account
+  else if (msg.token) saved.setToken(msg.token);
+
+  ui.setAccount(msg.username, msg.guest, {
+    onLogout: () => {
+      net.send({ t: MSG.LOGOUT, session: saved.session() });
+      saved.setSession(null);
+      location.reload();
+    },
+    onSignup: reloadToSignup,
+  });
   if (LOCATIONS[msg.locationId] && LOCATIONS[msg.locationId] !== world) {
     world = LOCATIONS[msg.locationId];
     renderer = new Renderer(canvas, world);
@@ -77,6 +86,7 @@ net.on(MSG.WELCOME, (msg) => {
   ui.showGame();
   ui.feed('Welcome to Mirror Lake! Different waters hold different fish.');
   if (msg.guest) ui.feed('You are already playing in another tab, so this tab is a guest and its progress is not saved.', '#f9c74f');
+  if (!msg.username && !msg.guest) ui.feed('Playing as a guest. Sign up to keep your progress on any device.', '#a9d6e5');
   input = new Input(canvas, {
     onMoveChange: (move) => net.send({ t: MSG.INPUT, ...move }),
     onActionDown,
@@ -95,10 +105,23 @@ net.on(MSG.PROFILE, (profile) => {
   ui.updateProfile(profile);
 });
 
-net.on(MSG.ERROR, (msg) => ui.showJoin(msg.message));
+net.on(MSG.ERROR, (msg) => {
+  if (msg.expired) saved.setSession(null);
+  if (msg.kicked) {
+    kicked = true;
+    meId = null;
+    ui.showJoin(`${msg.message} Reload the page to play here instead.`);
+    return;
+  }
+  form.setBusy(false);
+  form.showError(msg.message);
+});
+
 net.on('close', () => {
+  if (kicked) return;
+  if (meId) ui.showJoin('Disconnected from the server. Reload the page to rejoin.');
+  else form.setBusy(false);
   meId = null;
-  ui.showJoin('Disconnected from the server. Reload the page to rejoin.');
 });
 
 // ---- actions ----------------------------------------------------------------------

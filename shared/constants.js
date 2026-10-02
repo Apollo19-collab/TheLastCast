@@ -32,6 +32,7 @@ export const MSG = Object.freeze({
   REEL: 'reel',
   CANCEL: 'cancel',
   BUY: 'buy',
+  LOGOUT: 'logout',
   // server -> client
   WELCOME: 'welcome',
   STATE: 'state',

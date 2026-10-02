@@ -29,41 +29,66 @@ export const LOCATIONS = {
     // Water zones, checked in order; the first match wins.
     // A zone with `rect: null` is the default for any other water.
     // biteRate > 1 means faster bites. `fish` maps species id -> weight.
+    // `label: false` hides the zone's name painted on the water.
     zones: [
       {
         id: 'deep',
         name: 'Deep Water',
         rect: { x: 480, y: 120, w: 700, h: 240 },
         biteRate: 0.6,
-        fish: { boot: 2, carp: 20, catfish: 30, trout: 15, pike: 15, sturgeon: 15, ghost: 1 },
+        // Cold, deep fish. Only reachable from the end of the dock.
+        fish: {
+          boot: 2, cisco: 25, whitefish: 20, carp: 8, catfish: 18, walleye: 10,
+          laketrout: 15, burbot: 12, pike: 6, sturgeon: 12, ghost: 1,
+        },
+      },
+      {
+        id: 'dockShade',
+        name: 'Dock Shade',
+        rect: { x: 740, y: 430, w: 120, h: 230 },
+        label: false, // the dock covers the middle of this zone
+        biteRate: 1.1,
+        // Fish that hide under structure.
+        fish: { boot: 4, bluegill: 25, crappie: 30, perch: 20, catfish: 12, bass: 10, walleye: 3 },
       },
       {
         id: 'reeds',
         name: 'Reed Bed',
         rect: { x: 180, y: 90, w: 230, h: 710 },
         biteRate: 1.0,
-        fish: { boot: 4, bluegill: 20, perch: 35, bass: 20, pike: 12 },
+        // Weedy ambush hunters.
+        fish: {
+          boot: 4, shiner: 15, rudd: 25, perch: 25, bluegill: 10, tench: 15,
+          bowfin: 10, bass: 12, pike: 10, muskie: 4, mossback: 0.5,
+        },
       },
       {
         id: 'rocks',
         name: 'Rocky Drop-off',
         rect: { x: 1150, y: 420, w: 250, h: 380 },
         biteRate: 0.9,
-        fish: { boot: 3, perch: 15, trout: 35, bass: 30, catfish: 12, pike: 5 },
+        // The lake bed falls away steeply here, so deep-water fish come in close.
+        fish: {
+          boot: 3, perch: 12, smallmouth: 30, trout: 25, walleye: 18, bass: 12,
+          burbot: 7, laketrout: 7, sturgeon: 2, stonejaw: 0.5,
+        },
       },
       {
         id: 'shallows',
         name: 'Shallows',
         rect: { x: 180, y: 660, w: 1220, h: 140 },
         biteRate: 1.3,
-        fish: { boot: 8, bluegill: 45, perch: 30, carp: 15, bass: 2 },
+        fish: { boot: 8, bluegill: 35, pumpkinseed: 30, shiner: 25, perch: 20, carp: 12, bass: 3, koi: 2 },
       },
       {
         id: 'open',
         name: 'Open Lake',
         rect: null,
         biteRate: 0.9,
-        fish: { boot: 5, bluegill: 20, perch: 20, carp: 25, trout: 15, catfish: 10, pike: 5 },
+        fish: {
+          boot: 5, crappie: 22, bluegill: 15, perch: 15, carp: 22, trout: 12,
+          walleye: 10, gar: 8, catfish: 8, pike: 4,
+        },
       },
     ],
 

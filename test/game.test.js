@@ -6,7 +6,8 @@ import { FishingState, MSG } from '../shared/constants.js';
 import { LOCATIONS, isWalkable, isWater, zoneAt } from '../shared/world.js';
 import { GEAR, gearStats } from '../shared/gear.js';
 import { ProfileStore } from '../server/profiles.js';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { SPECIES } from '../shared/fish.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -250,20 +251,92 @@ test('better bait means more rare fish', () => {
   assert.ok(count(2) > count(1) * 1.3);
 });
 
-test('profile store saves to disk and restores by token', async () => {
+test('guest profiles save to disk and restore by token', async () => {
   const file = path.join(await mkdtemp(path.join(tmpdir(), 'lastcast-')), 'profiles.json');
   const a = new ProfileStore(file);
-  const { token, profile } = a.getOrCreate(null, 'Saver');
+  const { token, profile } = a.createGuest('Saver');
   profile.coins = 42;
   profile.gear.rod = 2;
   a.markDirty();
   await a.flush();
+  assert.ok(!(await readFile(file, 'utf8')).includes(token), 'tokens are stored hashed');
 
   const b = new ProfileStore(file);
   await b.load();
-  const again = b.getOrCreate(token, 'Saver');
-  assert.equal(again.token, token);
-  assert.equal(again.profile.coins, 42);
-  assert.equal(again.profile.gear.rod, 2);
-  assert.notEqual(b.getOrCreate('not-a-token', 'X').token, token);
+  assert.equal(b.getGuest(token).coins, 42);
+  assert.equal(b.getGuest(token).gear.rod, 2);
+  assert.equal(b.getGuest('not-a-token'), null);
+});
+
+test('accounts: register, log in, sessions, wrong passwords', async () => {
+  const store = new ProfileStore(null);
+  assert.match((await store.register('ab', 'secret1')).error, /3-16/);
+  assert.match((await store.register('Bob', '123')).error, /at least/);
+
+  const reg = await store.register('Bob_1', 'hunter22');
+  assert.ok(reg.profile && reg.session);
+  assert.equal(reg.profile.username, 'Bob_1');
+  assert.match((await store.register('bob_1', 'other123')).error, /taken/, 'usernames are case-insensitive');
+
+  assert.equal((await store.login('Bob_1', 'wrong-pass')).error, 'Wrong username or password.');
+  assert.equal((await store.login('nobody', 'hunter22')).error, 'Wrong username or password.');
+  const ok = await store.login('BOB_1', 'hunter22');
+  assert.equal(ok.profile, reg.profile);
+
+  assert.equal(store.getSession(ok.session), reg.profile);
+  store.revokeSession(ok.session);
+  assert.equal(store.getSession(ok.session), null);
+  assert.equal(store.getSession(reg.session), reg.profile, 'other sessions stay valid');
+});
+
+test('signing up keeps guest progress and retires the guest token', async () => {
+  const store = new ProfileStore(null);
+  const { token, profile } = store.createGuest('Fisher');
+  profile.coins = 99;
+  profile.index.bluegill = { count: 3, bestKg: 0.5, firstAt: 1 };
+  const reg = await store.register('Fisher', 'password1', token);
+  assert.equal(reg.profile, profile);
+  assert.equal(reg.profile.coins, 99);
+  assert.equal(store.getGuest(token), null, 'guest token no longer opens the account');
+});
+
+test('accounts persist; passwords are never stored in plain text', async () => {
+  const file = path.join(await mkdtemp(path.join(tmpdir(), 'lastcast-')), 'profiles.json');
+  const a = new ProfileStore(file);
+  const { session } = await a.register('Persist', 'plaintext-pw');
+  await a.flush();
+  const raw = await readFile(file, 'utf8');
+  assert.ok(!raw.includes('plaintext-pw'));
+  assert.ok(!raw.includes(session));
+
+  const b = new ProfileStore(file);
+  await b.load();
+  assert.equal(b.getSession(session).username, 'Persist');
+  assert.ok((await b.login('persist', 'plaintext-pw')).profile);
+});
+
+test('version 1 save files are migrated', async () => {
+  const file = path.join(await mkdtemp(path.join(tmpdir(), 'lastcast-')), 'profiles.json');
+  const token = 'a'.repeat(32);
+  await writeFile(file, JSON.stringify({ version: 1, profiles: { [token]: { name: 'Old', coins: 7, gear: { rod: 1 } } } }));
+  const store = new ProfileStore(file);
+  await store.load();
+  const p = store.getGuest(token);
+  assert.equal(p.coins, 7);
+  assert.deepEqual(p.gear, { rod: 1, reel: 0, bait: 0 });
+});
+
+test('each zone has its own fish; drop-off gets deep-water species', () => {
+  assert.equal(zoneAt(world, 750, 500).id, 'dockShade');
+  const fishIn = (id) => Object.keys(world.zones.find((z) => z.id === id).fish);
+  for (const deepFish of ['laketrout', 'burbot', 'sturgeon']) {
+    assert.ok(fishIn('deep').includes(deepFish));
+    assert.ok(fishIn('rocks').includes(deepFish), `${deepFish} at the drop-off`);
+    assert.ok(!fishIn('shallows').includes(deepFish));
+  }
+  assert.ok(fishIn('shallows').includes('koi') && !fishIn('deep').includes('koi'));
+  assert.ok(fishIn('reeds').includes('muskie'));
+  // Every species is catchable somewhere and every zone entry is a real species.
+  const all = new Set(world.zones.flatMap((z) => Object.keys(z.fish)));
+  assert.deepEqual([...all].sort(), Object.keys(SPECIES).sort());
 });

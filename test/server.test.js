@@ -23,19 +23,22 @@ before(async () => {
 
 after(() => server.kill());
 
-function join(name, token) {
+function connect(joinMsg) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${PORT}/ws`);
     const client = { ws, messages: [], id: null };
     ws.on('message', (d) => {
       const msg = JSON.parse(d.toString());
       client.messages.push(msg);
-      if (msg.t === 'welcome') { client.id = msg.id; client.token = msg.token; client.guest = msg.guest; resolve(client); }
+      if (msg.t === 'welcome') Object.assign(client, msg);
+      if (msg.t === 'welcome' || msg.t === 'error') resolve(client);
     });
-    ws.on('open', () => ws.send(JSON.stringify({ t: 'join', name, token })));
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'join', ...joinMsg })));
     ws.on('error', reject);
   });
 }
+
+const join = (name, token) => connect({ name, token });
 
 function waitFor(client, predicate, ms = 3000) {
   return new Promise((resolve, reject) => {
@@ -97,4 +100,32 @@ test('profiles: token reconnects to the same profile; duplicate tab becomes a gu
   assert.equal(back.token, a.token);
   assert.equal(back.guest, false);
   back.ws.close();
+});
+
+test('accounts: sign up, wrong password, log in, session, single login, logout', async () => {
+  const signup = await connect({ mode: 'register', username: 'Dana', password: 'reel-it-in' });
+  assert.equal(signup.username, 'Dana');
+  assert.match(signup.session, /^[a-f0-9]{32}$/);
+  signup.ws.close();
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Wrong password: error, connection stays open, retry works on the same socket.
+  const c = await connect({ mode: 'login', username: 'dana', password: 'nope-nope' });
+  assert.equal(c.messages.at(-1).message, 'Wrong username or password.');
+  assert.equal(c.ws.readyState, WebSocket.OPEN);
+  c.ws.send(JSON.stringify({ t: 'join', mode: 'login', username: 'dana', password: 'reel-it-in' }));
+  await waitFor(c, (m) => m.t === 'welcome');
+  assert.equal(c.messages.find((m) => m.t === 'welcome').username, 'Dana');
+
+  // Logging in elsewhere (with the saved session) kicks the first window.
+  const second = await connect({ mode: 'session', session: signup.session });
+  assert.equal(second.username, 'Dana');
+  await waitFor(c, (m) => m.t === 'error' && m.kicked);
+
+  // Logging out revokes that session.
+  second.ws.send(JSON.stringify({ t: 'logout', session: signup.session }));
+  await new Promise((r) => setTimeout(r, 150));
+  const again = await connect({ mode: 'session', session: signup.session });
+  assert.equal(again.messages.at(-1).expired, true);
+  again.ws.close();
 });
