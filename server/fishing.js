@@ -20,6 +20,7 @@ import {
   CROWD_RADIUS,
   FishingState,
   castDistance,
+  COINS_PER_POINT,
 } from '../shared/constants.js';
 import { SPECIES, STRENGTH_TIERS, fishDifficulty, scoreCatch, strengthTier } from '../shared/fish.js';
 import { affinityFor } from '../shared/gear.js';
@@ -149,6 +150,7 @@ function bite(ctx, player) {
     affinity: player.stats.affinity,
   }, mods.extraFish);
   const s = SPECIES[species];
+  ctx.useBait?.(player); // the fish took one bait, whether or not you hook it
   // Squared roll skews towards smaller fish; trophies are uncommon.
   const kg = s.minKg + (s.maxKg - s.minKg) * ctx.rng() ** 2;
   line.fish = { species, kg: Math.round(kg * 100) / 100 };
@@ -255,8 +257,9 @@ function landCatch(ctx, player) {
   }
 
   const profile = player.profile;
+  const coins = Math.round(points * COINS_PER_POINT);
   profile.score += points;
-  profile.coins += points;
+  profile.coins += coins;
   profile.catches += 1;
   if (!profile.best || points > profile.best.points) {
     profile.best = { species: fish.species, kg: fish.kg, points };
@@ -270,7 +273,7 @@ function landCatch(ctx, player) {
   };
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
-  countCatch(ctx, player, fish, s, zone, hotspot, points);
+  countCatch(ctx, player, fish, s, zone, hotspot, coins);
   ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event });
 
   resetLine(player);
@@ -285,6 +288,7 @@ function landCatch(ctx, player) {
     rarity: s.rarity,
     kg: fish.kg,
     points,
+    coins,
     zone: zone.name,
     hotspot: !!hotspot,
     isNew,
@@ -293,11 +297,11 @@ function landCatch(ctx, player) {
 }
 
 /** Lifetime counters that achievements measure. */
-function countCatch(ctx, player, fish, species, zone, hotspot, points) {
+function countCatch(ctx, player, fish, species, zone, hotspot, coins) {
   const c = player.profile.counters;
   const bump = (group, key) => { c[group][key] = (c[group][key] || 0) + 1; };
   c.catches += 1;
-  c.coinsEarned += points;
+  c.coinsEarned += coins;
   if (hotspot) c.hotspotCatches += 1;
   if (species.rarity === 'legendary') c.legendaryCatches += 1;
   if (fish.kg >= 10) c.bigFish += 1;

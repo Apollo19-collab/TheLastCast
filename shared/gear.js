@@ -55,20 +55,43 @@ export const ITEMS = Object.freeze({
   steel: item('line', 'Steel Leader', 600, 'Teeth can\'t cut it.', { strength: 1.6, bite: 0.95, affinity: { pike: 1.3 }, unlock: 'toothy' }),
   spectral: item('line', 'Spectral Line', 2000, 'Spun from something pale and cold.', { strength: 1.6, bite: 1.25, rare: 1.2, unlock: 'ghost_hunter' }),
 
-  // ---- bait & lures ----
-  bread: item('bait', 'Bread Crumbs', 0, 'Fish are not impressed.', { bite: 1.0, rare: 1.0 }),
-  worms: item('bait', 'Earthworms', 40, 'Faster bites.', { bite: 1.25, rare: 1.2 }),
-  corn: item('bait', 'Sweet Corn', 60, 'Carp, tench and koi love it.', { bite: 1.2, rare: 1.0, affinity: { carp: 2.5 } }),
-  nightcrawler: item('bait', 'Nightcrawlers', 120, 'Big juicy worms for catfish and burbot.', { bite: 1.3, rare: 1.15, affinity: { catfish: 2.2 } }),
-  spinner: item('bait', 'Spinner Lure', 150, 'Attracts uncommon and rare fish.', { bite: 1.4, rare: 1.5 }),
-  roe: item('bait', 'Salmon Roe', 300, 'Irresistible to trout and salmon.', { bite: 1.3, rare: 1.3, affinity: { trout: 2.0 }, unlock: 'trout_bum' }),
-  frog: item('bait', 'Frog Popper', 350, 'Explodes off the surface in the weeds.', { bite: 1.2, rare: 1.6, affinity: { bass: 1.8, pike: 1.8 }, unlock: 'weed_warrior' }),
-  goldlure: item('bait', 'Golden Lure', 450, 'Legends have been seen chasing it.', { bite: 1.6, rare: 2.0, unlock: 'dedicated' }),
-  minnow: item('bait', 'Live Minnow', 600, 'Nothing beats the real thing.', { bite: 1.8, rare: 1.6, unlock: 'bait_shop' }),
-  glowjig: item('bait', 'Glow Jig', 800, 'Shines in the dark deep water.', { bite: 1.4, rare: 2.2, affinity: { ancient: 1.5, whitefish: 1.5 }, unlock: 'deep_diver' }),
-  squid: item('bait', 'Squid Strips', 500, "Tough, smelly bait that sea fish can't ignore.", { bite: 1.4, rare: 1.5, affinity: { sea: 1.8 }, unlock: 'old_salt' }),
-  mythicfly: item('bait', 'Mythic Fly', 3500, 'Tied from a legend\'s feather.', { bite: 1.5, rare: 3.0, unlock: 'living_legend' }),
+  // ---- bait & lures: consumables, bought in packs at the Bait Shop ----
+  // price is per pack of `pack` uses. One use goes each time a fish bites.
+  // Bread Crumbs are free and never run out.
+  bread: item('bait', 'Bread Crumbs', 0, 'Fish are not impressed. Free and endless.', { bite: 1.0, rare: 1.0 }),
+  worms: item('bait', 'Earthworms', 25, 'Faster bites.', { bite: 1.25, rare: 1.2, pack: 25 }),
+  corn: item('bait', 'Sweet Corn', 30, 'Carp, tench and koi love it.', { bite: 1.2, rare: 1.0, affinity: { carp: 2.5 }, pack: 25 }),
+  nightcrawler: item('bait', 'Nightcrawlers', 40, 'Big juicy worms for catfish and burbot.', { bite: 1.3, rare: 1.15, affinity: { catfish: 2.2 }, pack: 20 }),
+  spinner: item('bait', 'Spinner Lure', 60, 'Attracts uncommon and rare fish.', { bite: 1.4, rare: 1.5, pack: 15 }),
+  roe: item('bait', 'Salmon Roe', 60, 'Irresistible to trout and salmon.', { bite: 1.3, rare: 1.3, affinity: { trout: 2.0 }, pack: 20, unlock: 'trout_bum' }),
+  frog: item('bait', 'Frog Popper', 60, 'Explodes off the surface in the weeds.', { bite: 1.2, rare: 1.6, affinity: { bass: 1.8, pike: 1.8 }, pack: 10, unlock: 'weed_warrior' }),
+  goldlure: item('bait', 'Golden Lure', 120, 'Legends have been seen chasing it.', { bite: 1.6, rare: 2.0, pack: 10, unlock: 'dedicated' }),
+  minnow: item('bait', 'Live Minnow', 120, 'Nothing beats the real thing.', { bite: 1.8, rare: 1.6, pack: 20, unlock: 'bait_shop' }),
+  glowjig: item('bait', 'Glow Jig', 120, 'Shines in the dark deep water.', { bite: 1.4, rare: 2.2, affinity: { ancient: 1.5, whitefish: 1.5 }, pack: 10, unlock: 'deep_diver' }),
+  squid: item('bait', 'Squid Strips', 100, "Tough, smelly bait that sea fish can't ignore.", { bite: 1.4, rare: 1.5, affinity: { sea: 1.8 }, pack: 20, unlock: 'old_salt' }),
+  mythicfly: item('bait', 'Mythic Fly', 250, 'Tied from a legend\'s feather.', { bite: 1.5, rare: 3.0, pack: 5, unlock: 'living_legend' }),
 });
+
+/** Bait and lures are used up (all but the free starter bait). */
+export function isConsumable(itemId) {
+  return ITEMS[itemId]?.slot === 'bait' && itemId !== STARTER.bait;
+}
+
+// Buying several packs at once is cheaper.
+export const BULK_PACKS = 5;
+export const BULK_DISCOUNT = 0.1;
+
+/** Coins for `packs` packs of a consumable (1 or BULK_PACKS). */
+export function packPrice(itemId, packs = 1) {
+  const price = ITEMS[itemId].price * packs;
+  return packs >= BULK_PACKS ? Math.round(price * (1 - BULK_DISCOUNT)) : price;
+}
+
+/** How many of a bait a profile has: Infinity for the free starter bait. */
+export function baitCount(profile, itemId) {
+  if (!isConsumable(itemId)) return itemId === STARTER.bait ? Infinity : 0;
+  return profile?.bait?.[itemId] || 0;
+}
 
 export function itemsForSlot(slot) {
   return Object.entries(ITEMS).filter(([, it]) => it.slot === slot).map(([id, it]) => ({ id, ...it }));

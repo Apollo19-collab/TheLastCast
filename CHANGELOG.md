@@ -2,6 +2,15 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.9.0 - The Bait Shop (2026-10-02)
+
+- Bait and lures are now used up: each bite takes one. Bread Crumbs are still free and never run out.
+- New Bait Shop stall on South Beach, next to where you start: press E to buy bait in packs (5 packs at once are 10% cheaper). On a voyage, the deckhand by the wheelhouse sells bait.
+- Your bait and how many are left show under your coins. If you run out, you switch back to Bread Crumbs.
+- Easier money: every catch now pays 1.25 coins per point. Bait is cheap: Earthworms cost about a coin a bite.
+- Bait you already owned turned into 40 uses of each.
+- Smoother lake: the boat is drawn from a cached image and skipped when off screen, and the HUD only updates text that changed.
+
 ## 0.8.0 - Duels & the boat (2026-10-02)
 
 - Fishing duels: stand next to another angler and press E to challenge them. If they accept (Y), you both fish for 3 minutes with the same matched tackle, and the most points wins.

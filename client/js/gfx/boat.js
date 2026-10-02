@@ -80,7 +80,7 @@ export function drawBoat(ctx, pose, { length: L, beam: B, time = 0, bob = 1, lig
   ctx.save();
   ctx.translate(pose.x, pose.y);
   ctx.rotate(pose.h + Math.sin(time / 1300) * 0.006 * bob);
-  const scale = L / 560; // props are sized for the big trawler
+  const s = Math.max(0.55, L / 560);
 
   // Shadow on the water.
   ctx.save();
@@ -89,125 +89,11 @@ export function drawBoat(ctx, pose, { length: L, beam: B, time = 0, bob = 1, lig
   ctx.fill(hullPath(L, B));
   ctx.restore();
 
-  // Hull with a darker waterline.
-  const hull = hullPath(L, B);
-  ctx.fillStyle = HULL;
-  ctx.fill(hull);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = HULL_DARK;
-  ctx.stroke(hull);
+  // Everything that doesn't move is painted once into a cached image.
+  const sprite = boatSprite(L, B, lights);
+  ctx.drawImage(sprite.canvas, -sprite.w / 2, -sprite.h / 2, sprite.w, sprite.h);
 
-  // Deck planks.
-  const deck = hullPath(L, B, Math.max(5, 9 * scale));
-  ctx.save();
-  ctx.clip(deck);
-  ctx.fillStyle = DECK;
-  ctx.fillRect(-L / 2, -B / 2, L, B);
-  ctx.strokeStyle = PLANK;
-  ctx.lineWidth = 1;
-  const plank = Math.max(6, 9 * scale);
-  for (let y = -B / 2; y < B / 2; y += plank) {
-    ctx.beginPath();
-    ctx.moveTo(-L / 2, y);
-    ctx.lineTo(L / 2, y);
-    ctx.stroke();
-    // Staggered plank ends.
-    for (let x = -L / 2 + ((y / plank) % 2 ? 40 : 0) * scale; x < L / 2; x += 80 * scale) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + plank);
-      ctx.stroke();
-    }
-  }
-  // Worn, lighter wood down the middle where people walk.
-  const wear = ctx.createLinearGradient(0, -B / 2, 0, B / 2);
-  wear.addColorStop(0, 'rgba(0,0,0,0.12)');
-  wear.addColorStop(0.5, 'rgba(255,240,210,0.12)');
-  wear.addColorStop(1, 'rgba(0,0,0,0.12)');
-  ctx.fillStyle = wear;
-  ctx.fillRect(-L / 2, -B / 2, L, B);
-  ctx.restore();
-
-  // Rail.
-  ctx.strokeStyle = RAIL;
-  ctx.lineWidth = Math.max(2, 3 * scale);
-  ctx.stroke(deck);
-  ctx.fillStyle = '#6b4a2a';
-  for (let x = -L / 2 + 20 * scale; x < L * 0.28; x += 34 * scale) {
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      ctx.arc(x, side * (B / 2 - Math.max(5, 9 * scale)), 2.2 * Math.max(0.7, scale), 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // Props: coiled nets, crates and a life ring.
-  const s = Math.max(0.55, scale);
-  const nets = (x, y) => {
-    ctx.strokeStyle = 'rgba(40,70,60,0.85)';
-    ctx.lineWidth = 1.2;
-    for (let r = 4; r < 16 * s; r += 3) {
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  };
-  nets(L * 0.3, -B * 0.18);
-  ctx.fillStyle = '#8d6b3f';
-  ctx.strokeStyle = '#4a3420';
-  ctx.lineWidth = 1;
-  for (const [x, y] of [[L * 0.3, B * 0.16], [L * 0.3 + 18 * s, B * 0.2]]) {
-    ctx.fillRect(x - 8 * s, y - 8 * s, 16 * s, 16 * s);
-    ctx.strokeRect(x - 8 * s, y - 8 * s, 16 * s, 16 * s);
-  }
-  ctx.strokeStyle = '#ff7b00';
-  ctx.lineWidth = 4 * s;
-  ctx.beginPath();
-  ctx.arc(-L * 0.22, -B / 2 + 14 * s, 7 * s, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4 * s;
-  ctx.setLineDash([3 * s, 8 * s]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Wheelhouse at the stern.
-  const cabinLen = L * 0.19;
-  const cabinW = B * 0.78;
-  const cx = -L / 2 + 5;
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(cx + 4, -cabinW / 2 + 5, cabinLen, cabinW);
-  ctx.fillStyle = '#f1efe8';
-  ctx.strokeStyle = '#8d8a80';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(cx, -cabinW / 2, cabinLen, cabinW, 6 * s);
-  ctx.fill();
-  ctx.stroke();
-  // Roof ridge and windows facing forward.
-  ctx.fillStyle = '#d9d5c9';
-  ctx.fillRect(cx + 4, -2, cabinLen - 8, 4);
-  ctx.fillStyle = lights ? '#ffe8a3' : '#4ea8de';
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(cx + cabinLen - 7 * s, -cabinW / 2 + 8 * s + i * (cabinW - 16 * s) / 3, 4 * s, (cabinW - 16 * s) / 3 - 4 * s);
-  }
-  // Funnel.
-  ctx.fillStyle = '#2b2d42';
-  ctx.beginPath();
-  ctx.arc(cx + cabinLen * 0.35, 0, 8 * s, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#e63946';
-  ctx.lineWidth = 3 * s;
-  ctx.stroke();
-
-  // Mast with a furled sail and a pennant.
-  const mx = L * 0.08;
-  ctx.fillStyle = '#e9d8a6';
-  ctx.fillRect(mx - L * 0.2, -2.5 * s, L * 0.2, 5 * s);
-  ctx.fillStyle = '#5b3c22';
-  ctx.beginPath();
-  ctx.arc(mx, 0, 6 * s, 0, Math.PI * 2);
-  ctx.fill();
+  // The pennant flapping at the stern.
   ctx.fillStyle = '#e63946';
   ctx.beginPath();
   const flap = Math.sin(time / 180) * 4 * s;
@@ -216,8 +102,152 @@ export function drawBoat(ctx, pose, { length: L, beam: B, time = 0, bob = 1, lig
   ctx.lineTo(-L / 2 - 14 * s, 4 * s + flap);
   ctx.closePath();
   ctx.fill();
-
   ctx.restore();
+}
+
+const SPRITE_PX = 2; // sprite pixels per world unit
+const sprites = new Map();
+
+/** The boat's hull, deck, props and wheelhouse, rendered once per size. */
+function boatSprite(L, B, lights) {
+  const key = `${L}|${B}|${lights}`;
+  if (!sprites.has(key)) {
+    const w = L + 24;
+    const h = B + 24;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(w * SPRITE_PX);
+    canvas.height = Math.ceil(h * SPRITE_PX);
+    const g = canvas.getContext('2d');
+    g.scale(SPRITE_PX, SPRITE_PX);
+    g.translate(w / 2, h / 2);
+    paintBoat(g, L, B, lights);
+    sprites.set(key, { canvas, w, h });
+  }
+  return sprites.get(key);
+}
+
+function paintBoat(g, L, B, lights) {
+  const scale = L / 560; // props are sized for the big trawler
+
+  // Hull with a darker waterline.
+  const hull = hullPath(L, B);
+  g.fillStyle = HULL;
+  g.fill(hull);
+  g.lineWidth = 3;
+  g.strokeStyle = HULL_DARK;
+  g.stroke(hull);
+
+  // Deck planks.
+  const deck = hullPath(L, B, Math.max(5, 9 * scale));
+  g.save();
+  g.clip(deck);
+  g.fillStyle = DECK;
+  g.fillRect(-L / 2, -B / 2, L, B);
+  g.strokeStyle = PLANK;
+  g.lineWidth = 1;
+  const plank = Math.max(6, 9 * scale);
+  for (let y = -B / 2; y < B / 2; y += plank) {
+    g.beginPath();
+    g.moveTo(-L / 2, y);
+    g.lineTo(L / 2, y);
+    g.stroke();
+    // Staggered plank ends.
+    for (let x = -L / 2 + ((y / plank) % 2 ? 40 : 0) * scale; x < L / 2; x += 80 * scale) {
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x, y + plank);
+      g.stroke();
+    }
+  }
+  // Worn, lighter wood down the middle where people walk.
+  const wear = g.createLinearGradient(0, -B / 2, 0, B / 2);
+  wear.addColorStop(0, 'rgba(0,0,0,0.12)');
+  wear.addColorStop(0.5, 'rgba(255,240,210,0.12)');
+  wear.addColorStop(1, 'rgba(0,0,0,0.12)');
+  g.fillStyle = wear;
+  g.fillRect(-L / 2, -B / 2, L, B);
+  g.restore();
+
+  // Rail.
+  g.strokeStyle = RAIL;
+  g.lineWidth = Math.max(2, 3 * scale);
+  g.stroke(deck);
+  g.fillStyle = '#6b4a2a';
+  for (let x = -L / 2 + 20 * scale; x < L * 0.28; x += 34 * scale) {
+    for (const side of [-1, 1]) {
+      g.beginPath();
+      g.arc(x, side * (B / 2 - Math.max(5, 9 * scale)), 2.2 * Math.max(0.7, scale), 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+
+  // Props: coiled nets, crates and a life ring.
+  const s = Math.max(0.55, scale);
+  const nets = (x, y) => {
+    g.strokeStyle = 'rgba(40,70,60,0.85)';
+    g.lineWidth = 1.2;
+    for (let r = 4; r < 16 * s; r += 3) {
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.stroke();
+    }
+  };
+  nets(L * 0.3, -B * 0.18);
+  g.fillStyle = '#8d6b3f';
+  g.strokeStyle = '#4a3420';
+  g.lineWidth = 1;
+  for (const [x, y] of [[L * 0.3, B * 0.16], [L * 0.3 + 18 * s, B * 0.2]]) {
+    g.fillRect(x - 8 * s, y - 8 * s, 16 * s, 16 * s);
+    g.strokeRect(x - 8 * s, y - 8 * s, 16 * s, 16 * s);
+  }
+  g.strokeStyle = '#ff7b00';
+  g.lineWidth = 4 * s;
+  g.beginPath();
+  g.arc(-L * 0.22, -B / 2 + 14 * s, 7 * s, 0, Math.PI * 2);
+  g.stroke();
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 4 * s;
+  g.setLineDash([3 * s, 8 * s]);
+  g.stroke();
+  g.setLineDash([]);
+
+  // Wheelhouse at the stern.
+  const cabinLen = L * 0.19;
+  const cabinW = B * 0.78;
+  const cx = -L / 2 + 5;
+  g.fillStyle = 'rgba(0,0,0,0.3)';
+  g.fillRect(cx + 4, -cabinW / 2 + 5, cabinLen, cabinW);
+  g.fillStyle = '#f1efe8';
+  g.strokeStyle = '#8d8a80';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.roundRect(cx, -cabinW / 2, cabinLen, cabinW, 6 * s);
+  g.fill();
+  g.stroke();
+  // Roof ridge and windows facing forward.
+  g.fillStyle = '#d9d5c9';
+  g.fillRect(cx + 4, -2, cabinLen - 8, 4);
+  g.fillStyle = lights ? '#ffe8a3' : '#4ea8de';
+  for (let i = 0; i < 3; i++) {
+    g.fillRect(cx + cabinLen - 7 * s, -cabinW / 2 + 8 * s + i * (cabinW - 16 * s) / 3, 4 * s, (cabinW - 16 * s) / 3 - 4 * s);
+  }
+  // Funnel.
+  g.fillStyle = '#2b2d42';
+  g.beginPath();
+  g.arc(cx + cabinLen * 0.35, 0, 8 * s, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = '#e63946';
+  g.lineWidth = 3 * s;
+  g.stroke();
+
+  // Mast with a furled sail and a pennant.
+  const mx = L * 0.08;
+  g.fillStyle = '#e9d8a6';
+  g.fillRect(mx - L * 0.2, -2.5 * s, L * 0.2, 5 * s);
+  g.fillStyle = '#5b3c22';
+  g.beginPath();
+  g.arc(mx, 0, 6 * s, 0, Math.PI * 2);
+  g.fill();
 }
 
 /** Lantern glow, drawn after the night has darkened everything else. */

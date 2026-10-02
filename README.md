@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.8.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.9.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -14,7 +14,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Hook a fish | Press `Space` / click when the bobber dips and shows **!** |
 | Reel | Hold `Space` / mouse. **Release when the fish pulls** or the line snaps |
 | Reel in / give up | `Esc` or right-click |
-| Board the boat / challenge an angler to a duel | `E` when you're next to the boat or another angler |
+| Open the Bait Shop / board the boat / challenge an angler to a duel | `E` when you're next to the shop, the boat or another angler |
 | Accept / decline a duel | `Y` / `N` |
 | Tackle / Fish Index / Achievements / Catch History | `G` / `I` / `T` / `H` (or the buttons under your score) |
 | Options (volume, controls) | `O` (or the Options button) |
@@ -74,14 +74,15 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
 
 ### Progression
 
-- **Coins.** Every catch earns coins equal to its points. Score is never spent and drives the leaderboard; coins are what you spend.
+- **Coins.** Every catch earns 1.25 coins per point (`COINS_PER_POINT` in `shared/constants.js`). Score is never spent and drives the leaderboard; coins are what you spend.
+- **Bait Shop.** Bait and lures are consumables: each bite uses one, whether you hook the fish or not, and casting without a bite costs nothing. Buy them in packs at the **Bait Shop** stall on South Beach (press `E` next to it), or from the deckhand by the wheelhouse on a voyage. Five packs at once are 10% cheaper. **Bread Crumbs** are free and never run out, and you switch back to them automatically when your bait runs out. Prices run from about 1 coin a bite (Earthworms) to 50 (the Mythic Fly), well below what the fish they attract pay. Duels use matched tackle for free.
 - **Tackle** (`G`). 38 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
   - **Rods:** cast range and power. Power multiplies line strength.
   - **Reels:** reel speed, and drag (how fast tension eases).
   - **Lines:** strength, but strong lines can make fish shy. Fluorocarbon and stealth leaders get more bites.
-  - **Bait & lures:** bite speed and rare-fish odds.
+  - **Bait & lures:** bite speed and rare-fish odds. Used up as you fish (see Bait Shop below).
   - **Specialties:** some items favour certain fish. Fly rods and salmon roe for trout, corn for carp, nightcrawlers for catfish, steel leaders and frog poppers for pike, glow jigs for deep-water fish, centerpin reels for river fish, the Deep Sea Rod and Squid Strips for sea fish.
-  - **Unlocks:** 16 items can be bought from the start. The other 22, most of the late-game tackle, unlock through achievements.
+  - **Unlocks:** 16 items are available from the start. The other 22, most of the late-game tackle and bait, unlock through achievements. Rods, reels and lines are bought once; bait is bought in packs.
 - **Achievements** (`T`). 27 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, duels, voyages, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.

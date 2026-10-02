@@ -19,6 +19,7 @@ import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
 import { SeaScene } from './gfx/sea.js';
+import { drawBaitShop } from './gfx/shop.js';
 import { BOAT, SEA_BOAT } from '/shared/voyage.js';
 
 // Approximate area of the world visible on screen, in world units.
@@ -130,7 +131,7 @@ export class Renderer {
     this.drawZoneLabels();
     // The visiting boat sits between the water and land layers, so it
     // passes under the river bridge.
-    const boat = frame.boat?.x != null ? frame.boat : null;
+    const boat = frame.boat?.x != null && this.onScreen(frame.boat.x, frame.boat.y, BOAT.length * 1.5) ? frame.boat : null;
     if (boat) {
       const moving = boat.ph === 'arriving' || boat.ph === 'departing';
       if (moving) drawWake(ctx, boat, { length: BOAT.length, beam: BOAT.beam, speed: 0.8, time });
@@ -140,6 +141,7 @@ export class Renderer {
     if (boat?.ph === 'docked') drawGangplank(ctx, BOAT.landing.x + 26, boat.x - BOAT.beam / 2 + 4, boat.y);
     this.drawSurf(time);
     this.drawReeds(time);
+    for (const shop of this.world.shops ?? []) if (this.onScreen(shop.x, shop.y, 80)) drawBaitShop(ctx, shop.x, shop.y);
     this.drawAreaLabels();
 
     for (const h of frame.hotspots) this.drawHotspot(h, time);
@@ -592,6 +594,10 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(x0 + h.x * scale, y0 + h.y * scale, 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.fillStyle = '#ffd166';
+    for (const shop of this.world.shops ?? []) {
+      ctx.fillRect(x0 + shop.x * scale - 3 * dpr, y0 + shop.y * scale - 3 * dpr, 6 * dpr, 6 * dpr);
     }
     const boat = frame.boat;
     if (boat?.x != null) {

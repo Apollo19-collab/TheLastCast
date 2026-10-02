@@ -2,9 +2,22 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.9.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.0',
+    date: '2026-10-02',
+    title: 'The Bait Shop',
+    changes: [
+      'Bait and lures are now used up: each bite takes one. Bread Crumbs are still free and never run out.',
+      'New Bait Shop stall on South Beach, next to where you start: press E to buy bait in packs (5 packs at once are 10% cheaper). On a voyage, the deckhand by the wheelhouse sells bait.',
+      'Your bait and how many are left show under your coins. If you run out, you switch back to Bread Crumbs.',
+      'Easier money: every catch now pays 1.25 coins per point. Bait is cheap: Earthworms cost about a coin a bite.',
+      'Bait you already owned turned into 40 uses of each.',
+      'Smoother lake: the boat is drawn from a cached image and skipped when off screen, and the HUD only updates text that changed.',
+    ],
+  },
   {
     version: '0.8.0',
     date: '2026-10-02',

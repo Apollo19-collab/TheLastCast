@@ -9,7 +9,7 @@ import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
 import { computeStats } from '/shared/gear.js';
 import { VERSION } from '/shared/version.js';
 import { DUEL } from '/shared/duel.js';
-import { BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
+import { BOAT, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
@@ -34,7 +34,7 @@ const audio = new AudioEngine();
 const ui = new UI({
   world: lakeWorld,
   audio,
-  onBuy: (item) => net.send({ t: MSG.BUY, item }),
+  onBuy: (item, packs = 1) => net.send({ t: MSG.BUY, item, packs }),
   onEquip: (item) => net.send({ t: MSG.EQUIP, item }),
 });
 const buffer = new SnapshotBuffer(100);
@@ -150,6 +150,7 @@ net.on(MSG.WELCOME, (msg) => {
   if (msg.room) setRoom(msg.room);
   ui.showGame();
   ui.feed('Welcome to Mirror Lake! Different waters hold different fish.');
+  ui.feed('🪱 Better bait gets more bites and rarer fish. Buy it at the Bait Shop right next to you (press E there). Bread Crumbs are free.', '#c9e4a6');
   ui.feed('A boat docks at the South Beach dock every 15 minutes. Press E beside it to sail out to sea. Press E next to another angler to challenge them to a duel.', '#9ad1ff');
   if (msg.guest) ui.feed('You are already playing in another tab, so this tab is a guest and its progress is not saved.', '#f9c74f');
   if (!msg.username && !msg.guest) ui.feed('Playing as a guest. Sign up to keep your progress on any device.', '#a9d6e5');
@@ -231,9 +232,20 @@ function onCancel() {
   else net.send({ t: MSG.CANCEL });
 }
 
+/** Is the local player at a place that sells bait? */
+function atBaitShop() {
+  if (room === 'voyage') return Math.hypot(selfPos.x - (SEA_BOAT.x - SEA_BOAT.length / 2 + 110), selfPos.y - SEA_BOAT.y) < 110;
+  const shop = lakeWorld.shops.find((s) => s.id === 'bait');
+  return Math.hypot(selfPos.x - shop.x, selfPos.y - shop.y) <= shop.range;
+}
+
 /** What pressing E would do right now: { text, run } or null. */
 function interaction(me) {
-  if (!me || room !== 'lake') return null;
+  if (!me) return null;
+  if (!me.ab && !me.du && atBaitShop()) {
+    return { text: room === 'voyage' ? 'E: buy bait from the deckhand' : 'E: open the Bait Shop', run: () => ui.openShop() };
+  }
+  if (room !== 'lake') return null;
   const boat = buffer.latest()?.boat;
   if (me.ab) return boat?.ph === 'docked' ? { text: 'E: step off the boat', run: () => net.send({ t: MSG.BOARD }) } : null;
   if (boat?.ph === 'docked' && Math.hypot(selfPos.x - BOAT.dock.x, selfPos.y - BOAT.dock.y) <= BOAT.boardRange) {
@@ -349,7 +361,7 @@ net.on(MSG.EVENT, (ev) => {
       if (mine && ev.duel) ui.flash(`Duel catch! ${ev.kg} kg ${ev.speciesName}: +${ev.points} duel points.`, 3000);
       else if (mine) {
         const isNew = ev.isNew ? ' NEW species for your Fish Index!' : '';
-        ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points & coins.${isNew}`, 3500);
+        ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points, +${ev.coins ?? ev.points} coins.${isNew}`, 3500);
       }
       break;
     }
@@ -398,6 +410,14 @@ net.on(MSG.EVENT, (ev) => {
       break;
     case 'info':
       ui.flash(ev.message, 2500);
+      break;
+    case 'baitLow':
+      ui.feed(`🪱 ${ev.message} Restock at the Bait Shop.`, '#ffb4a2');
+      break;
+    case 'baitOut':
+      ui.flash(ev.message, 4000);
+      ui.feed(`🪱 ${ev.message}`, '#ffb4a2');
+      audio.play('error');
       break;
 
     // ---- duels ----
@@ -585,6 +605,7 @@ function frame(now) {
       : areaAt(world, selfPos.x, selfPos.y)?.name ?? world.name;
     ui.updateMe(me, aimZone, where);
     ui.prompt(ui.menuOpen ? null : interaction(me)?.text ?? null);
+    ui.setShopAccess(atBaitShop());
     updateBoatLine(me, snap?.boat);
     updateDuelPanel(me, snap?.players ?? []);
     updateVoyagePanel(me, snap);

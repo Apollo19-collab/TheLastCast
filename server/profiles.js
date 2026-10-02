@@ -13,7 +13,7 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { ITEMS, STARTER, starterInventory } from '../shared/gear.js';
+import { ITEMS, STARTER, isConsumable, starterInventory } from '../shared/gear.js';
 import { newCounters } from '../shared/achievements.js';
 import { SPECIES } from '../shared/fish.js';
 import {
@@ -24,6 +24,7 @@ export const HISTORY_LIMIT = 50;
 const SAVE_DELAY_MS = 2000;
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const BAD_LOGIN = 'Wrong username or password.';
+const OWNED_BAIT_USES = 40; // uses given for each bait owned before bait became consumable
 
 export function newProfile(name = 'Angler') {
   return {
@@ -34,7 +35,8 @@ export function newProfile(name = 'Angler') {
     coins: 0,
     catches: 0,
     best: null, // { species, kg, points }
-    inventory: starterInventory(), // owned item ids (see shared/gear.js)
+    inventory: starterInventory(), // owned rods, reels and lines (see shared/gear.js)
+    bait: {}, // consumable bait and lures: item id -> uses left
     equipped: { ...STARTER }, // slot -> item id
     achievements: {}, // achievement id -> time earned
     counters: newCounters(), // lifetime stats that achievements measure
@@ -73,10 +75,20 @@ export function normalize(saved) {
   }
   delete p.gear;
   if (!saved.counters) backfillCounters(p);
-  p.inventory = p.inventory.filter((id) => ITEMS[id]);
+  if (!saved.bait) {
+    // Before 0.9 bait was bought once and kept forever. Turn each bait you
+    // owned into a generous stock of uses.
+    p.bait = {};
+    for (const id of p.inventory) if (isConsumable(id)) p.bait[id] = OWNED_BAIT_USES;
+  }
+  p.inventory = p.inventory.filter((id) => ITEMS[id] && !isConsumable(id));
+  p.bait = { ...p.bait };
+  for (const id of Object.keys(p.bait)) if (!isConsumable(id) || !(p.bait[id] > 0)) delete p.bait[id];
   for (const [slot, id] of Object.entries(STARTER)) {
     if (!p.inventory.includes(id)) p.inventory.push(id);
-    if (ITEMS[p.equipped[slot]]?.slot !== slot || !p.inventory.includes(p.equipped[slot])) p.equipped[slot] = id;
+    const eq = p.equipped[slot];
+    const have = isConsumable(eq) ? p.bait[eq] > 0 : p.inventory.includes(eq);
+    if (ITEMS[eq]?.slot !== slot || !have) p.equipped[slot] = id;
   }
   return p;
 }

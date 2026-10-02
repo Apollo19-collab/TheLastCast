@@ -14,6 +14,9 @@ export const BITE_WINDOW = 1.3; // seconds to hook a fish after it bites
 
 export const CROWD_RADIUS = 90; // other bobbers within this range slow your bites
 
+// Coins earned per point when you land a fish (score is the points themselves).
+export const COINS_PER_POINT = 1.25;
+
 export const FishingState = Object.freeze({
   IDLE: 'idle',
   CASTING: 'casting',

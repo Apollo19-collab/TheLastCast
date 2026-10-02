@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, sanitizeName } from '../server/game.js';
 import { pickSpecies } from '../server/fishing.js';
-import { FishingState, MSG } from '../shared/constants.js';
+import { COINS_PER_POINT, FishingState, MSG } from '../shared/constants.js';
 import { LOCATIONS, areaAt, isWalkable, isWater, zoneAt } from '../shared/world.js';
-import { ITEMS, SLOTS, computeStats } from '../shared/gear.js';
+import { BULK_PACKS, ITEMS, SLOTS, computeStats, isConsumable, packPrice } from '../shared/gear.js';
 import { ACHIEVEMENTS, progressOf, unlocksFor } from '../shared/achievements.js';
 import { CHANGELOG, VERSION } from '../shared/version.js';
 import { normalize } from '../server/profiles.js';
@@ -123,7 +123,8 @@ test('full loop: bite, hook, reel carefully, catch and score', () => {
   assert.equal(profile.score, caught.points);
   // Catch points, plus the "First Catch" achievement's reward.
   assert.ok(profile.achievements.first_catch);
-  assert.equal(profile.coins, caught.points + ACHIEVEMENTS.find((x) => x.id === 'first_catch').coins);
+  assert.equal(profile.coins, caught.coins + ACHIEVEMENTS.find((x) => x.id === 'first_catch').coins);
+  assert.equal(caught.coins, Math.round(caught.points * COINS_PER_POINT), 'coins are a bit more than points');
   assert.equal(profile.counters.catches, 1);
   assert.equal(profile.counters.zone.shallows, 1);
   assert.equal(profile.counters.area.southBeach, 1);
@@ -316,7 +317,7 @@ test('unlocking achievements are not reachable in the first hour', () => {
     trophy_hunter: 15,
     heavyweight: 34, // kg; a 35 kg fish is a rare roll
     hotspot_hopper: 150,
-    bait_shop: 4500, // can't spend more than you've earned
+    bait_shop: 5600, // can't spend more than you've earned (~4,500 x the coin rate)
     collector: 32, // species: ~24 at the lake, plus sea fish from a few voyages
     ghost_hunter: 0,
     living_legend: 1,
@@ -596,4 +597,97 @@ test('early fish still put up a fight (no instant catches)', () => {
   assert.ok(avg('bluegill', 0.3) >= 4, 'a small bluegill takes a few seconds');
   assert.ok(avg('carp', 5) >= 6, 'a carp takes a while');
   assert.ok(avg('bass', 3) >= 8, 'a bass fights for a good while');
+});
+
+// ---- consumable bait ----------------------------------------------------------------
+
+/** A player standing at the lake's Bait Shop with money to spend. */
+function atShop(coins = 1000) {
+  const g = makeGame();
+  const shop = world.shops.find((x) => x.id === 'bait');
+  Object.assign(g.player, { x: shop.x + 40, y: shop.y + 40 });
+  g.player.profile.coins = coins;
+  return g;
+}
+
+/** Make the next bite happen right away. */
+function biteNow(game, player) {
+  player.line = { state: FishingState.WAITING, x: 1500, y: 1450, zoneId: 'deep', timer: 0.01, hotspot: false };
+  game.tick(0.05);
+}
+
+test('bait: bought in packs at the Bait Shop, again and again', () => {
+  const { game, player, inbox } = atShop();
+  const p = player.profile;
+  game.handleMessage(player, { t: MSG.BUY, item: 'worms' });
+  assert.equal(p.bait.worms, ITEMS.worms.pack);
+  assert.equal(p.equipped.bait, 'worms', 'equipped straight away');
+  assert.equal(p.coins, 1000 - ITEMS.worms.price);
+  game.handleMessage(player, { t: MSG.BUY, item: 'worms', packs: BULK_PACKS });
+  assert.equal(p.bait.worms, ITEMS.worms.pack * (1 + BULK_PACKS), 'buy more any time');
+  assert.equal(p.coins, 1000 - ITEMS.worms.price - packPrice('worms', BULK_PACKS));
+  assert.ok(packPrice('worms', BULK_PACKS) < ITEMS.worms.price * BULK_PACKS, 'bulk is cheaper');
+  assert.ok(!p.inventory.includes('worms'), 'bait lives in the bait bag, not the tackle box');
+
+  // Away from the shop you can't buy bait (rods etc. are still fine).
+  Object.assign(player, { x: 1600, y: 1800 });
+  game.handleMessage(player, { t: MSG.BUY, item: 'corn' });
+  assert.ok(!p.bait.corn);
+  assert.match(inbox.at(-1).message, /Bait Shop/);
+  game.handleMessage(player, { t: MSG.BUY, item: 'fiberglass' });
+  assert.ok(p.inventory.includes('fiberglass'));
+});
+
+test('bait: each bite uses one; running out switches back to free bread', () => {
+  const { game, player, inbox } = atShop();
+  const p = player.profile;
+  game.handleMessage(player, { t: MSG.BUY, item: 'spinner' });
+  const n = ITEMS.spinner.pack;
+  biteNow(game, player);
+  assert.equal(p.bait.spinner, n - 1);
+  game.handleMessage(player, { t: MSG.CANCEL });
+  // Casting and reeling in without a bite costs nothing.
+  game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.2 });
+  game.handleMessage(player, { t: MSG.CANCEL });
+  assert.equal(p.bait.spinner, n - 1);
+
+  p.bait.spinner = 1;
+  biteNow(game, player);
+  assert.ok(!p.bait.spinner);
+  assert.equal(p.equipped.bait, 'bread');
+  assert.equal(player.stats.rareBoost, computeStats(p.equipped).rareBoost);
+  assert.ok(inbox.some((m) => m.kind === 'baitOut'));
+  // Bread never runs out, and you can't equip bait you don't have.
+  biteNow(game, player);
+  assert.equal(p.equipped.bait, 'bread');
+  game.handleMessage(player, { t: MSG.EQUIP, item: 'spinner' });
+  assert.equal(p.equipped.bait, 'bread');
+});
+
+test('bait: duel bites are free', () => {
+  // Duel bait is free (matched tackle).
+  const { game, player } = atShop();
+  game.handleMessage(player, { t: MSG.BUY, item: 'worms' });
+  player.gear = { rod: 'carbon', reel: 'baitcaster', line: 'fluoro', bait: 'spinner' };
+  const before = player.profile.bait.worms;
+  biteNow(game, player);
+  assert.equal(player.profile.bait.worms, before, 'duel bites are on the house');
+});
+
+test('bait: owners of old permanent bait get a stock of it', () => {
+  const p = normalize({ name: 'Old', coins: 10, inventory: ['willow', 'rusty', 'mono', 'bread', 'worms', 'goldlure'], equipped: { rod: 'willow', reel: 'rusty', line: 'mono', bait: 'goldlure' } });
+  assert.ok(p.bait.worms > 0 && p.bait.goldlure > 0);
+  assert.equal(p.equipped.bait, 'goldlure', 'still equipped');
+  assert.ok(!p.inventory.some(isConsumable));
+  const fresh = normalize({ name: 'New', bait: { worms: 3 }, equipped: { bait: 'corn' } });
+  assert.equal(fresh.equipped.bait, 'bread', "can't keep bait you have none of equipped");
+});
+
+test('bait economy: cheap bait pays for itself many times over', () => {
+  // Expected coins from an average catch versus the cost of one use.
+  const perUse = (id) => ITEMS[id].price / ITEMS[id].pack;
+  assert.ok(perUse('worms') <= 1.2, 'early bait costs about a coin a bite');
+  for (const id of Object.keys(ITEMS).filter(isConsumable)) {
+    assert.ok(perUse(id) <= 50, `${id} is not absurdly expensive`);
+  }
 });

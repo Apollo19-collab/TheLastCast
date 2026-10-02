@@ -38,6 +38,10 @@ export const LOCATIONS = {
       { x: 3040, y: 880, w: 60, h: 240, type: 'bridge' }, // bridge over the river
     ],
 
+    // Shops: walk up and press E. The stall itself is solid.
+    shops: [{ id: 'bait', name: 'Bait Shop', x: 1395, y: 2075, range: 70 }],
+    solid: [{ x: 1365, y: 2050, w: 60, h: 40 }], // the Bait Shop stall
+
     // Water zones, checked in order; the first match wins.
     // `rect` (or `rects` for an L-shaped zone); `rect: null` is the default for
     // any other water. biteRate > 1 means faster bites. `fish` maps species id

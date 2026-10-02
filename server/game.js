@@ -5,7 +5,7 @@
 
 import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
-import { ITEMS, computeStats } from '../shared/gear.js';
+import { BULK_PACKS, ITEMS, STARTER, baitCount, computeStats, isConsumable, packPrice } from '../shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
@@ -147,7 +147,7 @@ export class Game {
         break;
       case MSG.BUY:
         if (this.tackleLocked(player)) return;
-        this.buy(player, msg.item);
+        this.buy(player, msg.item, msg.packs === BULK_PACKS ? BULK_PACKS : 1);
         break;
       case MSG.EQUIP:
         if (this.tackleLocked(player)) return;
@@ -168,43 +168,88 @@ export class Game {
 
   // ---- progression -------------------------------------------------------------
 
-  /** Whether a player may buy an item (owned items and locked items can't be bought). */
-  canBuy(profile, itemId) {
+  /**
+   * Whether a player may buy an item. Rods, reels and lines are bought once;
+   * bait comes in packs and can be bought again and again (packs: 1 or BULK_PACKS).
+   */
+  canBuy(profile, itemId, packs = 1) {
     const it = ITEMS[itemId];
     if (!it) return { ok: false };
-    if (profile.inventory.includes(itemId)) return { ok: false, message: `You already own the ${it.name}.` };
+    const consumable = isConsumable(itemId);
+    if (!consumable && profile.inventory.includes(itemId)) return { ok: false, message: `You already own the ${it.name}.` };
     if (it.unlock && !profile.achievements[it.unlock]) {
       return { ok: false, message: `The ${it.name} unlocks with the "${ACHIEVEMENT_BY_ID[it.unlock].name}" achievement.` };
     }
-    if (profile.coins < it.price) return { ok: false, message: `You need ${it.price - profile.coins} more coins for the ${it.name}.` };
-    return { ok: true };
+    const price = consumable ? packPrice(itemId, packs) : it.price;
+    if (profile.coins < price) return { ok: false, message: `You need ${price - profile.coins} more coins for that.` };
+    return { ok: true, price };
+  }
+
+  /** Where bait can be bought: at the lake's Bait Shop, or anywhere on a voyage (the deckhand). */
+  atBaitShop(player) {
+    if (this.kind === 'voyage') return true;
+    return !!this.world.shops?.some((s) => s.id === 'bait' && Math.hypot(player.x - s.x, player.y - s.y) <= s.range);
   }
 
   /** Buy an item by id; it is equipped straight away. */
-  buy(player, itemId) {
+  buy(player, itemId, packs = 1) {
     if (typeof itemId !== 'string' || !Object.hasOwn(ITEMS, itemId)) return;
     const { profile } = player;
-    const check = this.canBuy(profile, itemId);
+    const consumable = isConsumable(itemId);
+    if (consumable && !this.atBaitShop(player)) {
+      this.emitTo(player, { kind: 'shop', ok: false, message: 'Bait is sold at the Bait Shop on South Beach.' });
+      return;
+    }
+    const check = this.canBuy(profile, itemId, packs);
     if (!check.ok) {
       if (check.message) this.emitTo(player, { kind: 'shop', ok: false, message: check.message });
       return;
     }
     const it = ITEMS[itemId];
-    profile.coins -= it.price;
-    profile.counters.coinsSpent += it.price;
-    profile.inventory.push(itemId);
+    profile.coins -= check.price;
+    profile.counters.coinsSpent += check.price;
+    let message;
+    if (consumable) {
+      const uses = it.pack * packs;
+      profile.bait[itemId] = (profile.bait[itemId] || 0) + uses;
+      message = `You bought ${uses} ${it.name} (${profile.bait[itemId]} in your bag).`;
+    } else {
+      profile.inventory.push(itemId);
+      message = `You bought the ${it.name}!`;
+    }
     profile.equipped[it.slot] = itemId;
     player.stats = computeStats(profile.equipped);
-    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought the ${it.name}!` });
+    this.emitTo(player, { kind: 'shop', ok: true, message });
     this.checkAchievements(player);
     this.profileChanged(player);
   }
 
-  /** Equip an owned item in its slot. */
+  /** A fish took the bait: use one up. Out of it? Back to the free starter bait. */
+  useBait(player) {
+    if (player.gear) return; // duels use matched tackle, on the house
+    const { profile } = player;
+    const id = profile.equipped.bait;
+    if (!isConsumable(id)) return;
+    const left = Math.max(0, (profile.bait[id] || 0) - 1);
+    const it = ITEMS[id];
+    if (left > 0) {
+      profile.bait[id] = left;
+      if (left === 5) this.emitTo(player, { kind: 'baitLow', message: `Only 5 ${it.name} left.` });
+    } else {
+      delete profile.bait[id];
+      profile.equipped.bait = STARTER.bait;
+      player.stats = computeStats(profile.equipped);
+      this.emitTo(player, { kind: 'baitOut', message: `You're out of ${it.name}! Back to ${ITEMS[STARTER.bait].name}. Restock at the Bait Shop.` });
+    }
+    this.profileChanged(player);
+  }
+
+  /** Equip an owned item (or bait you have some of) in its slot. */
   equip(player, itemId) {
     if (typeof itemId !== 'string' || !Object.hasOwn(ITEMS, itemId)) return;
     const { profile } = player;
-    if (!profile.inventory.includes(itemId)) return;
+    const have = ITEMS[itemId].slot === 'bait' ? baitCount(profile, itemId) > 0 : profile.inventory.includes(itemId);
+    if (!have) return;
     profile.equipped[ITEMS[itemId].slot] = itemId;
     player.stats = computeStats(profile.equipped);
     this.profileChanged(player);
@@ -233,6 +278,7 @@ export class Game {
       coins: p.coins,
       catches: p.catches,
       inventory: p.inventory,
+      bait: p.bait,
       equipped: p.equipped,
       achievements: p.achievements,
       counters: p.counters,

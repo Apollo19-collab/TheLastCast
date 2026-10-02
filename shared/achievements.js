@@ -39,7 +39,7 @@ export const ACHIEVEMENTS = [
   { id: 'trophy_hunter', name: 'Trophy Hunter', desc: 'Land 30 fish weighing 10 kg or more.', metric: 'bigFish', goal: 30, coins: 400 },
   { id: 'heavyweight', name: 'Heavyweight', desc: 'Land a fish of 35 kg or more.', metric: 'heaviest', goal: 35, coins: 500, unit: 'kg' },
   { id: 'hotspot_hopper', name: 'Hotspot Hopper', desc: 'Catch 200 fish inside hotspots.', metric: 'hotspotCatches', goal: 200, coins: 400 },
-  { id: 'bait_shop', name: 'Bait Shop Regular', desc: 'Spend 6,000 coins on tackle.', metric: 'coinsSpent', goal: 6000, coins: 400 },
+  { id: 'bait_shop', name: 'Bait Shop Regular', desc: 'Spend 8,000 coins on tackle and bait.', metric: 'coinsSpent', goal: 8000, coins: 400 },
   { id: 'collector', name: 'Collector', desc: 'Discover 40 species for your Fish Index.', metric: 'species', goal: 40, coins: 800 },
   { id: 'ghost_hunter', name: 'Ghost Hunter', desc: 'Catch The Pale Ghost.', metric: 'index.ghost', goal: 1, coins: 1000 },
   { id: 'living_legend', name: 'Living Legend', desc: 'Catch 3 legendary fish.', metric: 'legendaryCatches', goal: 3, coins: 1500 },

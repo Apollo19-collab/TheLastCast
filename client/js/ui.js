@@ -4,7 +4,7 @@
 // voyage panel, banners and results.
 
 import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
-import { ITEMS, SLOTS, SLOT_LABELS, computeStats, itemsForSlot } from '/shared/gear.js';
+import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
 import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
@@ -27,6 +27,11 @@ function h(tag, attrs = {}, ...children) {
   }
   el.append(...children.flat().filter((c) => c != null && c !== false));
   return el;
+}
+
+/** Set an element's text only when it changed (avoids re-layout every frame). */
+function setText(el, text) {
+  if (el.textContent !== text) el.textContent = text;
 }
 
 /** Replace an element's children, skipping null/false ones. */
@@ -71,6 +76,7 @@ function itemStats(it) {
   }
   const aff = affinityText(it.affinity);
   if (aff) parts.push(`Favours ${aff}`);
+  if (it.pack) parts.push(`${it.pack} uses per pack`);
   return parts.join(' · ');
 }
 
@@ -84,6 +90,7 @@ export class UI {
     this.onBuy = onBuy;
     this.onEquip = onEquip;
     this.tackleSlot = 'rod';
+    this.shopAccess = false; // standing at the Bait Shop (or at sea): bait can be bought
     for (const el of document.querySelectorAll('.version-label')) {
       el.textContent = `v${VERSION} · What's new`;
       el.addEventListener('click', () => this.openMenu('news'));
@@ -129,6 +136,7 @@ export class UI {
 
   updateProfile(profile) {
     this.profile = profile;
+    this.setBait(profile);
     if (this.menuTab === 'options') { this.setStats(profile); return; }
     $('me-coins').textContent = profile.coins;
     $('me-score').textContent = profile.score;
@@ -188,7 +196,7 @@ export class UI {
         ['Hook', 'Space / click when the bobber dips'],
         ['Reel', 'Hold; release when the fish pulls'],
         ['Reel in', 'Esc or right-click'],
-        ['Interact', 'E: board the boat, or challenge a nearby angler to a duel'],
+        ['Interact', 'E: open the Bait Shop, board the boat, or challenge a nearby angler to a duel'],
         ['Duels', 'Y accept · N decline a challenge'],
         ['Menus', 'G tackle · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
@@ -210,7 +218,8 @@ export class UI {
       },
       h('img', { src: gearIconURL(id), alt: '' }),
       h('span', { class: 'loadout-label' }, SLOT_LABELS[slot].split(' ')[0]),
-      h('span', { class: 'loadout-name' }, ITEMS[id].name));
+      h('span', { class: 'loadout-name' }, ITEMS[id].name),
+      isConsumable(id) ? h('span', { class: 'loadout-count' }, `×${baitCount(p, id)}`) : null);
     }));
     const aff = affinityText(stats.affinity);
     const summary = h('div', { class: 'loadout-stats' },
@@ -219,6 +228,7 @@ export class UI {
       aff ? h('div', {}, `Specialties: ${aff}`) : null);
 
     const list = itemsForSlot(this.tackleSlot).sort((a, b) => a.price - b.price).map((it) => {
+      if (it.slot === 'bait') return this.baitRow(it);
       let action;
       if (p.equipped[it.slot] === it.id) action = h('span', { class: 'tag equipped' }, 'Equipped');
       else if (owned.has(it.id)) action = h('button', { class: 'btn', onclick: () => this.onEquip(it.id) }, 'Equip');
@@ -241,6 +251,10 @@ export class UI {
         action);
     });
 
+    const baitNote = this.tackleSlot !== 'bait' ? null
+      : this.shopAccess
+        ? h('p', { class: 'shop-note open' }, '🪱 Bait Shop: buy packs here. Each bite uses one; Bread Crumbs are free and never run out.')
+        : h('p', { class: 'shop-note' }, '🪱 Bait and lures are used up, one per bite. Buy more at the Bait Shop on South Beach (or from the deckhand on a voyage).');
     return [
       h('p', { class: 'menu-note' }, h('b', {}, `${num(p.coins)} coins`), '. Mix and match: equip any rod, reel, line and bait you own.'),
       loadout,
@@ -249,8 +263,65 @@ export class UI {
         class: slot === this.tackleSlot ? 'active' : '',
         onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
       }, SLOT_LABELS[slot]))),
+      baitNote,
       ...list,
-    ];
+    ].filter(Boolean);
+  }
+
+  /** One bait in the Tackle menu: how many you have, equip, and buy (at the shop). */
+  baitRow(it) {
+    const p = this.profile;
+    const count = baitCount(p, it.id);
+    const free = it.id === STARTER.bait;
+    const locked = it.unlock && !p.achievements[it.unlock];
+    const actions = [];
+    if (p.equipped.bait === it.id) actions.push(h('span', { class: 'tag equipped' }, 'Equipped'));
+    else if (count > 0) actions.push(h('button', { class: 'btn', onclick: () => this.onEquip(it.id) }, 'Equip'));
+    if (locked) {
+      const a = ACHIEVEMENT_BY_ID[it.unlock];
+      const pr = progressOf(p, a);
+      actions.push(h('div', { class: 'locked' },
+        h('div', {}, '🔒 ', h('b', {}, a.name)),
+        h('div', { class: 'bar small' }, h('div', { style: { width: `${pr.fraction * 100}%` } })),
+        h('div', { class: 'locked-progress' }, `${num(pr.value)} / ${num(pr.goal)}${a.unit ? ` ${a.unit}` : ''}`)));
+    } else if (!free && this.shopAccess) {
+      for (const packs of [1, BULK_PACKS]) {
+        const price = packPrice(it.id, packs);
+        actions.push(h('button', { class: 'btn buy', disabled: p.coins < price, onclick: () => this.onBuy(it.id, packs) },
+          `Buy ${it.pack * packs} · ${num(price)}c`));
+      }
+    }
+    return h('div', { class: `item-row${count > 0 ? ' owned' : ''}` },
+      h('img', { class: 'gear-icon', src: gearIconURL(it.id), alt: '' }),
+      h('div', { class: 'item-text' },
+        h('div', { class: 'item-name' }, it.name, h('span', { class: 'bait-count' }, free ? ' · free, endless' : ` · ${count} left`)),
+        h('div', { class: 'item-desc' }, it.desc),
+        h('div', { class: 'gear-stats' }, itemStats(it)),
+        !free && !locked ? h('div', { class: 'gear-stats' }, `${num(it.price)} coins per pack · ${num(packPrice(it.id, BULK_PACKS))} for ${BULK_PACKS} packs`) : null),
+      h('div', { class: 'bait-actions' }, actions));
+  }
+
+  /** Open the Bait Shop (the Tackle menu's bait tab, with buying enabled). */
+  openShop() {
+    this.tackleSlot = 'bait';
+    this.shopAccess = true;
+    this.openMenu('gear');
+  }
+
+  /** Whether you're standing at a shop; refreshes the Tackle menu if that changes. */
+  setShopAccess(on) {
+    if (this.shopAccess === on) return;
+    this.shopAccess = on;
+    if (this.menuTab === 'gear') this.renderMenu();
+  }
+
+  /** The bait line in the player panel. */
+  setBait(profile) {
+    const id = profile.equipped.bait;
+    const it = ITEMS[id];
+    const text = isConsumable(id) ? `🪱 ${it.name} ×${baitCount(profile, id)}` : `🍞 ${it.name} (free)`;
+    setText($('bait-line'), text);
+    $('bait-line').classList.toggle('low', isConsumable(id) && baitCount(profile, id) <= 5);
   }
 
   // ---- achievements --------------------------------------------------------------------
@@ -390,7 +461,7 @@ export class UI {
       h('div', { class: 'catch-name' }, ev.speciesName),
       h('div', { class: 'catch-meta' },
         h('span', { class: 'catch-rarity' }, rarity.label),
-        ` · ${ev.kg} kg · +${ev.points} ${ev.duel ? 'duel pts' : 'pts'}`,
+        ` · ${ev.kg} kg · +${ev.points} ${ev.duel ? 'duel pts' : `pts · +${ev.coins ?? ev.points} coins`}`,
         ev.hotspot ? ' · hotspot bonus' : '',
         ev.event ? ' · event bonus' : ''),
       ev.duel ? h('div', { class: 'catch-note' }, 'Duel catch: counts for the duel only') : null,
@@ -416,11 +487,11 @@ export class UI {
 
   updateMe(me, zoneName, areaName) {
     if (!me) return;
-    $('me-location').textContent = `📍 ${areaName}`;
-    $('me-name').textContent = me.name;
-    $('me-score').textContent = me.sc;
-    $('me-catches').textContent = me.c;
-    $('aim-zone').textContent = zoneName ? `Aiming at: ${zoneName}` : '';
+    setText($('me-location'), `📍 ${areaName}`);
+    setText($('me-name'), me.name);
+    setText($('me-score'), String(me.sc));
+    setText($('me-catches'), String(me.c));
+    setText($('aim-zone'), zoneName ? `Aiming at: ${zoneName}` : '');
   }
 
   /** room: 'lake' ranks by score; 'voyage' ranks by points this voyage. */
@@ -467,7 +538,7 @@ export class UI {
   /** The boat line in the player panel (lake only). */
   setBoatLine(text, highlight = false) {
     const el = $('boat-line');
-    el.textContent = text || '';
+    setText(el, text || '');
     el.classList.toggle('highlight', highlight);
   }
 
@@ -675,6 +746,6 @@ export class UI {
   status(text, urgent = false) {
     if (urgent) this.flashUntil = 0;
     else if (performance.now() < this.flashUntil) return;
-    $('status').textContent = text;
+    setText($('status'), text);
   }
 }
