@@ -9,6 +9,24 @@ import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared
 import { CHANGELOG, VERSION } from '/shared/version.js';
 import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
+import { ARMOUR_SLOTS, ARMOUR_SLOT_LABELS, SETS, computeArmour } from '/shared/armour.js';
+import { MAX_LEVEL, levelFor, levelProgress } from '/shared/levels.js';
+
+const SLOT_ICONS = { head: '🎩', body: '🧥', legs: '👖', feet: '🥾' };
+
+/** "+10% coins, bites 15% faster" for a computeArmour() result. */
+function armourBonusText(a) {
+  const pct = (v) => `${Math.round((v - 1) * 100)}%`;
+  const parts = [];
+  if (a.coins > 1) parts.push(`+${pct(a.coins)} coins`);
+  if (a.xp > 1) parts.push(`+${pct(a.xp)} XP`);
+  if (a.bite > 1) parts.push(`bites +${pct(a.bite)}`);
+  if (a.rare > 1) parts.push(`rare odds +${pct(a.rare)}`);
+  if (a.tension < 1) parts.push(`tension ${Math.round((1 - a.tension) * 100)}% slower`);
+  if (a.reel > 1) parts.push(`reel +${pct(a.reel)}`);
+  if (a.weight > 1) parts.push(`fish ${pct(a.weight)} bigger`);
+  return parts.join(' · ');
+}
 import { VOLUME_CHANNELS } from './audio.js';
 import { fishImageURL } from './gfx/fishArt.js';
 import { gearIconURL } from './gfx/gearArt.js';
@@ -137,6 +155,7 @@ export class UI {
   updateProfile(profile) {
     this.profile = profile;
     this.setBait(profile);
+    this.setLevel(profile.xp);
     if (this.menuTab === 'options') { this.setStats(profile); return; }
     $('me-coins').textContent = profile.coins;
     $('me-score').textContent = profile.score;
@@ -155,6 +174,7 @@ export class UI {
       index: () => this.renderIndex(),
       history: () => this.renderHistory(),
       achievements: () => this.renderAchievements(),
+      armour: () => this.renderArmour(),
     };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
     body.scrollTop = scroll; // keep your place when the profile updates
@@ -198,7 +218,7 @@ export class UI {
         ['Reel in', 'Esc or right-click'],
         ['Interact', 'E: open the Bait Shop, board the boat, or challenge a nearby angler to a duel'],
         ['Duels', 'Y accept · N decline a challenge'],
-        ['Menus', 'G tackle · I fish index · H history · T achievements · O options'],
+        ['Menus', 'G tackle · R armour · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];
@@ -313,6 +333,61 @@ export class UI {
     if (this.shopAccess === on) return;
     this.shopAccess = on;
     if (this.menuTab === 'gear') this.renderMenu();
+  }
+
+  /** Level badge and XP bar in the player panel. */
+  setLevel(xp = 0) {
+    const pr = levelProgress(xp);
+    setText($('level-badge'), `Lv ${pr.level}`);
+    $('xp-fill').style.width = `${Math.round(pr.fraction * 100)}%`;
+    setText($('xp-text'), pr.level >= MAX_LEVEL ? 'MAX' : `${num(pr.into)} / ${num(pr.needed)} XP`);
+  }
+
+  // ---- armour --------------------------------------------------------------------------
+
+  renderArmour() {
+    const p = this.profile;
+    const level = levelFor(p.xp || 0);
+    const worn = computeArmour(p.armour);
+    const owned = new Set(p.armourOwned || []);
+    const active = worn.set ? SETS[worn.set] : null;
+    const summary = h('div', { class: 'armour-summary' },
+      h('div', {}, 'Wearing: ', ARMOUR_SLOTS.map((slot) => {
+        const id = p.armour[slot];
+        return `${SLOT_ICONS[slot]} ${id ? SETS[id.split('_')[0]].pieces[slot] : 'nothing'}`;
+      }).join(' · ')),
+      h('div', {}, armourBonusText(worn) || 'No armour bonuses yet.'),
+      active ? h('div', {}, 'Set effect: ', h('b', {}, active.effect.name), ` · ${active.effect.desc}`)
+        : h('div', {}, 'Wear all four pieces of one set for its set effect.'));
+
+    const sets = Object.entries(SETS).map(([setId, set]) => {
+      const locked = level < set.level;
+      const pieces = ARMOUR_SLOTS.map((slot) => {
+        const id = `${setId}_${slot}`;
+        const isWorn = p.armour[slot] === id;
+        let action;
+        if (owned.has(id)) action = h('button', { class: 'btn', onclick: () => this.onEquip(id) }, isWorn ? 'Take off' : 'Wear');
+        else if (!locked) action = h('button', { class: 'btn buy', disabled: p.coins < set.price, onclick: () => this.onBuy(id) }, `Buy · ${num(set.price)}`);
+        else action = h('span', { class: 'locked-progress' }, `🔒 Lv ${set.level}`);
+        return h('div', { class: `armour-piece${isWorn ? ' worn' : ''}` },
+          h('span', { class: 'icon' }, SLOT_ICONS[slot]),
+          h('span', {}, set.pieces[slot]),
+          action);
+      });
+      const perk = armourBonusText(computeArmour({ [ARMOUR_SLOTS[0]]: `${setId}_head` }));
+      return h('div', { class: `armour-set${locked ? ' is-locked' : ''}${worn.set === setId ? ' active' : ''}` },
+        h('div', { class: 'armour-set-head' },
+          h('span', { class: 'armour-swatch', style: { background: set.look.jacket } }),
+          h('span', { class: 'armour-set-name' }, set.name),
+          h('span', { class: 'armour-level' }, locked ? `Unlocks at level ${set.level}` : `Level ${set.level}`)),
+        h('div', { class: 'armour-effect' }, `Each piece: ${perk}. Full set: `, h('b', {}, set.effect.name), ` · ${set.effect.desc}`),
+        h('div', { class: 'armour-pieces' }, pieces));
+    });
+    return [
+      h('p', { class: 'menu-note' }, h('b', {}, `Level ${level}`), ` · ${num(p.coins)} coins. Armour doesn't change your rod: it adds bonuses of its own. Higher levels unlock better sets. Armour is switched off in duels.`),
+      summary,
+      ...sets,
+    ];
   }
 
   /** The bait line in the player panel. */
@@ -499,7 +574,7 @@ export class UI {
     const atSea = room === 'voyage';
     const value = (p) => (atSea ? p.vp ?? 0 : p.sc);
     const sorted = [...players].sort((a, b) => value(b) - value(a)).slice(0, 10);
-    const key = room + sorted.map((p) => `${p.id}:${value(p)}:${p.c}:${p.best?.points}:${p.du ?? ''}:${p.ab ?? ''}`).join('|');
+    const key = room + sorted.map((p) => `${p.id}:${value(p)}:${p.c}:${p.lv}:${p.best?.points}:${p.du ?? ''}:${p.ab ?? ''}`).join('|');
     if (key === this.lastBoard) return;
     this.lastBoard = key;
     $('leaderboard-title').textContent = atSea ? 'Crew · this voyage' : 'Anglers';
@@ -516,7 +591,7 @@ export class UI {
       name.textContent = p.name;
       const score = document.createElement('span');
       score.className = 'lb-score';
-      score.textContent = atSea ? `${num(value(p))} pts` : `${p.sc} pts · ${p.c}🐟`;
+      score.textContent = atSea ? `${num(value(p))} pts` : `Lv${p.lv ?? 1} · ${p.sc} pts`;
       if (p.du) name.textContent += ' ⚔';
       if (p.ab) name.textContent += ' ⛴';
       li.append(dot, name, score);

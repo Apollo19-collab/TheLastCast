@@ -16,6 +16,7 @@
 
 import { ITEMS } from './gear.js';
 import { SPECIES } from './fish.js';
+import { levelFor } from './levels.js';
 
 const SPECIES_COUNT = Object.keys(SPECIES).length;
 
@@ -53,6 +54,8 @@ export const ACHIEVEMENTS = [
   { id: 'sea_legs', name: 'Sea Legs', desc: 'Complete 5 boat voyages.', metric: 'voyages', goal: 5, coins: 600 },
   { id: 'old_salt', name: 'Old Salt', desc: 'Catch 300 fish at sea.', metric: 'seaCatches', goal: 300, coins: 800 },
   { id: 'current_rider', name: 'Current Rider', desc: 'Catch 40 fish during special events at sea.', metric: 'eventCatches', goal: 40, coins: 600 },
+  { id: 'rising_star', name: 'Rising Star', desc: 'Reach level 10.', metric: 'level', goal: 10, coins: 300 },
+  { id: 'master_angler', name: 'Master Angler', desc: 'Reach the maximum level, 50.', metric: 'level', goal: 50, coins: 5000 },
   { id: 'leviathan_slayer', name: 'Leviathan Slayer', desc: 'Catch The Leviathan in the Abyssal Trench.', metric: 'index.leviathan', goal: 1, coins: 2500 },
 ];
 
@@ -74,6 +77,7 @@ export function newCounters() {
 function read(profile, path) {
   if (path === 'species') return Object.keys(profile.index || {}).length;
   if (path === 'score') return profile.score || 0;
+  if (path === 'level') return levelFor(profile.xp || 0);
   const [group, key] = path.split('.');
   if (group === 'index') return profile.index?.[key]?.count || 0;
   const c = profile.counters || {};

@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.9.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.10.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -16,7 +16,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Reel in / give up | `Esc` or right-click |
 | Open the Bait Shop / board the boat / challenge an angler to a duel | `E` when you're next to the shop, the boat or another angler |
 | Accept / decline a duel | `Y` / `N` |
-| Tackle / Fish Index / Achievements / Catch History | `G` / `I` / `T` / `H` (or the buttons under your score) |
+| Tackle / Armour / Fish Index / Achievements / Catch History | `G` / `R` / `I` / `T` / `H` (or the buttons under your score) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
 
@@ -84,6 +84,23 @@ Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth
   - **Specialties:** some items favour certain fish. Fly rods and salmon roe for trout, corn for carp, nightcrawlers for catfish, steel leaders and frog poppers for pike, glow jigs for deep-water fish, centerpin reels for river fish, the Deep Sea Rod and Squid Strips for sea fish.
   - **Unlocks:** 16 items are available from the start. The other 22, most of the late-game tackle and bait, unlock through achievements. Rods, reels and lines are bought once; bait is bought in packs.
 - **Achievements** (`T`). 27 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, duels, voyages, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
+- **Levels.** Every catch gives XP (1 per point, plus armour bonuses). Finishing a voyage and playing duels give XP too. There are 50 levels: early ones take minutes, the last ones over an hour, and level 50 takes about 40 hours (`shared/levels.js`; a test checks this against simulated fishing). Each level up pays `level × 20` coins. Levels never change your tackle.
+- **Armour** (`R`). Four slots (hat, jacket, waders, boots), separate from tackle. Higher levels unlock better sets, bought with coins. Every piece gives a small bonus. Wear all four pieces of one set for its **set effect**:
+
+  | Set | Level | Full-set effect |
+  | --- | --- | --- |
+  | Canvas Workwear | 2 | Penny Pincher: +10% coins |
+  | Oilskin | 6 | Steady Hands: line tension builds 15% slower |
+  | Reedwalker | 10 | Weed Whisperer: bites 30% faster in the Reed Bed, Weedy Cove and Lily Marsh |
+  | Four-Leaf | 15 | Double Catch: 10% chance of a second fish |
+  | Sea Dog | 20 | Old Sea Dog: +30% points, coins and XP at sea |
+  | Trophy Hunter | 26 | Heavy Hitter: much bigger fish |
+  | Stormbreaker | 32 | Second Wind: 25% chance a snapping line holds |
+  | Grand Mariner | 38 | Scholar of the Deep: +25% XP, bites 15% faster |
+  | Legend's Regalia | 44 | Fortune's Favourite: 20% Double Catch, rare odds ×1.3 |
+  | Golden Angler | 50 | Golden Touch: 25% Double Catch, +25% coins and XP, legendaries ×1.5 |
+
+  Armour shows on your angler and is switched off in duels. Sets live in `shared/armour.js`, and their effects are applied in `server/fishing.js`.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
@@ -225,6 +242,8 @@ shared/         Imported by BOTH server and browser (plain ES modules)
   fish.js       Species, rarity and scoring
   gear.js       Tackle catalog (36 items), loadout -> stats, specialties
   achievements.js  Achievements, their goals/rewards, and progress from lifetime counters
+  levels.js     XP curve (50 levels, ~40 hours) and XP rewards
+  armour.js     Armour sets, pieces, level requirements and set effects
   version.js    Game version + in-game changelog (keep package.json and CHANGELOG.md in sync)
   duel.js       Duel rules: length, prize, matched tackle
   voyage.js     The boat's schedule and route, sea locations, events, missions, the sea world

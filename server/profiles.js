@@ -15,6 +15,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ITEMS, STARTER, isConsumable, starterInventory } from '../shared/gear.js';
 import { newCounters } from '../shared/achievements.js';
+import { ARMOUR, ARMOUR_SLOTS, emptyArmour } from '../shared/armour.js';
 import { SPECIES } from '../shared/fish.js';
 import {
   TOKEN_RE, checkPassword, checkUsername, hashPassword, hashToken, newToken, verifyPassword,
@@ -37,6 +38,9 @@ export function newProfile(name = 'Angler') {
     best: null, // { species, kg, points }
     inventory: starterInventory(), // owned rods, reels and lines (see shared/gear.js)
     bait: {}, // consumable bait and lures: item id -> uses left
+    xp: 0, // total XP; your level comes from this (shared/levels.js)
+    armourOwned: [], // armour piece ids (shared/armour.js)
+    armour: emptyArmour(), // slot -> piece id or null
     equipped: { ...STARTER }, // slot -> item id
     achievements: {}, // achievement id -> time earned
     counters: newCounters(), // lifetime stats that achievements measure
@@ -82,6 +86,14 @@ export function normalize(saved) {
     for (const id of p.inventory) if (isConsumable(id)) p.bait[id] = OWNED_BAIT_USES;
   }
   p.inventory = p.inventory.filter((id) => ITEMS[id] && !isConsumable(id));
+  // Before 0.10 there were no levels: start from your score (1 XP per point).
+  if (saved.xp == null) p.xp = saved.score || 0;
+  p.armourOwned = (p.armourOwned || []).filter((id) => ARMOUR[id]);
+  p.armour = { ...emptyArmour(), ...p.armour };
+  for (const slot of ARMOUR_SLOTS) {
+    const id = p.armour[slot];
+    if (id && (ARMOUR[id]?.slot !== slot || !p.armourOwned.includes(id))) p.armour[slot] = null;
+  }
   p.bait = { ...p.bait };
   for (const id of Object.keys(p.bait)) if (!isConsumable(id) || !(p.bait[id] > 0)) delete p.bait[id];
   for (const [slot, id] of Object.entries(STARTER)) {

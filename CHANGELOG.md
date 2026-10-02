@@ -2,6 +2,16 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.10.0 - Levels & Armour (2026-10-02)
+
+- Levels: earn XP from every catch (1 XP per point), voyages and duels. There are 50 levels, and reaching the top takes about 40 hours. Each level up pays coins.
+- Your level and XP bar show under your name, and your level shows on your name tag and the leaderboard.
+- Armour (R): a new hat, jacket, waders and boots slot. Levels never change your rod; they unlock armour.
+- 10 armour sets, unlocking from level 2 to level 50. Every piece gives a small bonus, and wearing a full set unlocks its set effect: Double Catch, Steady Hands, Weed Whisperer, Old Sea Dog, Heavy Hitter, Second Wind, Golden Touch and more.
+- Armour shows on your angler, and the top sets glow. It is switched off in duels.
+- Existing players start with XP equal to their score so far.
+- New achievements: Rising Star (level 10) and Master Angler (level 50).
+
 ## 0.9.0 - The Bait Shop (2026-10-02)
 
 - Bait and lures are now used up: each bite takes one. Bread Crumbs are still free and never run out.

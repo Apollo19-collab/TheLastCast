@@ -24,6 +24,7 @@ import {
 } from '../shared/constants.js';
 import { SPECIES, STRENGTH_TIERS, fishDifficulty, scoreCatch, strengthTier } from '../shared/fish.js';
 import { affinityFor } from '../shared/gear.js';
+import { NO_ARMOUR } from '../shared/armour.js';
 import { areaAt } from '../shared/world.js';
 import { HISTORY_LIMIT } from './profiles.js';
 import { zoneAt } from '../shared/world.js';
@@ -85,8 +86,8 @@ export function hook(ctx, player) {
     pullTimer: 0.5 + ctx.rng(),
     fight, // difficulty: rarity x size (see fishDifficulty)
     tier: strengthTier(fight),
-    reelSpeed: player.stats.reelSpeed * (mods.reelSpeed ?? 1),
-    lineStrength: player.stats.lineStrength / (mods.tension ?? 1),
+    reelSpeed: player.stats.reelSpeed * (mods.reelSpeed ?? 1) * armourOf(ctx, player).reel,
+    lineStrength: player.stats.lineStrength / ((mods.tension ?? 1) * armourOf(ctx, player).tension),
     drag: player.stats.drag,
   });
   ctx.emitTo(player, { kind: 'hooked', strength: STRENGTH_TIERS[strengthTier(fight)].label });
@@ -133,7 +134,10 @@ function land(ctx, player) {
   const hotspot = ctx.hotspotAt(line.x, line.y);
   const crowd = ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
 
-  const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1))
+  const armour = armourOf(ctx, player);
+  const zoneArmour = armour.zoneBite?.zones.includes(zone.id) ? armour.zoneBite.mult : 1;
+  const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1)
+    * armour.bite * zoneArmour)
     / (1 + (ctx.world.crowdPenalty ?? CROWD_PENALTY) * crowd);
   line.state = WAITING;
   line.timer = (4 + ctx.rng() * 8) / rate;
@@ -145,18 +149,32 @@ function bite(ctx, player) {
   const line = player.line;
   const zone = zoneById(ctx.world, line.zoneId);
   const mods = ctx.mods ?? {};
+  const armour = armourOf(ctx, player);
   const species = pickSpecies(ctx.rng, zone, line.hotspot, {
-    rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1),
+    rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1) * armour.rare,
+    legendaryBoost: armour.legendary,
     affinity: player.stats.affinity,
   }, mods.extraFish);
-  const s = SPECIES[species];
   ctx.useBait?.(player); // the fish took one bait, whether or not you hook it
-  // Squared roll skews towards smaller fish; trophies are uncommon.
-  const kg = s.minKg + (s.maxKg - s.minKg) * ctx.rng() ** 2;
-  line.fish = { species, kg: Math.round(kg * 100) / 100 };
+  line.fish = { species, kg: rollKg(ctx.rng, species, armour.weight) };
   line.state = BITE;
   line.timer = BITE_WINDOW;
   ctx.emitTo(player, { kind: 'bite' });
+}
+
+/** Armour bonuses for a player (none in plain test contexts). */
+function armourOf(ctx, player) {
+  return ctx.armourOf?.(player) ?? NO_ARMOUR;
+}
+
+/**
+ * A fish's weight. The squared roll skews towards smaller fish, so trophies
+ * are uncommon; `weight` > 1 (Trophy Hunter armour) shifts it towards bigger fish.
+ */
+export function rollKg(rng, speciesId, weight = 1) {
+  const s = SPECIES[speciesId];
+  const kg = s.minKg + (s.maxKg - s.minKg) * rng() ** (2 / weight);
+  return Math.round(kg * 100) / 100;
 }
 
 // Better bait shifts odds away from junk and towards rarer fish.
@@ -176,7 +194,8 @@ export function pickSpecies(rng, zone, hotspot, mods = {}, extraFish = null) {
   const fish = extraFish ? { ...zone.fish, ...extraFish } : zone.fish;
   const entries = Object.entries(fish).map(([id, w]) => {
     const { rarity } = SPECIES[id];
-    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id);
+    const legendary = rarity === 'legendary' ? mods.legendaryBoost ?? 1 : 1;
+    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id) * legendary;
     return [id, w * boost];
   });
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -222,6 +241,12 @@ function fight(ctx, player, dt) {
     line.tension = Math.max(0, line.tension - dt * 0.7 * drag);
   }
 
+  if (line.tension >= 1 && !line.saved && ctx.rng() < armourOf(ctx, player).snapSave) {
+    // Stormbreaker armour: the line holds, once per fight.
+    line.saved = true;
+    line.tension = 0.55;
+    ctx.emitTo(player, { kind: 'lineHeld', message: 'Second Wind! Your line held on.' });
+  }
   if (line.tension >= 1) {
     resetLine(player);
     if (!player.duel) {
@@ -242,11 +267,11 @@ function landCatch(ctx, player) {
   const { fish, hotspot, zoneId } = player.line;
   const s = SPECIES[fish.species];
   const event = ctx.mods?.event ?? null; // a special event at sea is on
-  const points = scoreCatch(fish.species, fish.kg, (hotspot ? HOTSPOT_SCORE_BONUS : 1) * (ctx.mods?.points ?? 1));
   const zone = zoneById(ctx.world, zoneId);
 
   if (player.duel) {
     // Duel catches only count on the duel scoreboard: no coins, score or index.
+    const points = scoreCatch(fish.species, fish.kg, (hotspot ? HOTSPOT_SCORE_BONUS : 1) * (ctx.mods?.points ?? 1));
     resetLine(player);
     ctx.duels.recordCatch(player, points);
     ctx.emitAll({
@@ -256,8 +281,28 @@ function landCatch(ctx, player) {
     return;
   }
 
+  resetLine(player);
+  const armour = armourOf(ctx, player);
+  rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus: false });
+  // Armour set effect: a second fish of the same kind on the line.
+  if (armour.double && ctx.rng() < armour.double) {
+    const extra = { species: fish.species, kg: rollKg(ctx.rng, fish.species, armour.weight) };
+    rewardCatch(ctx, player, extra, { hotspot, zone, event, armour, bonus: true });
+  }
+  ctx.checkAchievements(player);
+  ctx.profileChanged(player);
+}
+
+/** Score, coins, XP, Fish Index and history for one landed fish. */
+function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus }) {
+  const s = SPECIES[fish.species];
+  const atSea = ctx.kind === 'voyage';
+  const multiplier = (hotspot ? HOTSPOT_SCORE_BONUS : 1) * (ctx.mods?.points ?? 1) * (atSea ? armour.sea : 1);
+  const points = scoreCatch(fish.species, fish.kg, multiplier);
+  const coins = Math.round(points * COINS_PER_POINT * armour.coins);
+  const xp = Math.round(points * armour.xp);
+
   const profile = player.profile;
-  const coins = Math.round(points * COINS_PER_POINT);
   profile.score += points;
   profile.coins += coins;
   profile.catches += 1;
@@ -275,10 +320,8 @@ function landCatch(ctx, player) {
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, coins);
   ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event });
+  ctx.gainXp?.(player, xp);
 
-  resetLine(player);
-  ctx.checkAchievements(player);
-  ctx.profileChanged(player);
   ctx.emitAll({
     kind: 'catch',
     playerId: player.id,
@@ -289,10 +332,12 @@ function landCatch(ctx, player) {
     kg: fish.kg,
     points,
     coins,
+    xp,
     zone: zone.name,
     hotspot: !!hotspot,
     isNew,
     event: event ? true : undefined,
+    double: bonus || undefined,
   });
 }
 

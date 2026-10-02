@@ -7,6 +7,8 @@ import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/cons
 import { isWater, stepMovement } from '../shared/world.js';
 import { BULK_PACKS, ITEMS, STARTER, baitCount, computeStats, isConsumable, packPrice } from '../shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
+import { ARMOUR, NO_ARMOUR, SETS, computeArmour } from '../shared/armour.js';
+import { levelFor, levelUpCoins } from '../shared/levels.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
 import { Duels } from './duel.js';
@@ -80,6 +82,7 @@ export class Game {
       line: newLine(),
       profile, // persistent: score, coins, tackle, achievements, index, history
       stats: computeStats(profile.equipped),
+      armourStats: computeArmour(profile.armour),
       gear: null, // tackle override (duels); profile.equipped is never changed by it
       duel: null,
       aboard: false, // waiting on the boat at the lake
@@ -146,10 +149,12 @@ export class Game {
         cancel(this, player);
         break;
       case MSG.BUY:
+        if (Object.hasOwn(ARMOUR, String(msg.item))) { this.buyArmour(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
         this.buy(player, msg.item, msg.packs === BULK_PACKS ? BULK_PACKS : 1);
         break;
       case MSG.EQUIP:
+        if (Object.hasOwn(ARMOUR, String(msg.item))) { this.wearArmour(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
         this.equip(player, msg.item);
         break;
@@ -224,6 +229,69 @@ export class Game {
     this.profileChanged(player);
   }
 
+  // ---- levels and armour ---------------------------------------------------------
+
+  /** Armour bonuses in effect right now (switched off in duels). */
+  armourOf(player) {
+    return player.duel ? NO_ARMOUR : player.armourStats ?? NO_ARMOUR;
+  }
+
+  /** Add XP; announces level ups and pays a small coin reward for each. */
+  gainXp(player, amount) {
+    if (!(amount > 0)) return;
+    const { profile } = player;
+    const before = levelFor(profile.xp);
+    profile.xp += Math.round(amount);
+    const after = levelFor(profile.xp);
+    for (let level = before + 1; level <= after; level++) {
+      const coins = levelUpCoins(level);
+      profile.coins += coins;
+      profile.counters.coinsEarned += coins;
+      const unlocks = Object.values(SETS).filter((s) => s.level === level).map((s) => s.name);
+      this.emitTo(player, { kind: 'levelUp', level, coins, unlocks });
+      this.emitAll({ kind: 'levelUpAll', playerId: player.id, name: player.name, level });
+    }
+  }
+
+  /** Buy an armour piece (needs the level and the coins); it's worn straight away. */
+  buyArmour(player, pieceId) {
+    const it = ARMOUR[pieceId];
+    const { profile } = player;
+    let message = null;
+    if (profile.armourOwned.includes(pieceId)) message = `You already own the ${it.name}.`;
+    else if (levelFor(profile.xp) < it.level) message = `The ${it.name} needs level ${it.level}.`;
+    else if (profile.coins < it.price) message = `You need ${it.price - profile.coins} more coins for the ${it.name}.`;
+    if (message) {
+      this.emitTo(player, { kind: 'shop', ok: false, message });
+      return;
+    }
+    profile.coins -= it.price;
+    profile.armourOwned.push(pieceId);
+    profile.armour[it.slot] = pieceId;
+    this.armourChanged(player);
+    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought the ${it.name}!` });
+  }
+
+  /** Put on an owned piece, or take it off if it's already worn. */
+  wearArmour(player, pieceId) {
+    const it = ARMOUR[pieceId];
+    const { profile } = player;
+    if (!profile.armourOwned.includes(pieceId)) return;
+    profile.armour[it.slot] = profile.armour[it.slot] === pieceId ? null : pieceId;
+    this.armourChanged(player);
+  }
+
+  armourChanged(player) {
+    const before = player.armourStats?.set;
+    player.armourStats = computeArmour(player.profile.armour);
+    const set = player.armourStats.set;
+    if (set && set !== before) {
+      const e = SETS[set].effect;
+      this.emitTo(player, { kind: 'setBonus', set: SETS[set].name, effect: e.name, desc: e.desc });
+    }
+    this.profileChanged(player);
+  }
+
   /** A fish took the bait: use one up. Out of it? Back to the free starter bait. */
   useBait(player) {
     if (player.gear) return; // duels use matched tackle, on the house
@@ -280,6 +348,9 @@ export class Game {
       inventory: p.inventory,
       bait: p.bait,
       equipped: p.equipped,
+      xp: p.xp,
+      armourOwned: p.armourOwned,
+      armour: p.armour,
       achievements: p.achievements,
       counters: p.counters,
       index: p.index,
@@ -390,6 +461,9 @@ export class Game {
         g: (({ rod, reel, line, bait }) => [rod, reel, line, bait])(p.gear ?? p.profile.equipped), // drawn on their angler
         ...this.hooks.playerExtras?.(p),
       };
+      s.lv = levelFor(p.profile.xp);
+      const worn = p.profile.armour;
+      if (worn.head || worn.body || worn.legs || worn.feet) s.ar = [worn.head, worn.body, worn.legs, worn.feet];
       if (p.aboard) s.ab = 1;
       if (p.duel) Object.assign(s, this.duels.snapshotFor(p));
       if (line.state !== FishingState.IDLE) {

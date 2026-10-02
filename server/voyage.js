@@ -9,6 +9,7 @@
 
 import { SEA_EVENTS, SEA_LOCATIONS, MISSIONS, TIMES_OF_DAY, VOYAGE, deckSlot, makeSeaWorld, missionGoal, missionText, seaZone } from '../shared/voyage.js';
 import { Game } from './game.js';
+import { XP } from '../shared/levels.js';
 import { cancel } from './fishing.js';
 import { FishingState } from '../shared/constants.js';
 
@@ -222,12 +223,15 @@ export class Voyage {
       profile.coins += r.bonus;
       profile.counters.coinsEarned += r.bonus;
       profile.counters.voyages += 1;
+      r.xp = XP.voyage + Math.round(r.points * t.pointsBonus);
+      this.game.gainXp(player, r.xp);
       this.game.checkAchievements(player);
       this.game.profileChanged(player);
       this.game.emitTo(player, {
         kind: 'voyageResults',
         rank: rank + 1,
         bonus: r.bonus,
+        xp: r.xp,
         breakdown,
         crewTotal: this.crewTotal,
         missions: this.missions.map((m) => ({ text: m.text, done: m.done })),

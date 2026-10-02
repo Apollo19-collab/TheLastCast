@@ -355,13 +355,16 @@ net.on(MSG.EVENT, (ev) => {
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
       const big = ev.rarity === 'rare' || ev.rarity === 'legendary';
       if (p) renderer.addEffect({ type: 'fishPop', species: ev.species, big, text: `+${ev.points}`, x: p.x, y: p.y, color, duration: 2600 });
-      if (mine) ui.showCatch(ev);
+      if (mine && !ev.double) ui.showCatch(ev);
       if (mine) audio.play('catch', { rarity: ev.rarity, isNew: ev.isNew });
       else audio.play('catchOther', { rarity: ev.rarity, ...playerPos(ev.playerId) });
       if (mine && ev.duel) ui.flash(`Duel catch! ${ev.kg} kg ${ev.speciesName}: +${ev.points} duel points.`, 3000);
-      else if (mine) {
+      else if (mine && ev.double) {
+        ui.flash(`DOUBLE CATCH! A second ${ev.speciesName} (${ev.kg} kg): +${ev.points} points, +${ev.coins} coins.`, 3500);
+        ui.banner('Double Catch!', `Another ${ev.speciesName}`, '#7bd389', 2200);
+      } else if (mine) {
         const isNew = ev.isNew ? ' NEW species for your Fish Index!' : '';
-        ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points, +${ev.coins ?? ev.points} coins.${isNew}`, 3500);
+        ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points, +${ev.coins ?? ev.points} coins, +${ev.xp ?? ev.points} XP.${isNew}`, 3500);
       }
       break;
     }
@@ -410,6 +413,24 @@ net.on(MSG.EVENT, (ev) => {
       break;
     case 'info':
       ui.flash(ev.message, 2500);
+      break;
+    case 'levelUp': {
+      const unlocks = ev.unlocks.length ? `New armour: ${ev.unlocks.join(', ')} (press R)` : '';
+      ui.banner(`Level ${ev.level}!`, [`+${ev.coins} coins`, unlocks].filter(Boolean).join(' · '), '#ffd166', 4000);
+      ui.toast({ title: 'Level up', name: `Level ${ev.level}`, detail: [`+${ev.coins} coins`, unlocks].filter(Boolean).join(' · ') });
+      audio.play('achievement');
+      break;
+    }
+    case 'levelUpAll':
+      if (!mine) ui.feed(`⭐ ${ev.name} reached level ${ev.level}!`, '#ffd166');
+      break;
+    case 'setBonus':
+      ui.toast({ title: 'Set bonus active', name: `${ev.set}: ${ev.effect}`, detail: ev.desc });
+      audio.play('mission');
+      break;
+    case 'lineHeld':
+      ui.flash(ev.message, 2000);
+      audio.play('hook');
       break;
     case 'baitLow':
       ui.feed(`🪱 ${ev.message} Restock at the Bait Shop.`, '#ffb4a2');

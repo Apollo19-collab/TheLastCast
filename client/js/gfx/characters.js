@@ -4,6 +4,7 @@
 
 import { FishingState } from '/shared/constants.js';
 import { lookOf } from './gearArt.js';
+import { SETS } from '/shared/armour.js';
 import { STRENGTH_TIERS } from '/shared/fish.js';
 import { seeded, seedFrom } from './noise.js';
 
@@ -87,7 +88,7 @@ export function bobberPos(p, time) {
  * anim: { phase, moving } walking animation state kept by the renderer.
  */
 export function drawAngler(ctx, p, { self, time, anim }) {
-  const st = styleFor(p.id);
+  const st = armourStyle(styleFor(p.id), p.ar);
   const step = anim?.moving ? Math.sin(anim.phase) : 0;
 
   // Ground shadow and the "this is you" marker.
@@ -111,16 +112,33 @@ export function drawAngler(ctx, p, { self, time, anim }) {
   ctx.translate(p.x, p.y);
   ctx.rotate(p.f);
 
-  // Boots, alternating while walking.
-  ctx.fillStyle = '#3a2f28';
+  // Legendary armour glows.
+  if (st.glow) {
+    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 22);
+    g.addColorStop(0, `${st.glow}66`);
+    g.addColorStop(1, `${st.glow}00`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, 22 + Math.sin(time / 300) * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Waders and boots, alternating while walking.
   for (const side of [-1, 1]) {
+    if (st.waders) {
+      ctx.fillStyle = st.waders;
+      ctx.beginPath();
+      ctx.ellipse(step * 3 * side - 2, side * 5, 5.5, 3.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = st.boots;
     ctx.beginPath();
     ctx.ellipse(step * 4 * side - 1, side * 5, 4, 2.8, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Torso: shirt in the player's colour with a tackle vest.
-  const shirt = p.color;
+  // Torso: shirt in the player's colour with a tackle vest (or an armour jacket).
+  const shirt = st.jacket ?? p.color;
   const grad = ctx.createRadialGradient(-3, -4, 1, 0, 0, 13);
   grad.addColorStop(0, shade(shirt, 40));
   grad.addColorStop(1, shade(shirt, -25));
@@ -128,10 +146,18 @@ export function drawAngler(ctx, p, { self, time, anim }) {
   ctx.beginPath();
   ctx.ellipse(0, 0, 8, 11.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = 'rgba(85,95,60,0.55)';
+  ctx.fillStyle = st.jacket ? 'rgba(0,0,0,0.18)' : 'rgba(85,95,60,0.55)';
   ctx.beginPath();
   ctx.ellipse(-1.5, 0, 5.5, 9, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (st.trim) {
+    ctx.strokeStyle = st.trim;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(4, -8);
+    ctx.lineTo(4, 8);
+    ctx.stroke();
+  }
   ctx.strokeStyle = shade(shirt, -50);
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -173,10 +199,90 @@ export function drawAngler(ctx, p, { self, time, anim }) {
   drawRod(ctx, p, time);
 }
 
+// Armour looks by set (see shared/armour.js SETS[...].look).
+function armourStyle(base, ar) {
+  if (!ar) return { ...base, boots: '#3a2f28' };
+  const look = (id) => (id ? SETS[id.split('_')[0]]?.look : null);
+  const [head, body, legs, feet] = ar.map(look);
+  return {
+    ...base,
+    hat: head?.hat ?? base.hat,
+    hatColor: head?.hatColor ?? base.hatColor,
+    jacket: body?.jacket,
+    trim: body?.trim,
+    waders: legs?.jacket ? shade(legs.jacket, -30) : null,
+    boots: feet?.boots ?? '#3a2f28',
+    glow: (head?.glow && body?.glow) ? body.glow : null,
+  };
+}
+
 function drawHat(ctx, st) {
   const c = st.hatColor;
   ctx.lineWidth = 1;
   switch (st.hat) {
+    case 'souwester':
+      ctx.fillStyle = shade(c, -15);
+      ctx.beginPath();
+      ctx.ellipse(-1, 0, 11, 9.5, 0, 0, Math.PI * 2); // long brim at the back
+      ctx.fill();
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(1, 0, 6.4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'captain':
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.ellipse(7, 0, 5, 6, 0, -Math.PI / 2, Math.PI / 2);
+      ctx.fill();
+      ctx.fillStyle = '#f1f1f1';
+      ctx.beginPath();
+      ctx.arc(1, 0, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(5, 0, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'tricorn':
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(-6, -9);
+      ctx.lineTo(-6, 9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = st.trim ?? '#ffd166';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      break;
+    case 'crown':
+      ctx.fillStyle = shade(c, -30);
+      ctx.beginPath();
+      ctx.arc(1, 0, 6.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = c;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(1 + Math.cos(a - 0.35) * 5.5, Math.sin(a - 0.35) * 5.5);
+        ctx.lineTo(1 + Math.cos(a) * 9.5, Math.sin(a) * 9.5);
+        ctx.lineTo(1 + Math.cos(a + 0.35) * 5.5, Math.sin(a + 0.35) * 5.5);
+        ctx.fill();
+      }
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(1, 0, 5.6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#e63946';
+      ctx.beginPath();
+      ctx.arc(1, 0, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      break;
     case 'bucket':
       ctx.fillStyle = shade(c, -20);
       ctx.beginPath();
@@ -416,7 +522,8 @@ function drawLure(ctx, b, B, time) {
 
 export function drawNameTag(ctx, p, self) {
   ctx.font = '600 11px system-ui, sans-serif';
-  const w = ctx.measureText(p.name).width + 12;
+  const label = p.lv ? `${p.name} · ${p.lv}` : p.name;
+  const w = ctx.measureText(label).width + 12;
   const x = p.x - w / 2;
   const y = p.y - 34;
   ctx.fillStyle = self ? 'rgba(20,60,80,0.75)' : 'rgba(0,0,0,0.5)';
@@ -430,7 +537,7 @@ export function drawNameTag(ctx, p, self) {
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(p.name, p.x + 3, y + 8);
+  ctx.fillText(label, p.x + 3, y + 8);
   ctx.textBaseline = 'alphabetic';
 }
 

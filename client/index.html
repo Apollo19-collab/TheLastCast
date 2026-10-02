@@ -12,6 +12,7 @@
   <div id="hud" hidden>
     <div id="me-panel" class="panel">
       <div id="me-name"></div>
+      <div id="level-line"><span id="level-badge">Lv 1</span><span class="xpbar"><span id="xp-fill"></span></span><span id="xp-text"></span></div>
       <div id="account-line">
         <span id="account-label"></span>
         <button type="button" id="account-action"></button>
@@ -25,6 +26,7 @@
       <div class="menu-buttons">
         <button data-tab="gear" title="Tackle shop and loadout (G)">Tackle <kbd>G</kbd></button>
         <button data-tab="index" title="Fish index (I)">Fish Index <kbd>I</kbd></button>
+        <button data-tab="armour" title="Armour (R)">Armour <kbd>R</kbd></button>
         <button data-tab="achievements" title="Achievements (T)">Achievements <kbd>T</kbd></button>
         <button data-tab="history" title="Catch history (H)">History <kbd>H</kbd></button>
         <button data-tab="options" title="Options (O)">Options <kbd>O</kbd></button>
@@ -49,7 +51,7 @@
 
     <div id="help" class="panel">
       <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
-      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>E</b> Bait Shop / board the boat / duel an angler · <b>G</b> tackle · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
+      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>E</b> Bait Shop / board the boat / duel an angler · <b>G</b> tackle · <b>R</b> armour · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
     </div>
   </div>
 
@@ -58,6 +60,7 @@
       <div class="menu-tabs">
         <button data-tab="gear">Tackle</button>
         <button data-tab="index">Fish Index</button>
+        <button data-tab="armour">Armour</button>
         <button data-tab="achievements">Achievements</button>
         <button data-tab="history">History</button>
         <button data-tab="options">Options</button>

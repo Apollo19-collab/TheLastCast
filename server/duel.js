@@ -9,6 +9,7 @@
 
 import { DUEL } from '../shared/duel.js';
 import { computeStats } from '../shared/gear.js';
+import { XP } from '../shared/levels.js';
 import { newLine } from './fishing.js';
 
 export class Duels {
@@ -167,6 +168,7 @@ export class Duels {
     }
     for (const p of [a, b]) {
       p.profile.counters.duels += 1;
+      this.game.gainXp(p, p === winner ? XP.duelWin : XP.duelPlay);
       const other = p === a ? b : a;
       this.game.emitTo(p, {
         kind: 'duelEnd',
