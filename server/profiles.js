@@ -38,6 +38,7 @@ export function newProfile(name = 'Angler') {
     best: null, // { species, kg, points }
     inventory: starterInventory(), // owned rods, reels and lines (see shared/gear.js)
     bait: {}, // consumable bait and lures: item id -> uses left
+    chum: 0, // chum buckets in your bag (shared/chum.js)
     xp: 0, // total XP; your level comes from this (shared/levels.js)
     armourOwned: [], // armour piece ids (shared/armour.js)
     armour: emptyArmour(), // slot -> piece id or null
@@ -94,6 +95,7 @@ export function normalize(saved) {
     const id = p.armour[slot];
     if (id && (ARMOUR[id]?.slot !== slot || !p.armourOwned.includes(id))) p.armour[slot] = null;
   }
+  p.chum = Math.max(0, p.chum | 0);
   p.bait = { ...p.bait };
   for (const id of Object.keys(p.bait)) if (!isConsumable(id) || !(p.bait[id] > 0)) delete p.bait[id];
   for (const [slot, id] of Object.entries(STARTER)) {

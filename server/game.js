@@ -9,6 +9,8 @@ import { BULK_PACKS, ITEMS, STARTER, baitCount, computeStats, isConsumable, pack
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
 import { ARMOUR, NO_ARMOUR, SETS, computeArmour } from '../shared/armour.js';
 import { levelFor, levelUpCoins } from '../shared/levels.js';
+import { CHUM, rollChum } from '../shared/chum.js';
+import { isWalkable } from '../shared/world.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
 import { Duels } from './duel.js';
@@ -53,6 +55,8 @@ export class Game {
     this.hooks = hooks;
     this.players = new Map();
     this.hotspots = [];
+    this.chums = []; // placed chum buckets: { id, ownerId, name, x, y, life, fish }
+    this.nextChumId = 1;
     this.events = [];
     this.nextHotspotId = 1;
     // Fishing modifiers from special events at sea (see SEA_EVENTS in voyage.js).
@@ -108,6 +112,7 @@ export class Game {
     if (!this.players.has(player.id)) return;
     this.duels?.playerLeft(player);
     this.hooks.onLeave?.(player);
+    this.chums = this.chums.filter((c) => c.ownerId !== player.id); // packed away when you leave
     this.players.delete(player.id);
     player.line = newLine();
     player.input = { up: false, down: false, left: false, right: false };
@@ -148,7 +153,11 @@ export class Game {
       case MSG.CANCEL:
         cancel(this, player);
         break;
+      case MSG.CHUM:
+        this.placeChum(player);
+        break;
       case MSG.BUY:
+        if (msg.item === 'chum') { this.buyChum(player, msg.packs === 5 ? 5 : 1); return; }
         if (Object.hasOwn(ARMOUR, String(msg.item))) { this.buyArmour(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
         this.buy(player, msg.item, msg.packs === BULK_PACKS ? BULK_PACKS : 1);
@@ -292,6 +301,80 @@ export class Game {
     this.profileChanged(player);
   }
 
+  // ---- chum buckets ------------------------------------------------------------
+
+  buyChum(player, count) {
+    const { profile } = player;
+    const price = CHUM.price * count;
+    let message = null;
+    if (!this.atBaitShop(player)) message = 'Chum buckets are sold at the Bait Shop on South Beach.';
+    else if (profile.chum + count > CHUM.maxOwned) message = `You can carry at most ${CHUM.maxOwned} chum buckets.`;
+    else if (profile.coins < price) message = `You need ${price - profile.coins} more coins for that.`;
+    if (message) {
+      this.emitTo(player, { kind: 'shop', ok: false, message });
+      return;
+    }
+    profile.coins -= price;
+    profile.counters.coinsSpent += price;
+    profile.chum += count;
+    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought ${count} chum bucket${count > 1 ? 's' : ''}. Press C to put one down.` });
+    this.checkAchievements(player);
+    this.profileChanged(player);
+  }
+
+  /** Put a chum bucket down at your feet (one out at a time). */
+  placeChum(player) {
+    const { profile } = player;
+    let message = null;
+    if (profile.chum <= 0) message = 'You have no chum buckets. Buy them at the Bait Shop.';
+    else if (player.duel) message = 'No chum in duels!';
+    else if (player.aboard) message = 'Wait until the boat is out at sea.';
+    else if (this.chums.some((c) => c.ownerId === player.id)) message = 'You already have a chum bucket out.';
+    else if (!isWalkable(this.world, player.x, player.y)) message = 'You can\'t put a bucket down here.';
+    if (message) {
+      this.emitTo(player, { kind: 'info', message });
+      return;
+    }
+    profile.chum -= 1;
+    this.chums.push({ id: this.nextChumId++, ownerId: player.id, name: player.name, x: player.x, y: player.y, life: CHUM.duration, fish: 0 });
+    this.emitTo(player, { kind: 'chumPlaced', seconds: CHUM.duration, fish: CHUM.maxFish });
+    this.emitAll({ kind: 'chumAll', playerId: player.id, name: player.name });
+    this.profileChanged(player);
+  }
+
+  /** Bobbers near any chum bucket bite faster. */
+  chumBiteBonus(x, y) {
+    return this.chums.some((c) => Math.hypot(c.x - x, c.y - y) <= CHUM.attractRadius) ? CHUM.biteBonus : 1;
+  }
+
+  /** You landed a fish near your own bucket: maybe it becomes bait. */
+  chumCatch(player, rarity) {
+    const bucket = this.chums.find((c) => c.ownerId === player.id && Math.hypot(c.x - player.x, c.y - player.y) <= CHUM.radius);
+    if (!bucket || player.duel) return;
+    bucket.fish += 1;
+    const { profile } = player;
+    const unlocked = (id) => !ITEMS[id].unlock || !!profile.achievements[ITEMS[id].unlock];
+    const got = rollChum(this.rng, rarity, unlocked);
+    if (got) {
+      profile.bait[got.bait] = (profile.bait[got.bait] || 0) + got.uses;
+      this.emitTo(player, { kind: 'chummed', bait: got.bait, name: ITEMS[got.bait].name, uses: got.uses });
+    }
+    if (bucket.fish >= CHUM.maxFish) this.removeChum(bucket, 'full');
+  }
+
+  removeChum(bucket, why) {
+    this.chums = this.chums.filter((c) => c !== bucket);
+    const owner = this.players.get(bucket.ownerId);
+    if (owner) this.emitTo(owner, { kind: 'chumDone', why, fish: bucket.fish });
+  }
+
+  updateChums(dt) {
+    for (const c of [...this.chums]) {
+      c.life -= dt;
+      if (c.life <= 0) this.removeChum(c, 'time');
+    }
+  }
+
   /** A fish took the bait: use one up. Out of it? Back to the free starter bait. */
   useBait(player) {
     if (player.gear) return; // duels use matched tackle, on the house
@@ -347,6 +430,7 @@ export class Game {
       catches: p.catches,
       inventory: p.inventory,
       bait: p.bait,
+      chum: p.chum,
       equipped: p.equipped,
       xp: p.xp,
       armourOwned: p.armourOwned,
@@ -362,6 +446,7 @@ export class Game {
 
   tick(dt) {
     this.updateHotspots(dt);
+    this.updateChums(dt);
     this.duels?.tick(dt);
     for (const p of this.players.values()) {
       // Players stand still while their line is out, or while aboard the boat.
@@ -482,6 +567,7 @@ export class Game {
       t: MSG.STATE,
       players,
       hotspots: this.hotspots.map((h) => ({ id: h.id, x: r1(h.x), y: r1(h.y), r: h.r, life: r1(h.life) })),
+      chums: this.chums.map((c) => ({ id: c.id, o: c.ownerId, n: c.name, x: r1(c.x), y: r1(c.y), l: Math.ceil(c.life), f: c.fish })),
       ...this.hooks.snapshot?.(),
     };
   }

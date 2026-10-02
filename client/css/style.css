@@ -475,3 +475,5 @@ table.controls td:first-child { opacity: 0.6; width: 90px; }
 .armour-summary { font-size: 12px; margin: 0 0 10px; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.2); }
 .armour-summary b { color: #ffd166; }
 @media (max-width: 800px) { .armour-pieces { grid-template-columns: repeat(2, 1fr); } }
+
+.chum-icon { display: grid; place-items: center; font-size: 28px; }

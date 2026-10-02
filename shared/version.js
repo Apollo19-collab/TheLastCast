@@ -2,9 +2,20 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.10.0';
+export const VERSION = '0.11.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.11.0',
+    date: '2026-10-02',
+    title: 'Chum buckets',
+    changes: [
+      'Chum buckets: buy them at the Bait Shop (60 coins each) and press C to put one down where you stand. It lasts 10 minutes or 30 fish.',
+      'Fish you land near your bucket can turn into random bait for your bag. Rarer fish give better bait: common fish make worms and corn, legendaries can make Golden Lures and even a Mythic Fly. Only bait you have unlocked can come out.',
+      'Chum draws fish in: bobbers near any chum bucket get 15% faster bites, for everyone.',
+      'Balanced so a bucket returns about 1-1.5x its price in bait early on, rising to about 2x late game (a test keeps it there).',
+    ],
+  },
   {
     version: '0.10.0',
     date: '2026-10-02',

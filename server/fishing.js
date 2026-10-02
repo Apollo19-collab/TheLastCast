@@ -137,7 +137,7 @@ function land(ctx, player) {
   const armour = armourOf(ctx, player);
   const zoneArmour = armour.zoneBite?.zones.includes(zone.id) ? armour.zoneBite.mult : 1;
   const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1)
-    * armour.bite * zoneArmour)
+    * armour.bite * zoneArmour * (ctx.chumBiteBonus?.(line.x, line.y) ?? 1))
     / (1 + (ctx.world.crowdPenalty ?? CROWD_PENALTY) * crowd);
   line.state = WAITING;
   line.timer = (4 + ctx.rng() * 8) / rate;
@@ -320,6 +320,7 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus })
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, coins);
   ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event });
+  ctx.chumCatch?.(player, s.rarity);
   ctx.gainXp?.(player, xp);
 
   ctx.emitAll({

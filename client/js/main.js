@@ -37,6 +37,7 @@ const ui = new UI({
   onBuy: (item, packs = 1) => net.send({ t: MSG.BUY, item, packs }),
   onEquip: (item) => net.send({ t: MSG.EQUIP, item }),
 });
+ui.onChum = () => net.send({ t: MSG.CHUM });
 const buffer = new SnapshotBuffer(100);
 ui.setSoundButton(audio.muted, () => ui.setSoundButton(audio.toggleMute()));
 
@@ -171,6 +172,7 @@ net.on(MSG.WELCOME, (msg) => {
     onCancel,
     onInteract,
     onAnswer: answerInvite,
+    onChum: () => net.send({ t: MSG.CHUM }),
     onMenu: (tab) => {
       ui.toggleMenu(tab);
       if (ui.menuOpen) { charge = null; input.releaseAll(); }
@@ -432,6 +434,20 @@ net.on(MSG.EVENT, (ev) => {
       ui.flash(ev.message, 2000);
       audio.play('hook');
       break;
+    case 'chumPlaced':
+      ui.flash(`Chum bucket down! Land fish near it to turn them into bait (${Math.round(ev.seconds / 60)} min or ${ev.fish} fish).`, 4000);
+      audio.play('splash');
+      break;
+    case 'chumAll':
+      if (!mine) ui.feed(`🪣 ${ev.name} put down a chum bucket. Bites are faster near it.`, '#e5989b');
+      break;
+    case 'chummed':
+      ui.feed(`🪣 Your chum bucket made ${ev.uses} ${ev.name}.`, '#c9e4a6');
+      renderer.addEffect({ type: 'text', text: `+${ev.uses} ${ev.name}`, x: selfPos.x, y: selfPos.y - 24, color: '#c9e4a6', duration: 1800 });
+      break;
+    case 'chumDone':
+      ui.feed(ev.why === 'full' ? `🪣 Your chum bucket is empty after ${ev.fish} fish.` : `🪣 Your chum bucket has run out (${ev.fish} fish chummed).`, '#e5989b');
+      break;
     case 'baitLow':
       ui.feed(`🪱 ${ev.message} Restock at the Bait Shop.`, '#ffb4a2');
       break;
@@ -643,6 +659,7 @@ function frame(now) {
     time: now,
     players: drawn,
     hotspots: snap?.hotspots ?? [],
+    chums: snap?.chums ?? [],
     meId,
     aim,
     boat,

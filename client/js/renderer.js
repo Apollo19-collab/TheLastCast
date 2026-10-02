@@ -19,7 +19,8 @@ import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
 import { SeaScene } from './gfx/sea.js';
-import { drawBaitShop } from './gfx/shop.js';
+import { drawBaitShop, drawChumBucket } from './gfx/shop.js';
+import { CHUM } from '/shared/chum.js';
 import { BOAT, SEA_BOAT } from '/shared/voyage.js';
 
 // Approximate area of the world visible on screen, in world units.
@@ -145,6 +146,7 @@ export class Renderer {
     this.drawAreaLabels();
 
     for (const h of frame.hotspots) this.drawHotspot(h, time);
+    this.drawChums(frame, time);
     this.updateAnims(frame.players);
     for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
     if (frame.aim) this.drawAim(frame.aim);
@@ -180,6 +182,7 @@ export class Renderer {
     if (sea.sailing) drawWake(ctx, pose, { ...size, speed: 1, time });
     const evening = sea.time === 'Night' || sea.time === 'Sunset';
     drawBoat(ctx, pose, { ...size, time, bob: sea.sailing ? 2.5 : 1, lights: evening });
+    this.drawChums(frame, time);
 
     this.updateAnims(frame.players);
     for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
@@ -198,6 +201,13 @@ export class Renderer {
     for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
     this.drawEffects(time);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  drawChums(frame, time) {
+    for (const c of frame.chums ?? []) {
+      if (!this.onScreen(c.x, c.y, CHUM.radius)) continue;
+      drawChumBucket(this.ctx, c, time, c.o === frame.meId, { radius: CHUM.radius, attract: CHUM.attractRadius });
+    }
   }
 
   updateAnims(players) {
@@ -593,6 +603,12 @@ export class Renderer {
     for (const h of frame.hotspots) {
       ctx.beginPath();
       ctx.arc(x0 + h.x * scale, y0 + h.y * scale, 2.5 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#c1121f';
+    for (const c of frame.chums ?? []) {
+      ctx.beginPath();
+      ctx.arc(x0 + c.x * scale, y0 + c.y * scale, 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = '#ffd166';

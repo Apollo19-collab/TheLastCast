@@ -9,6 +9,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared
 import { CHANGELOG, VERSION } from '/shared/version.js';
 import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
+import { CHUM } from '/shared/chum.js';
 import { ARMOUR_SLOTS, ARMOUR_SLOT_LABELS, SETS, computeArmour } from '/shared/armour.js';
 import { MAX_LEVEL, levelFor, levelProgress } from '/shared/levels.js';
 
@@ -218,6 +219,7 @@ export class UI {
         ['Reel in', 'Esc or right-click'],
         ['Interact', 'E: open the Bait Shop, board the boat, or challenge a nearby angler to a duel'],
         ['Duels', 'Y accept · N decline a challenge'],
+        ['Chum', 'C: put a chum bucket down (buy them at the Bait Shop)'],
         ['Menus', 'G tackle · R armour · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
@@ -275,6 +277,7 @@ export class UI {
       : this.shopAccess
         ? h('p', { class: 'shop-note open' }, '🪱 Bait Shop: buy packs here. Each bite uses one; Bread Crumbs are free and never run out.')
         : h('p', { class: 'shop-note' }, '🪱 Bait and lures are used up, one per bite. Buy more at the Bait Shop on South Beach (or from the deckhand on a voyage).');
+    const chumRow = this.tackleSlot === 'bait' ? this.chumRow() : null;
     return [
       h('p', { class: 'menu-note' }, h('b', {}, `${num(p.coins)} coins`), '. Mix and match: equip any rod, reel, line and bait you own.'),
       loadout,
@@ -284,8 +287,30 @@ export class UI {
         onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
       }, SLOT_LABELS[slot]))),
       baitNote,
+      chumRow,
       ...list,
     ].filter(Boolean);
+  }
+
+  /** Chum buckets at the top of the bait list. */
+  chumRow() {
+    const p = this.profile;
+    const actions = [];
+    if (p.chum > 0) actions.push(h('button', { class: 'btn', onclick: () => { this.onChum?.(); this.closeMenu(); } }, 'Put one down (C)'));
+    if (this.shopAccess) {
+      for (const n of [1, 5]) {
+        const price = CHUM.price * n;
+        actions.push(h('button', { class: 'btn buy', disabled: p.coins < price || p.chum + n > CHUM.maxOwned, onclick: () => this.onBuy('chum', n) },
+          `Buy ${n} · ${num(price)}c`));
+      }
+    }
+    return h('div', { class: `item-row${p.chum > 0 ? ' owned' : ''}` },
+      h('div', { class: 'gear-icon chum-icon' }, '🪣'),
+      h('div', { class: 'item-text' },
+        h('div', { class: 'item-name' }, 'Chum Bucket', h('span', { class: 'bait-count' }, ` · ${p.chum || 0} in your bag`)),
+        h('div', { class: 'item-desc' }, 'Put it down near the water. Fish you land close to it can turn into random bait: rarer fish give better bait. The chum also makes everyone\'s bites nearby 15% faster.'),
+        h('div', { class: 'gear-stats' }, `Lasts ${CHUM.duration / 60} minutes or ${CHUM.maxFish} fish · ${num(CHUM.price)} coins each · One out at a time · Packed away if you leave`)),
+      h('div', { class: 'bait-actions' }, actions));
   }
 
   /** One bait in the Tackle menu: how many you have, equip, and buy (at the shop). */
@@ -394,7 +419,8 @@ export class UI {
   setBait(profile) {
     const id = profile.equipped.bait;
     const it = ITEMS[id];
-    const text = isConsumable(id) ? `🪱 ${it.name} ×${baitCount(profile, id)}` : `🍞 ${it.name} (free)`;
+    const chum = profile.chum ? ` · 🪣 ×${profile.chum}` : '';
+    const text = (isConsumable(id) ? `🪱 ${it.name} ×${baitCount(profile, id)}` : `🍞 ${it.name} (free)`) + chum;
     setText($('bait-line'), text);
     $('bait-line').classList.toggle('low', isConsumable(id) && baitCount(profile, id) <= 5);
   }

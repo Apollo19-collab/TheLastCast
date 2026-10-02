@@ -16,7 +16,7 @@ const MOVE_KEYS = {
 export class Input {
   constructor(canvas, {
     onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute,
-    onInteract = () => {}, onAnswer = () => {}, isBlocked = () => false,
+    onInteract = () => {}, onAnswer = () => {}, onChum = () => {}, isBlocked = () => false,
   }) {
     this.move = { up: false, down: false, left: false, right: false };
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -52,6 +52,8 @@ export class Input {
         setAction(true);
       } else if (e.code === 'KeyE' && !e.repeat) {
         onInteract();
+      } else if (e.code === 'KeyC' && !e.repeat) {
+        onChum();
       }
     });
     window.addEventListener('keyup', (e) => {
