@@ -10,6 +10,7 @@ import { Input } from './input.js';
 import { Renderer } from './renderer.js';
 import { UI } from './ui.js';
 import { JoinForm, reloadToSignup, saved } from './account.js';
+import { AudioEngine } from './audio.js';
 
 const CHARGE_PERIOD_MS = 1100; // time for the power meter to go 0 -> 1
 
@@ -19,6 +20,18 @@ let renderer = new Renderer(canvas, world);
 const net = new Connection();
 const ui = new UI({ world, onBuy: (slot) => net.send({ t: MSG.BUY, slot }) });
 const buffer = new SnapshotBuffer(100);
+const audio = new AudioEngine();
+ui.setSoundButton(audio.muted, () => ui.setSoundButton(audio.toggleMute()));
+
+// Browsers only allow sound after the player interacts with the page.
+window.addEventListener('pointerdown', () => audio.unlock());
+window.addEventListener('keydown', () => audio.unlock());
+
+/** Where a player currently is, for positional sounds. */
+function playerPos(id) {
+  const p = buffer.latest()?.players.find((q) => q.id === id);
+  return p ? { x: p.x, y: p.y } : {};
+}
 
 let meId = null;
 let input = null;
@@ -96,6 +109,7 @@ net.on(MSG.WELCOME, (msg) => {
       ui.toggleMenu(tab);
       if (ui.menuOpen) { charge = null; input.releaseAll(); }
     },
+    onMute: () => ui.setSoundButton(audio.toggleMute()),
     isBlocked: () => ui.menuOpen,
   });
 });
@@ -140,6 +154,7 @@ function onActionUp() {
   charge = null;
   if (ui.menuOpen) return;
   net.send({ t: MSG.CAST, angle: aimAngle(), power });
+  audio.play('cast');
 }
 
 function onCancel() {
@@ -167,6 +182,7 @@ net.on(MSG.STATE, (snap) => {
     if (p.s === FishingState.CASTING && prev !== FishingState.CASTING) castStarts.set(p.id, now);
     if (p.s === FishingState.WAITING && prev === FishingState.CASTING) {
       renderer.addEffect({ type: 'splash', x: p.bx, y: p.by, duration: 700 });
+      audio.play('splash', { x: p.bx, y: p.by, volume: p.id === meId ? 1 : 0.6 });
     }
     lastStates.set(p.id, p.s);
   }
@@ -190,6 +206,8 @@ net.on(MSG.EVENT, (ev) => {
       ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}`, color);
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
       if (p) renderer.addEffect({ type: 'text', text: `${ev.speciesName} +${ev.points}`, x: p.x, y: p.y, color, duration: 2200 });
+      if (mine) audio.play('catch', { rarity: ev.rarity, isNew: ev.isNew });
+      else audio.play('catchOther', { rarity: ev.rarity, ...playerPos(ev.playerId) });
       if (mine) {
         const isNew = ev.isNew ? ' NEW species for your Fish Index!' : '';
         ui.flash(`You caught a ${ev.kg} kg ${ev.speciesName}! +${ev.points} points & coins.${isNew}`, 3500);
@@ -199,10 +217,12 @@ net.on(MSG.EVENT, (ev) => {
     case 'shop':
       ui.flash(ev.message, 2500);
       ui.feed(ev.message, ev.ok ? '#7bd389' : '#ff8f8f');
+      audio.play(ev.ok ? 'coin' : 'error');
       break;
     case 'snap':
       ui.feed(`${mine ? 'Your' : `${ev.name}'s`} line snapped!`, '#ff6b6b');
       if (mine) ui.flash('SNAP! Too much tension. Let go when the fish pulls.', 3000);
+      audio.play('snap', mine ? {} : { volume: 0.5, ...playerPos(ev.playerId) });
       break;
     case 'landed': {
       const notes = [];
@@ -213,13 +233,21 @@ net.on(MSG.EVENT, (ev) => {
     }
     case 'bite':
       ui.flash('BITE! Press Space or click now!', 1300);
+      audio.play('bite');
       break;
     case 'hooked':
       ui.flash('Hooked! Hold to reel, release when it pulls.', 1500);
+      audio.play('hook');
       break;
     case 'castFail':
+      ui.flash(ev.message, 2500);
+      audio.play('error');
+      break;
     case 'missed':
     case 'escape':
+      ui.flash(ev.message, 2500);
+      audio.play('lose');
+      break;
     case 'info':
       ui.flash(ev.message, 2500);
       break;
@@ -282,6 +310,11 @@ function frame(now) {
     ui.status(text, pulling || me.s === FishingState.BITE);
     ui.updateMe(me, aimZone);
   }
+
+  audio.listener = selfPos;
+  audio.updateReel(me?.s === FishingState.REELING
+    ? { reeling: !!input?.actionHeld && !ui.menuOpen, pulling: me.pl, tension: me.tn, progress: me.pg }
+    : null);
 
   renderer.updateCamera(selfPos.x, selfPos.y, dt);
   renderer.draw({

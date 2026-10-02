@@ -107,6 +107,7 @@ canvas#game { display: block; cursor: crosshair; }
   cursor: pointer;
 }
 .menu-buttons button:hover, .menu-tabs button:hover { background: rgba(255, 255, 255, 0.16); }
+#sound-toggle.off { opacity: 0.55; text-decoration: line-through; }
 kbd { font: 10px ui-monospace, monospace; opacity: 0.6; }
 
 .menu-window {

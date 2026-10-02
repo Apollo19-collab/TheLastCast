@@ -158,6 +158,14 @@ export class UI {
     ];
   }
 
+  /** Sound on/off button; onClick is only bound the first time. */
+  setSoundButton(muted, onClick) {
+    const btn = $('sound-toggle');
+    btn.firstChild.textContent = muted ? 'Sound off ' : 'Sound on ';
+    btn.classList.toggle('off', muted);
+    if (onClick && !btn.onclick) btn.onclick = () => { onClick(); btn.blur(); };
+  }
+
   /** Account line under the player name: log out, or sign up for guests. */
   setAccount(username, tempGuest, { onLogout, onSignup }) {
     const action = $('account-action');

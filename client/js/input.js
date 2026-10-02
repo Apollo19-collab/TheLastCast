@@ -12,7 +12,7 @@ const MOVE_KEYS = {
 };
 
 export class Input {
-  constructor(canvas, { onMoveChange, onActionDown, onActionUp, onCancel, onMenu, isBlocked = () => false }) {
+  constructor(canvas, { onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute, isBlocked = () => false }) {
     this.move = { up: false, down: false, left: false, right: false };
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     this.actionHeld = false;
@@ -35,6 +35,7 @@ export class Input {
       if (e.target instanceof HTMLInputElement) return;
       if (e.code === 'Escape') { onCancel(); return; }
       if (MENU_KEYS[e.code] && !e.repeat) { onMenu(MENU_KEYS[e.code]); return; }
+      if (e.code === 'KeyM' && !e.repeat) { onMute(); return; }
       if (isBlocked()) return;
       const dir = MOVE_KEYS[e.code];
       if (dir) {

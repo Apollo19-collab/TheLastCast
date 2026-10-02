@@ -13,6 +13,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Reel | Hold `Space` / mouse. **Release when the fish pulls** or the line snaps |
 | Reel in / give up | `Esc`, `E` or right-click |
 | Gear shop / Fish Index / Catch History | `G` / `I` / `H` (or the buttons under your score) |
+| Sound on/off | `M` (or the Sound button) |
 
 **Where you stand and cast matters:**
 
@@ -41,6 +42,22 @@ The aim line previews where your cast will land and which zone it hits.
   - **Bait:** faster bites and better odds of uncommon, rare and legendary fish (and less junk).
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
+
+### Sound
+
+Everything is synthesized in the browser with the Web Audio API, so there are no audio files to download.
+
+- **Fishing feedback:**
+  - a whoosh when you cast, and a splash where the bobber lands;
+  - a plunk and ping on a bite, and a thump when you hook the fish;
+  - the reel clicks while you wind in. When the fish pulls, it switches to a fast **drag buzz**, your cue to let go;
+  - a rising whine as the line nears snapping;
+  - a fanfare when you land a fish, which gets longer for rarer fish, with extra sparkle for a new species;
+  - a twang when the line snaps, and short sounds for an escaped fish, buying gear, or casting onto land.
+- **Other players:** their splashes, catches and snaps play quieter, and are panned left or right by where they are relative to you.
+- **Lake ambience:** a slow wash of distant waves, water lapping, a light breeze, songbirds on the bank, and the occasional loon calling across the water.
+
+Browsers only allow sound after you click or press a key, so sound starts with your first interaction. Mute is remembered per browser.
 
 ### Accounts
 
@@ -148,6 +165,8 @@ client/
   index.html, css/style.css
   js/main.js           Wires everything together; sends intentions, never outcomes
   js/account.js        Join screen (log in / sign up / guest) and saved session/guest tokens
+  js/audio.js          Audio engine: positional sound effects, reel/drag/strain feedback, lake ambience
+  js/sounds.js         ALL sound recipes, by name (swap any for a recorded sample later)
   js/net.js            WebSocket wrapper
   js/input.js          Keyboard / mouse
   js/interpolation.js  Smooths other players between server snapshots
@@ -169,6 +188,7 @@ The first version is deliberately small. Here is where planned features plug in:
 
 | Feature | Where |
 | --- | --- |
+| Better sound | Each sound in `client/js/sounds.js` is a named recipe. Replace one with a recorded sample (e.g. `client/assets/splash.ogg`) by adding a sample loader to the kit in `audio.js`. Callers use `audio.play('splash')` and don't change. |
 | Better graphics / animations | Replace `draw*` methods in `client/js/renderer.js` with sprites. Colours and sizes are in `theme.js`. Static assets can go in `client/assets/` and are served automatically. |
 | More fishing locations | Add an entry to `LOCATIONS` in `shared/world.js`. Then run one `Game` per location in `server/index.js` (rooms) and let the client pick one in the welcome flow. `welcome` already sends `locationId`. |
 | More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables in `shared/world.js`. A test checks that every species lives somewhere. |
