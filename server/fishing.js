@@ -17,7 +17,7 @@ import {
   FishingState,
   castDistance,
 } from '../shared/constants.js';
-import { SPECIES, scoreCatch } from '../shared/fish.js';
+import { SPECIES, STRENGTH_TIERS, fishDifficulty, scoreCatch, strengthTier } from '../shared/fish.js';
 import { affinityFor } from '../shared/gear.js';
 import { areaAt } from '../shared/world.js';
 import { HISTORY_LIMIT } from './profiles.js';
@@ -63,8 +63,7 @@ export function tryCast(ctx, player, angle, power) {
 export function hook(ctx, player) {
   const line = player.line;
   if (line.state !== BITE) return;
-  const s = SPECIES[line.fish.species];
-  const sizeFrac = (line.fish.kg - s.minKg) / Math.max(0.0001, s.maxKg - s.minKg);
+  const fight = fishDifficulty(line.fish.species, line.fish.kg);
   Object.assign(line, {
     state: REELING,
     progress: 0.25,
@@ -72,12 +71,13 @@ export function hook(ctx, player) {
     reeling: false,
     pulling: false,
     pullTimer: 0.5 + ctx.rng(),
-    fight: Math.min(1, s.fight * (0.85 + 0.3 * sizeFrac)),
+    fight, // difficulty: rarity x size (see fishDifficulty)
+    tier: strengthTier(fight),
     reelSpeed: player.stats.reelSpeed,
     lineStrength: player.stats.lineStrength,
     drag: player.stats.drag,
   });
-  ctx.emitTo(player, { kind: 'hooked' });
+  ctx.emitTo(player, { kind: 'hooked', strength: STRENGTH_TIERS[strengthTier(fight)].label });
 }
 
 export function setReel(player, on) {
@@ -170,9 +170,14 @@ export function pickSpecies(rng, zone, hotspot, mods = {}) {
 // Reeling mini-game. The fish alternates between resting and pulling.
 // Reeling while it pulls builds tension fast; release to let tension drop,
 // but the fish swims away while you wait.
+//
+// `fight` (difficulty) scales everything: harder fish pull longer and more
+// often, build tension faster, drag progress back further and come in slower.
+// Tackle pushes back: line strength slows tension, reel speed adds progress,
+// drag lets tension ease faster.
 function fight(ctx, player, dt) {
   const line = player.line;
-  const f = line.fight;
+  const d = line.fight;
   const reelSpeed = line.reelSpeed ?? 1;
   const lineStrength = line.lineStrength ?? 1;
   const drag = line.drag ?? 1;
@@ -180,14 +185,19 @@ function fight(ctx, player, dt) {
   line.pullTimer -= dt;
   if (line.pullTimer <= 0) {
     line.pulling = !line.pulling;
-    line.pullTimer = line.pulling ? 0.4 + ctx.rng() * (0.6 + f) : 0.6 + ctx.rng() * 1.4;
+    line.pullTimer = line.pulling
+      ? 0.4 + ctx.rng() * (0.5 + 0.45 * d)
+      : (0.7 + ctx.rng() * 1.3) / (0.8 + 0.25 * d);
+    // Big fish start each run with a sudden surge on the line.
+    if (line.pulling) line.tension += (0.08 * Math.max(0, d - 1)) / lineStrength;
   }
 
   if (line.reeling) {
-    line.progress += dt * (line.pulling ? 0.05 : 0.32 - 0.12 * f) * reelSpeed;
-    line.tension += (dt * (line.pulling ? 0.35 + 0.9 * f : 0.08)) / lineStrength;
+    // During a run, strong fish strip line even while you reel against them.
+    line.progress += dt * (line.pulling ? 0.06 * reelSpeed - 0.03 * d : (0.3 / (0.5 + 0.5 * d)) * reelSpeed);
+    line.tension += (dt * (line.pulling ? 0.3 + 0.65 * d : 0.05 * (0.5 + 0.5 * d))) / lineStrength;
   } else {
-    line.progress -= dt * (line.pulling ? 0.04 + 0.12 * f : 0.015);
+    line.progress -= dt * (line.pulling ? 0.02 + 0.06 * d : 0.01);
     line.tension = Math.max(0, line.tension - dt * 0.7 * drag);
   }
 

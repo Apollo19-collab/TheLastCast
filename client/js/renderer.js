@@ -124,7 +124,9 @@ export class Renderer {
     const sorted = [...frame.players].sort((a, b) => a.y - b.y);
     for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
     for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
-    for (const p of frame.players) if (p.s === FishingState.REELING) drawReelBars(ctx, p);
+    // Your own fight bars last, so nothing covers them.
+    for (const p of frame.players) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
+    for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
     this.drawEffects(time);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);

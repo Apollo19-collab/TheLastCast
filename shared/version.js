@@ -2,9 +2,20 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.7.0';
+export const VERSION = '0.7.1';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.1',
+    date: '2026-10-02',
+    title: 'Fish fight back',
+    changes: [
+      'Reeling difficulty now depends on the fish: rarer and bigger fish pull longer, surge harder and strip line.',
+      'Small common fish stay easy. Big rare fish test your timing, and legendaries need serious tackle.',
+      'Stronger lines, faster reels and smooth drag make a real difference in a fight.',
+      'Your REEL and LINE bars are 4x bigger, show how strong the fish is, warn you when it pulls, and mark the danger zone near snapping.',
+    ],
+  },
   {
     version: '0.7.0',
     date: '2026-10-02',

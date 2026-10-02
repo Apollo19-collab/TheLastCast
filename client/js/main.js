@@ -263,7 +263,7 @@ net.on(MSG.EVENT, (ev) => {
       audio.play('bite');
       break;
     case 'hooked':
-      ui.flash('Hooked! Hold to reel, release when it pulls.', 1500);
+      ui.flash(`Hooked a ${(ev.strength || 'mystery').toLowerCase()} fish! Hold to reel, release when it pulls.`, 1800);
       audio.play('hook');
       break;
     case 'castFail':

@@ -284,6 +284,7 @@ export class Game {
         s.tn = r2(line.tension);
         s.pg = r2(line.progress);
         s.pl = line.pulling;
+        s.fd = line.tier; // fish strength tier, for the fight bars
       }
       players.push(s);
     }

@@ -2,6 +2,13 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.7.1 - Fish fight back (2026-10-02)
+
+- Reeling difficulty now depends on the fish: rarer and bigger fish pull longer, surge harder and strip line.
+- Small common fish stay easy. Big rare fish test your timing, and legendaries need serious tackle.
+- Stronger lines, faster reels and smooth drag make a real difference in a fight.
+- Your REEL and LINE bars are 4x bigger, show how strong the fish is, warn you when it pulls, and mark the danger zone near snapping.
+
 ## 0.7.0 - Tackle & Achievements (2026-10-02)
 
 - Tackle overhaul: 36 rods, reels, lines and baits to collect. Equip any mix you like.

@@ -4,6 +4,7 @@
 
 import { FishingState } from '/shared/constants.js';
 import { lookOf } from './gearArt.js';
+import { STRENGTH_TIERS } from '/shared/fish.js';
 import { seeded, seedFrom } from './noise.js';
 
 const CAST_ANIM_MS = 600;
@@ -433,26 +434,84 @@ export function drawNameTag(ctx, p, self) {
   ctx.textBaseline = 'alphabetic';
 }
 
-export function drawReelBars(ctx, p) {
-  const W = 58;
+/**
+ * Fight bars under an angler who is reeling: REEL (progress) and LINE
+ * (tension, with a red danger zone near snapping). Your own are drawn 4x
+ * bigger, with the fish's strength and a warning while it pulls.
+ */
+export function drawReelBars(ctx, p, self = false, time = 0) {
+  const S = self ? 4 : 1;
+  const W = 58 * S;
+  const H = 5 * S;
   const x = p.x - W / 2;
-  let y = p.y + 20;
-  const bar = (value, color, label) => {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  let y = p.y + 20 + (self ? 6 : 0);
+  const tier = STRENGTH_TIERS[p.fd] ?? null;
+
+  const outlined = (text, cx, cy, color, size) => {
+    ctx.font = `800 ${size}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText(text, cx, cy);
+    ctx.fillStyle = color;
+    ctx.fillText(text, cx, cy);
+  };
+  if (self && tier) {
+    // Header: how strong the fish is.
+    outlined(`${tier.label.toUpperCase()} FISH`, p.x, y + 12, tier.color, 15);
+    y += 18;
+  }
+
+  const bar = (value, color, label, danger) => {
+    const pad = 2 * (self ? 2 : 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.beginPath();
-    ctx.roundRect(x - 2, y - 2, W + 4, 9, 4.5);
+    ctx.roundRect(x - pad, y - pad, W + pad * 2, H + pad * 2, (H + pad * 2) / 2);
     ctx.fill();
+    if (danger) {
+      ctx.fillStyle = 'rgba(255,60,60,0.28)';
+      ctx.beginPath();
+      ctx.roundRect(x + W * danger, y, W * (1 - danger), H, H / 2);
+      ctx.fill();
+    }
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.roundRect(x, y, Math.max(5, W * clamp(value, 0, 1)), 5, 2.5);
+    ctx.roundRect(x, y, Math.max(H, W * clamp(value, 0, 1)), H, H / 2);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = '700 7px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(label, x - 4, y + 5);
-    y += 11;
+    if (self) {
+      // Gloss and a label inside the bar.
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.beginPath();
+      ctx.roundRect(x + 2, y + 2, Math.max(0, W * clamp(value, 0, 1) - 4), H * 0.35, H / 4);
+      ctx.fill();
+      ctx.font = `800 ${Math.round(H * 0.7)}px system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(label, x + 8, y + H / 2 + 1);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, x + 8, y + H / 2 + 1);
+      ctx.textAlign = 'right';
+      const pct = `${Math.round(clamp(value, 0, 1) * 100)}%`;
+      ctx.strokeText(pct, x + W - 8, y + H / 2 + 1);
+      ctx.fillText(pct, x + W - 8, y + H / 2 + 1);
+      ctx.textBaseline = 'alphabetic';
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = '700 7px system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(label, x - 4, y + 5);
+    }
+    y += H + (self ? 12 : 6);
   };
-  bar(p.pg ?? 0, '#7bd389', 'REEL');
+  bar(p.pg ?? 0, '#7bd389', 'REEL', 0);
   const tn = p.tn ?? 0;
-  bar(tn, tn > 0.7 ? '#ff5d5d' : tn > 0.45 ? '#f9c74f' : '#9ad1ff', 'LINE');
+  bar(tn, tn > 0.7 ? '#ff5d5d' : tn > 0.45 ? '#f9c74f' : '#9ad1ff', 'LINE', 0.7);
+  if (self && p.pl) {
+    // Flashing warning while the fish makes a run.
+    const on = Math.sin(time / 90) > -0.2;
+    outlined('PULLING! EASE OFF', p.x, y + 8, on ? '#ff4d4d' : '#ffd166', 16);
+  }
 }

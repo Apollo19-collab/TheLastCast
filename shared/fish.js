@@ -66,6 +66,34 @@ export const FAMILIES = Object.freeze({
   trout: 'Trout & salmon', whitefish: 'Whitefish', pike: 'Pike', catfish: 'Catfish', ancient: 'Ancient fish',
 });
 
+// How hard each rarity fights, on top of the species' own `fight`.
+const RARITY_FIGHT = { junk: 0.5, common: 1, uncommon: 1.2, rare: 1.45, legendary: 1.8 };
+
+/**
+ * How hard a hooked fish fights (about 0.1 for a tiny common fish to ~3 for a
+ * huge legendary). Grows with rarity, with size within the species, and with
+ * sheer weight, so a 30 kg sturgeon outmuscles a 12 kg one.
+ */
+export function fishDifficulty(speciesId, kg) {
+  const s = SPECIES[speciesId];
+  const sizeFrac = Math.min(1, Math.max(0, (kg - s.minKg) / Math.max(0.0001, s.maxKg - s.minKg)));
+  const weight = 0.75 + 0.6 * sizeFrac + 0.08 * Math.log2(1 + kg);
+  return Math.round(s.fight * RARITY_FIGHT[s.rarity] * weight * 100) / 100;
+}
+
+export const STRENGTH_TIERS = [
+  { max: 0.45, label: 'Light', color: '#9ad1ff' },
+  { max: 0.8, label: 'Steady', color: '#7bd389' },
+  { max: 1.15, label: 'Strong', color: '#f9c74f' },
+  { max: 1.6, label: 'Powerful', color: '#f8961e' },
+  { max: Infinity, label: 'Monster', color: '#ff4d4d' },
+];
+
+/** Index into STRENGTH_TIERS for a difficulty value. */
+export function strengthTier(difficulty) {
+  return STRENGTH_TIERS.findIndex((t) => difficulty <= t.max);
+}
+
 /** Score for a fish of a given weight, plus any bonus multiplier. */
 export function scoreCatch(speciesId, kg, multiplier = 1) {
   const s = SPECIES[speciesId];

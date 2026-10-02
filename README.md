@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.7.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.7.1** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time.
 

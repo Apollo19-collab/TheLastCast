@@ -10,7 +10,7 @@ import { CHANGELOG, VERSION } from '../shared/version.js';
 import { normalize } from '../server/profiles.js';
 import { ProfileStore } from '../server/profiles.js';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { SPECIES } from '../shared/fish.js';
+import { SPECIES, fishDifficulty, strengthTier } from '../shared/fish.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -526,4 +526,51 @@ test('the big lake: three new locations, all reachable on foot', () => {
   assert.ok(reachable(3060, 1000), 'bridge over the river');
   assert.ok(reachable(3100, 400), 'east shore north of the river');
   assert.ok(reachable(1600, 1620), 'end of the South Beach dock');
+});
+
+// Simulated angler with ~0.3 s reaction time who reels while the fish rests
+// and a little into runs, backing off when tension gets high.
+function simulateFight(species, kg, equipped, seed) {
+  const game = new Game({ world, rng: seeded(seed) });
+  game.fillHotspots = () => {};
+  game.hotspots = [];
+  const p = game.addPlayer('Bot', () => {});
+  p.stats = computeStats(equipped);
+  p.line = { state: FishingState.BITE, x: 1500, y: 1450, zoneId: 'deep', timer: 1, fish: { species, kg } };
+  game.handleMessage(p, { t: MSG.HOOK });
+  const seen = [];
+  for (let t = 0; t < 120 && p.line.state === FishingState.REELING; t += 0.05) {
+    seen.push({ pulling: p.line.pulling, tension: p.line.tension });
+    const l = seen[Math.max(0, seen.length - 7)];
+    game.handleMessage(p, { t: MSG.REEL, on: l.pulling ? l.tension < 0.45 : l.tension < 0.75 });
+    game.tick(0.05);
+  }
+  return game.drainEvents().some((e) => e.kind === 'catch');
+}
+
+test('fight difficulty grows with rarity and size', () => {
+  assert.ok(fishDifficulty('bluegill', 0.55) > fishDifficulty('bluegill', 0.12), 'bigger is harder');
+  assert.ok(fishDifficulty('sturgeon', 38) > fishDifficulty('sturgeon', 12));
+  assert.ok(fishDifficulty('carp', 5) < fishDifficulty('pike', 8), 'common < rare');
+  assert.ok(fishDifficulty('pike', 8) < fishDifficulty('mossback', 28), 'rare < legendary');
+  assert.ok(fishDifficulty('boot', 1) < fishDifficulty('bluegill', 0.3), 'junk barely fights');
+  assert.equal(strengthTier(fishDifficulty('bluegill', 0.2)), 0);
+  assert.equal(strengthTier(fishDifficulty('ghost', 50)), 4);
+});
+
+test('small common fish are easy; legendaries need serious tackle', () => {
+  const starter = {};
+  const top = { rod: 'legendrod', reel: 'golden', line: 'spectral', bait: 'mythicfly' };
+  const landed = (sp, kg, eq) => [1, 2, 3, 4, 5, 6, 7, 8].filter((i) => simulateFight(sp, kg, eq, i * 7919)).length;
+  assert.equal(landed('bluegill', 0.3, starter), 8, 'starter gear lands small common fish');
+  assert.equal(landed('ghost', 50, starter), 0, 'starter gear cannot land a huge legendary');
+  assert.ok(landed('ghost', 50, top) >= 6, 'top tackle gives a real chance');
+});
+
+test('hooking reports how strong the fish is', () => {
+  const { game, player, inbox } = makeGame();
+  player.line = { state: FishingState.BITE, x: 1500, y: 1450, zoneId: 'deep', timer: 1, fish: { species: 'ghost', kg: 55 } };
+  game.handleMessage(player, { t: MSG.HOOK });
+  assert.equal(inbox.find((m) => m.kind === 'hooked').strength, 'Monster');
+  assert.equal(game.snapshot().players[0].fd, 4);
 });
