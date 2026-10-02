@@ -1,0 +1,19 @@
+{
+  "name": "the-last-cast",
+  "version": "0.1.0",
+  "description": "A multiplayer browser fishing game.",
+  "private": true,
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Last Cast</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="me-panel" class="panel">
+      <div id="me-name"></div>
+      <div>Score <b id="me-score">0</b> · Catches <b id="me-catches">0</b></div>
+      <div id="aim-zone"></div>
+    </div>
+
+    <div id="leaderboard" class="panel">
+      <h3>Anglers</h3>
+      <ol id="leaderboard-list"></ol>
+    </div>
+
+    <div id="feed" class="panel"></div>
+    <div id="status"></div>
+
+    <div id="help" class="panel">
+      <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
+      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in
+    </div>
+  </div>
+
+  <div id="join" class="overlay">
+    <form id="join-form">
+      <h1>The Last Cast</h1>
+      <p class="tagline">A multiplayer fishing game</p>
+      <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" autofocus>
+      <button type="submit">Start fishing</button>
+      <p id="join-error"></p>
+    </form>
+  </div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

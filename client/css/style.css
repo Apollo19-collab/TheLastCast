@@ -1,0 +1,95 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1d2b1f;
+  color: #f1f1f1;
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+canvas#game { display: block; cursor: crosshair; }
+
+[hidden] { display: none !important; }
+
+.panel {
+  position: fixed;
+  background: rgba(10, 20, 25, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  pointer-events: none;
+}
+
+#me-panel { top: 12px; left: 12px; min-width: 190px; }
+#me-name { font-weight: 700; font-size: 16px; }
+#aim-zone { color: #a9d6e5; font-size: 12px; min-height: 1.4em; }
+
+#leaderboard { top: 12px; right: 12px; width: 230px; }
+#leaderboard h3 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
+#leaderboard ol { margin: 0; padding-left: 18px; }
+#leaderboard li { display: flex; gap: 6px; align-items: center; padding: 1px 0; }
+#leaderboard li.me { font-weight: 700; }
+#leaderboard .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+#leaderboard .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#leaderboard .lb-score { opacity: 0.85; font-variant-numeric: tabular-nums; }
+
+#feed { left: 12px; bottom: 56px; width: min(460px, calc(100vw - 24px)); max-height: 40vh; overflow: hidden; }
+#feed:empty { display: none; }
+.feed-item { padding: 1px 0; }
+
+#status {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 520px);
+  padding: 6px 14px;
+  background: rgba(10, 20, 25, 0.72);
+  border-radius: 999px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+#status:empty { display: none; }
+
+#help { left: 12px; right: 12px; bottom: 12px; font-size: 12px; opacity: 0.85; text-align: center; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 18, 22, 0.65);
+}
+.overlay form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 24px;
+  background: rgba(15, 30, 36, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  text-align: center;
+}
+.overlay h1 { margin: 0; font-size: 30px; letter-spacing: 0.02em; }
+.tagline { margin: 0 0 6px; opacity: 0.7; }
+.overlay input, .overlay button {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.overlay input { background: #0d1a1f; color: inherit; }
+.overlay button { background: #3a86a8; color: #fff; font-weight: 700; cursor: pointer; border: none; }
+.overlay button:disabled { opacity: 0.6; cursor: default; }
+#join-error { margin: 0; color: #ff8f8f; min-height: 1.2em; }
+
+@media (max-width: 800px) {
+  #status { top: 116px; max-width: calc(100vw - 24px); font-size: 13px; }
+  #feed { bottom: 12px; font-size: 12px; }
+  #leaderboard { width: 170px; font-size: 12px; }
+  #help { display: none; }
+}
