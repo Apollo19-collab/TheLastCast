@@ -7,7 +7,7 @@ import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
 import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
-import { BOSSES, BOSS_ATTACKS, SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
+import { BOSS, BOSSES, BOSS_ATTACKS, DECK_AREAS, SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
 import { CHUM } from '/shared/chum.js';
 import { PETS, PET_IDS, PET_RARITIES, petPrice } from '/shared/pets.js';
@@ -841,15 +841,27 @@ export class UI {
   /** Boss health bar, incoming attack and your damage. */
   bossBlock(v) {
     const b = v.boss;
+    const boss = BOSSES[b.id];
     const frac = b.mx ? b.hp / b.mx : 1;
     const warn = b.w ? BOSS_ATTACKS[b.w] : null;
     const effect = b.e ? BOSS_ATTACKS[b.e] : null;
+    const phase = BOSS.phases[b.p ?? 0];
+    const share = v.crewContribution ? v.myContribution / v.crewContribution : 0;
+    const warnText = warn?.area
+      ? `⚠ ${boss.slam} in ${b.wl}! Get off ${DECK_AREAS[b.wa]?.name ?? 'the red area'}!`
+      : warn ? `⚠ ${warn.name} in ${b.wl}... ${warn.desc}` : null;
     return h('div', { class: 'boss-block' },
-      h('div', { class: 'boss-bar' }, h('div', { style: { width: `${Math.max(0, frac * 100)}%` } }),
+      v.phase === 'boss' ? h('div', { class: `boss-phase p${b.p ?? 0}` }, `Phase ${(b.p ?? 0) + 1}/3 · ${phase.name}`) : null,
+      h('div', { class: 'boss-bar' },
+        BOSS.phases.slice(1).map((ph) => h('i', { class: 'boss-mark', style: { left: `${ph.at * 100}%` } })),
+        h('div', { style: { width: `${Math.max(0, frac * 100)}%` } }),
         h('span', {}, b.mx ? `${num(b.hp)} / ${num(b.mx)}` : '')),
-      warn ? h('div', { class: 'boss-warn' }, `⚠ ${warn.name} in ${b.wl}... ${warn.desc}`) : null,
+      warnText ? h('div', { class: `boss-warn${warn.area ? ' slam' : ''}` }, warnText) : null,
+      b.bk ? h('div', { class: 'boss-breach' }, `🎯 BREACH! Cast into the golden ring to harpoon it (${Math.ceil(b.bk.t)}s)`) : null,
+      b.gr?.length ? h('div', { class: 'boss-grab' }, `🪓 ${boss.grab} on the rail! Mash E beside it (${b.gr.map((g) => `${g.hp} hits, ${g.t}s`).join(' · ')})`) : null,
       effect ? h('div', { class: 'boss-effect' }, `${effect.name}: ${effect.desc}`) : null,
-      h('div', { class: 'ep-stats' }, `Your damage: ${num(v.myDamage)} · Red weak spot = double damage`));
+      v.phase === 'boss' ? h('div', { class: 'ep-stats' },
+        `Your contribution: ${num(v.myContribution)} (${Math.round(share * 100)}%) · Prize pool: ${num(b.pool ?? 0)} coins`) : null);
   }
 
   hidePanel(kind) {
@@ -875,17 +887,20 @@ export class UI {
   /** End-of-voyage summary. */
   showVoyageResults(r) {
     const rows = r.ranking.map((x) => h('tr', { class: x.me ? 'me' : '' },
-      h('td', {}, `#${x.rank}`), h('td', {}, x.name), h('td', {}, num(x.points)), h('td', {}, String(x.catches)), h('td', {}, num(x.damage || 0))));
+      h('td', {}, `#${x.rank}`), h('td', {}, x.name), h('td', {}, num(x.points)), h('td', {}, String(x.catches)),
+      h('td', {}, num(x.contribution || 0)), h('td', {}, x.share ? `🪙 ${num(x.share)}` : '-')));
     const b = r.breakdown;
     this.showResults([
       h('h2', {}, '⛴ Voyage complete!'),
       h('p', { class: 'results-big' }, `You placed #${r.rank} and earned `, h('b', {}, `${num(r.bonus)} bonus coins`), '.'),
       h('p', { class: 'menu-note' },
-        `${num(b.points)} for your points · ${num(b.missions)} for crew missions${b.rank ? ` · ${num(b.rank)} for your placing` : ''}${b.boss ? ` · ${num(b.boss)} from the boss fight` : ''} · +${num(r.xp ?? 0)} XP`),
+        `${num(b.points)} for your points · ${num(b.missions)} for crew missions${b.rank ? ` · ${num(b.rank)} for your placing` : ''}${b.boss ? ` · ${num(b.boss)} from the boss fight` : ''}${b.pool ? ` · ${num(b.pool)} from the prize pool` : ''} · +${num(r.xp ?? 0)} XP`),
       r.boss ? h('p', { class: `boss-result ${r.boss.result}` },
-        r.boss.result === 'won' ? `⚔ ${r.boss.name} defeated!${r.boss.mvp ? ` MVP: ${r.boss.mvp}` : ''}` : `${r.boss.name} escaped.`) : null,
+        r.boss.result === 'won'
+          ? `⚔ ${r.boss.name} defeated! Prize pool: ${num(r.boss.pool ?? 0)} coins${r.boss.mvp ? ` · MVP: ${r.boss.mvp}` : ''}`
+          : `${r.boss.name} escaped. Consolation pool: ${num(r.boss.pool ?? 0)} coins.`) : null,
       h('table', { class: 'history results-table' },
-        h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Angler'), h('th', {}, 'Points'), h('th', {}, 'Fish'), h('th', {}, 'Boss dmg'))),
+        h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Angler'), h('th', {}, 'Points'), h('th', {}, 'Fish'), h('th', {}, 'Boss'), h('th', {}, 'Pool'))),
         h('tbody', {}, rows)),
       h('p', {}, `Crew total: `, h('b', {}, `${num(r.crewTotal)} pts`)),
       h('div', { class: 'missions' }, r.missions.map((m) => h('div', { class: `mission${m.done ? ' done' : ''}` }, m.done ? '✓ ' : '✗ ', m.text))),

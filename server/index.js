@@ -7,7 +7,7 @@ import { MSG, TICK_RATE } from '../shared/constants.js';
 import { DEFAULT_LOCATION } from '../shared/world.js';
 import { SPECIES } from '../shared/fish.js';
 import { VERSION } from '../shared/version.js';
-import { BOAT } from '../shared/voyage.js';
+import { BOAT, VOYAGE } from '../shared/voyage.js';
 import { Hub } from './hub.js';
 import { ProfileStore, newProfile } from './profiles.js';
 import { LoginLimiter } from './auth.js';
@@ -22,11 +22,17 @@ const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
 // Minutes between boat visits (default 15). Lower it to try voyages locally;
 // it must leave room for the 3 minutes the boat spends arriving, docked and leaving.
 const BOAT_INTERVAL = Math.max(4, Number(process.env.BOAT_INTERVAL_MINUTES) || BOAT.interval / 60) * 60;
+// Seconds of fishing at each voyage stop (default VOYAGE.fishing). Lower it to
+// reach the boss fight quickly when testing locally.
+const STOP_SECONDS = Number(process.env.VOYAGE_STOP_SECONDS) || 0;
+const VOYAGE_TIMING = STOP_SECONDS >= 10
+  ? { ...VOYAGE, fishing: STOP_SECONDS, eventEarliest: 2, eventLength: Math.min(VOYAGE.eventLength, Math.floor(STOP_SECONDS / 2)) }
+  : VOYAGE;
 
 const store = new ProfileStore(path.join(DATA_DIR, 'profiles.json'));
 await store.load();
 
-const hub = new Hub({ maxPlayers: MAX_PLAYERS, boatInterval: BOAT_INTERVAL, onProfileChange: () => store.markDirty() });
+const hub = new Hub({ maxPlayers: MAX_PLAYERS, boatInterval: BOAT_INTERVAL, voyageTiming: VOYAGE_TIMING, onProfileChange: () => store.markDirty() });
 
 const online = new Map(); // profile id -> { player, ws }
 const loginLimiter = new LoginLimiter({ max: 10, windowMs: 10 * 60 * 1000 }); // failed logins per IP

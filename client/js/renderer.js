@@ -22,7 +22,7 @@ import { SeaScene } from './gfx/sea.js';
 import { drawBaitShop, drawChumBucket, drawPet, drawZoo } from './gfx/shop.js';
 import { PETS, PET_RARITIES } from '/shared/pets.js';
 import { CHUM } from '/shared/chum.js';
-import { BOAT, SEA_BOAT } from '/shared/voyage.js';
+import { BOAT, BOSS, SEA_BOAT } from '/shared/voyage.js';
 
 // Approximate area of the world visible on screen, in world units.
 const VIEW_W = 950;
@@ -180,6 +180,8 @@ export class Renderer {
     const view = this.viewRect(0);
     this.sea.drawWater(ctx, view, time, sea);
     for (const h of frame.hotspots) this.drawHotspot(h, time);
+    const bs = sea.phase === 'boss' ? sea.boss : null;
+    if (bs?.bk) this.sea.drawBreach(ctx, time, bs.bk, bs.id);
 
     const pose = { x: SEA_BOAT.x, y: SEA_BOAT.y, h: 0 };
     const size = { length: SEA_BOAT.length, beam: SEA_BOAT.beam };
@@ -187,6 +189,9 @@ export class Renderer {
     const evening = sea.time === 'Night' || sea.time === 'Sunset';
     drawBoat(ctx, pose, { ...size, time, bob: sea.sailing ? 2.5 : 1, lights: evening });
     this.drawChums(frame, time);
+    if (bs?.wa) this.sea.drawSlamWarning(ctx, time, bs.wa, bs.wl);
+    const me = frame.players.find((p) => p.id === frame.meId);
+    for (const g of bs?.gr ?? []) this.sea.drawGrab(ctx, time, g, bs.id, me && Math.hypot(me.x - g.x, me.y - g.y) <= BOSS.grab.range);
 
     this.updateAnims(frame.players);
     for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
@@ -202,6 +207,7 @@ export class Renderer {
     if (evening) drawBoatLights(ctx, pose, size);
 
     for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
+    for (const p of sorted) if (p.dz) this.sea.drawDazed(ctx, time, p);
     for (const p of frame.players) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
     for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
     this.drawEffects(time);

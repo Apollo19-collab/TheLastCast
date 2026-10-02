@@ -10,7 +10,10 @@ import { pickSpecies, rollKg } from '../server/fishing.js';
 import { fishDifficulty, scoreCatch } from '../shared/fish.js';
 import { computeStats } from '../shared/gear.js';
 import { DUEL } from '../shared/duel.js';
-import { BOAT, BOSS, BOSSES, BOSS_ATTACKS, SEA_LOCATIONS, VOYAGE, boatState, boatSlot, bossHp, bossZone, deckSlot, makeSeaWorld, seaZone } from '../shared/voyage.js';
+import {
+  BOAT, BOSS, BOSSES, BOSS_ATTACKS, DECK_AREAS, SEA_LOCATIONS, VOYAGE, boatState, boatSlot, bossHp, bossPool, bossZone, deckSlot, inDeckArea,
+  makeSeaWorld, seaZone, splitPool,
+} from '../shared/voyage.js';
 
 const world = LOCATIONS.mirrorLake;
 
@@ -249,7 +252,7 @@ test('boarding: only near the docked boat; passengers wait on deck', () => {
   assert.ok(isWalkable(world, a.x, a.y));
 });
 
-test('voyage: sails 4 random stops with events, then pays out and comes home', () => {
+test('voyage: sails 3 random stops with events, then pays out and comes home', () => {
   const { hub, join, step, stepUntil } = makeHub();
   const { p: a, inbox } = join('Alice');
   const { p: b } = join('Bob');
@@ -269,8 +272,8 @@ test('voyage: sails 4 random stops with events, then pays out and comes home', (
   assert.ok(!hub.lake.players.has(a.id));
   const room = inbox.filter((m) => m.t === MSG.ROOM).at(-1);
   assert.equal(room.room, 'voyage');
-  assert.equal(room.stops.length, 4);
-  assert.equal(new Set(room.stops.map((s) => s.loc)).size, 4, 'four different locations');
+  assert.equal(room.stops.length, 3);
+  assert.equal(new Set(room.stops.map((s) => s.loc)).size, 3, 'three different locations');
   assert.equal(room.missions.length, 3);
   assert.ok(isWalkable(voyage.game.world, a.x, a.y), 'standing on deck');
 
@@ -409,16 +412,154 @@ test('boss: escapes if the crew runs out of time', () => {
   assert.ok(crew[0].inbox.find((m) => m.kind === 'voyageResults').breakdown.boss === BOSS.lose.coins);
 });
 
-test('boss balance: a coin flip for a new player alone, comfortable with mid-level tackle', () => {
-  // Expected damage one angler deals in the fight, casting into the weak
-  // spot half the time, with 20% downtime (warnings, missed fish).
-  const damage = (bossId, equipped) => {
+
+test('boss: the fight escalates through three phases as its health drops', () => {
+  const { voyage, step } = toBoss(['Alice']);
+  assert.equal(voyage.boss.phase, 0);
+  voyage.boss.hp = voyage.boss.max * 0.5;
+  step(0.05);
+  assert.equal(voyage.boss.phase, 1);
+  assert.ok(voyage.game.events.some((e) => e.kind === 'bossPhase' && e.name === 'Enraged'));
+  voyage.boss.hp = voyage.boss.max * 0.2;
+  step(0.05);
+  assert.equal(voyage.boss.phase, 2);
+  assert.ok(voyage.boss.nextAttack <= BOSS.phases[2].attackEvery[1] || voyage.boss.attack, 'attacks come faster');
+  assert.ok(voyage.boss.weakTimer <= BOSS.phases[2].weakSpotMove, 'the weak spot moves faster');
+});
+
+test('boss: harpoon a breach by landing your bobber in the ring, once per breach', () => {
+  const { voyage, crew, step } = toBoss(['Alice', 'Bob']);
+  const [a, b] = crew;
+  voyage.boss.nextBreach = 0;
+  voyage.boss.nextAttack = 999;
+  voyage.boss.nextGrab = 999;
+  step(0.05);
+  const breach = voyage.boss.breach;
+  assert.ok(breach, 'the boss breaches');
+  assert.ok(voyage.game.snapshot().vy.bs.bk, 'clients see the breach');
+  const castAt = (player, x, y) => {
+    player.line = { state: FishingState.CASTING, x, y, timer: 0.01, zoneId: 'boss' };
+    step(0.05);
+  };
+  const hp = voyage.boss.hp;
+  castAt(a.p, breach.x + 10, breach.y - 10);
+  assert.equal(hp - voyage.boss.hp, BOSS.breach.damage, 'harpooned');
+  assert.equal(voyage.scores.get(a.p.id).harpoons, 1);
+  castAt(a.p, breach.x, breach.y);
+  assert.equal(hp - voyage.boss.hp, BOSS.breach.damage, 'only once per breach');
+  castAt(b.p, breach.x + breach.r + 40, breach.y);
+  assert.equal(voyage.scores.get(b.p.id).harpoons, 0, 'outside the ring is a miss');
+  step(BOSS.breach.window);
+  assert.equal(voyage.boss.breach, null, 'it dives again');
+});
+
+test('boss: beat off a grab by mashing E beside it; if it holds on, the boss heals', () => {
+  const { voyage, crew, step } = toBoss(['Alice']);
+  const [a] = crew;
+  voyage.boss.nextGrab = 0;
+  voyage.boss.nextBreach = 999;
+  voyage.boss.nextAttack = 999;
+  step(0.05);
+  assert.equal(voyage.boss.grabs.length, 1);
+  const g = voyage.boss.grabs[0];
+  assert.ok(isWalkable(voyage.game.world, g.x, g.y), 'it grabs somewhere on deck you can reach');
+  Object.assign(a.p, { x: g.x > 900 ? g.x - 200 : g.x + 200, y: 600 });
+  voyage.game.handleMessage(a.p, { t: MSG.STRIKE });
+  assert.equal(g.hp, g.max, 'too far away');
+  Object.assign(a.p, { x: g.x, y: g.y < 600 ? 575 : 625 });
+  voyage.game.handleMessage(a.p, { t: MSG.STRIKE });
+  voyage.game.handleMessage(a.p, { t: MSG.STRIKE });
+  assert.equal(g.hp, g.max - 1, 'strikes have a short cooldown');
+  const hp = voyage.boss.hp;
+  for (let i = 0; i < 200 && voyage.boss.grabs.length; i++) {
+    step(BOSS.grab.cooldown);
+    voyage.game.handleMessage(a.p, { t: MSG.STRIKE });
+  }
+  assert.equal(voyage.boss.grabs.length, 0, 'beaten off');
+  assert.equal(hp - voyage.boss.hp, BOSS.grab.damage);
+  const score = voyage.scores.get(a.p.id);
+  assert.equal(score.grabHits, g.max);
+  assert.ok(score.contribution >= g.max * BOSS.grabHitValue + BOSS.grab.damage - 1);
+
+  // The next one is left alone and holds on.
+  voyage.boss.nextGrab = 0;
+  voyage.boss.hp = Math.round(voyage.boss.max * 0.8);
+  step(0.05);
+  const before = voyage.boss.hp;
+  step(BOSS.grab.time + 0.1);
+  assert.ok(voyage.game.events.some((e) => e.kind === 'grabFail'));
+  assert.equal(voyage.boss.hp - before, Math.round(voyage.boss.max * BOSS.grab.heal), 'the boss heals');
+});
+
+test('boss: a Slam dazes anyone standing in the marked area', () => {
+  const { voyage, crew, step } = toBoss(['Alice', 'Bob']);
+  const [a, b] = crew;
+  voyage.boss.nextAttack = 999;
+  voyage.boss.nextBreach = 999;
+  voyage.boss.nextGrab = 999;
+  Object.assign(a.p, { x: 1000, y: 600 });
+  Object.assign(b.p, { x: 750, y: 600 });
+  assert.ok(inDeckArea('bow', 1000, 600) && !inDeckArea('bow', 750, 600));
+  for (const area of Object.keys(DECK_AREAS)) {
+    const r = DECK_AREAS[area];
+    assert.ok(isWalkable(voyage.game.world, r.x + r.w / 2, r.y + r.h / 2), `${area} is on deck`);
+  }
+  a.p.line = { state: FishingState.WAITING, x: 1000, y: 800, timer: 99, zoneId: 'boss' };
+  voyage.bossAttack({ id: 'slam', area: 'bow' });
+  assert.ok(a.p.dazed > 0, 'caught in the slam');
+  assert.equal(a.p.line.state, FishingState.IDLE, 'and lost their line');
+  assert.equal(b.p.dazed ?? 0, 0, 'out of the way');
+  voyage.game.handleMessage(a.p, { t: MSG.CAST, angle: Math.PI / 2, power: 0.6 });
+  assert.equal(a.p.line.state, FishingState.IDLE, 'no casting while dazed');
+  step(BOSS.slam.stun + 0.1);
+  voyage.game.handleMessage(a.p, { t: MSG.CAST, angle: Math.PI / 2, power: 0.6 });
+  assert.equal(a.p.line.state, FishingState.CASTING, 'recovered');
+});
+
+test('prize pool: split by contribution, with an even share for every helper', () => {
+  const shares = splitPool(1000, [600, 300, 100, 0]);
+  const sum = shares.reduce((s, x) => s + x, 0);
+  assert.ok(sum <= 1000 && sum >= 996, `${sum} paid out`);
+  assert.ok(shares[0] > shares[1] && shares[1] > shares[2] && shares[2] > 0);
+  assert.equal(shares[3], 0, 'no contribution, no share');
+  assert.ok(shares[2] >= Math.floor(1000 * BOSS.pool.even / 3), 'even small helpers get the even share');
+  assert.deepEqual(splitPool(500, [0, 0]), [0, 0]);
+  // Bigger crews share a bigger pool, though less of it each.
+  assert.ok(bossPool('kraken', 4, true) > bossPool('kraken', 1, true));
+  assert.ok(bossPool('kraken', 4, true) / 4 < bossPool('kraken', 1, true));
+  assert.equal(bossPool('kraken', 2, false), Math.round(bossPool('kraken', 2, true) * BOSS.pool.lose));
+});
+
+test('prize pool: paid out at the end, the top contributor is MVP', () => {
+  const { voyage, crew } = toBoss(['Alice', 'Bob']);
+  const [a, b] = crew;
+  voyage.scores.get(a.p.id).contribution = 900;
+  voyage.scores.get(b.p.id).contribution = 300;
+  voyage.boss.hp = 1;
+  voyage.damageBoss(b.p, 1);
+  const ra = a.inbox.find((m) => m.kind === 'voyageResults');
+  const rb = b.inbox.find((m) => m.kind === 'voyageResults');
+  const pool = bossPool(voyage.boss.id, 2, true);
+  assert.equal(ra.boss.pool, pool);
+  assert.ok(ra.breakdown.pool > rb.breakdown.pool, 'more contribution, bigger share');
+  const paid = ra.breakdown.pool + rb.breakdown.pool;
+  assert.ok(paid <= pool && paid >= pool - 2);
+  assert.equal(ra.boss.mvp, 'Alice');
+  assert.equal(ra.breakdown.boss, BOSS.win.coins + BOSS.win.mvpCoins);
+  assert.equal(rb.breakdown.boss, BOSS.win.coins);
+});
+
+test('boss balance: a coin flip for a new player alone, comfortable with mid tackle, fair for a crew', () => {
+  // Expected damage one angler deals in the fight: fishing (half the time in
+  // the weak spot) for ~55% of it (the rest goes on grabs, dodging slams and
+  // recasting), plus harpooning 70% of the breaches.
+  const fishDps = (bossId, equipped) => {
     const rng = seeded(11);
     const zone = bossZone(bossId);
     const st = computeStats(equipped);
     let dmg = 0;
     let time = 0;
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < 3000; i++) {
       const weak = rng() < 0.5;
       const sp = pickSpecies(rng, zone, weak, st);
       const kg = rollKg(rng, sp);
@@ -426,13 +567,24 @@ test('boss balance: a coin flip for a new player alone, comfortable with mid-lev
       time += 8 / (zone.biteRate * st.biteSpeed * (weak ? 1.8 : 1)) + 6.1 + 5 * d;
       if (rng() > Math.max(0, (d - st.lineStrength * 1.1) / 2)) dmg += scoreCatch(sp, kg, weak ? 1.25 : 1) * (weak ? 2 : 1);
     }
-    return (dmg / time) * VOYAGE.boss * 0.8;
+    return dmg / time;
   };
+  const avg = (r) => (r[0] + r[1]) / 2;
+  const breaches = 1 + Math.floor((VOYAGE.boss - BOSS.breach.first) / avg(BOSS.breach.every));
+  const solo = (bossId, equipped) => fishDps(bossId, equipped) * VOYAGE.boss * 0.55 + breaches * 0.7 * BOSS.breach.damage;
+  // Grabs beaten off hurt it too: about one wave every 32 seconds.
+  const grabs = 1 + Math.floor((VOYAGE.boss - BOSS.grab.first) / (avg(BOSS.grab.every) + 6));
+  const report = [];
   for (const id of Object.keys(BOSSES)) {
-    const starter = damage(id, {}) / bossHp(id, 1);
-    const mid = damage(id, { rod: 'carbon', reel: 'baitcaster', line: 'braid', bait: 'spinner' }) / bossHp(id, 1);
-    assert.ok(starter > 0.7 && starter < 1.2, `${id}: starter solo deals ${starter.toFixed(2)}x its health`);
-    assert.ok(mid > 1.1 && mid < 2, `${id}: mid tackle solo deals ${mid.toFixed(2)}x its health`);
+    const starter = (solo(id, {}) + grabs * BOSS.grab.damage) / bossHp(id, 1);
+    const mid = (solo(id, { rod: 'carbon', reel: 'baitcaster', line: 'braid', bait: 'spinner' }) + grabs * BOSS.grab.damage) / bossHp(id, 1);
+    const crew4 = (4 * solo(id, {}) + grabs * 1.5 * BOSS.grab.damage) / bossHp(id, 4);
+    report.push(`${id} ${starter.toFixed(2)} ${mid.toFixed(2)} ${crew4.toFixed(2)}`);
+    assert.ok(starter > 0.8 && starter < 1.25, `${id}: starter solo deals ${starter.toFixed(2)}x its health`);
+    assert.ok(mid > 1.15 && mid < 2.3, `${id}: mid tackle solo deals ${mid.toFixed(2)}x its health`);
+    assert.ok(crew4 > 0.85 && crew4 < 1.4, `${id}: four starters deal ${crew4.toFixed(2)}x`);
   }
-  assert.ok(BOSS.perAngler < 300, 'each extra angler adds less health than they deal');
+  if (process.env.BOSS_REPORT) console.log(report.join('\n'));
+  assert.equal(VOYAGE.stops, 3);
+  assert.ok(VOYAGE.boss >= 240, 'a long fight');
 });

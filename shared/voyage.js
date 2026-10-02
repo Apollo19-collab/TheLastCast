@@ -111,12 +111,12 @@ export function boatSlot(pose, i, length = BOAT.length, beam = BOAT.beam) {
 // ---- out at sea -------------------------------------------------------------------
 
 export const VOYAGE = Object.freeze({
-  stops: 4, // locations visited per voyage, out of the 8 below
+  stops: 3, // locations visited per voyage, out of the 8 below
   outbound: 15, // seconds sailing out before the first stop
   fishing: 135, // seconds of fishing at each stop
   sailing: 15, // seconds between stops (lines in)
   bossIntro: 8, // seconds between the last stop and the boss surfacing
-  boss: 120, // seconds to defeat the boss before it escapes
+  boss: 240, // seconds to defeat the boss before it escapes
   results: 15, // seconds on the results screen before heading home
   eventEarliest: 20, // a stop's special event starts this many seconds in, or later
   eventLength: 50, // ...and lasts this long
@@ -243,53 +243,125 @@ export function seaZone(locId, eventActive = false) {
 
 // ---- the boss at the end of every voyage ----------------------------------------
 //
-// The crew fights it together by fishing: every fish landed deals its points
-// as damage, and fish caught in the boss's glowing weak spot (a moving
-// hotspot) deal double. The boss telegraphs attacks (3 s warning), and
-// attacks more often once it drops below 30% health. Health scales with the
-// crew: hp = (base + perAngler x crew) x the boss's own multiplier.
+// A four-minute fight in three phases (Surfacing, Enraged, Desperate) that
+// escalate as the boss loses health. The crew hurts it in two ways:
+//   - Fishing: every fish landed deals its points as damage, double from the
+//     glowing red weak spot (a hotspot that moves, faster in later phases).
+//   - Harpoons: every so often the boss BREACHES somewhere off the rail for a
+//     few seconds. Land your bobber inside the golden ring to harpoon it.
+// And it fights back:
+//   - Grabs: a tentacle (or jaws, coils...) seizes the rail. Walk over and mash
+//     E to beat it off before its timer runs out, or the boss heals and the
+//     whole boat lurches (line tension spikes).
+//   - Telegraphed attacks: Thrash, Ink Cloud and Whirlpool as before, plus a
+//     Slam that hits one part of the deck. Get off the marked area in time or
+//     you're dazed (line lost, no casting for a few seconds).
+// Everything you do earns contribution, and the prize pool is split by it.
+// Health scales with the crew: hp = (base + perAngler x crew) x the boss's own
+// multiplier. Balance is checked in test/multiplayer.test.js.
 
 export const BOSS = Object.freeze({
-  base: 80,
-  perAngler: 260,
+  base: 140,
+  perAngler: 640,
   weakSpotRadius: 75,
-  weakSpotMove: 15, // seconds before the weak spot moves
-  attackEvery: [18, 24], // seconds between attacks (random in range)
-  enragedEvery: [10, 14], // ...below 30% health
-  enrageAt: 0.3,
-  warning: 3,
+  phases: [
+    // at: starts once health is at or below this fraction
+    { at: 1, name: 'Surfacing', attackEvery: [16, 22], weakSpotMove: 15 },
+    { at: 0.6, name: 'Enraged', attackEvery: [12, 16], weakSpotMove: 12 },
+    { at: 0.25, name: 'Desperate', attackEvery: [8, 11], weakSpotMove: 9 },
+  ],
+  warning: 3, // seconds of warning before an attack lands
+  breach: { first: 12, every: [20, 28], window: 7, radius: 90, damage: 30 },
+  grab: {
+    first: 25, every: [22, 30], time: 15, // seconds to beat it off
+    hits: 5, hitsPerAngler: 3, // strikes needed (shared between grabs in a wave)
+    range: 70, cooldown: 0.25, // how close you must stand; seconds between strikes
+    heal: 0.08, lurch: 0.3, // if it holds on: boss heals 8% of max health, tension +0.3
+    damage: 25, // damage to the boss when it's beaten off
+  },
+  slam: { stun: 5 }, // seconds dazed if a slam catches you
+  grabHitValue: 6, // contribution per strike on a grab (damage counts 1:1)
   // Rewards for everyone still aboard.
-  win: { coins: 400, xp: 800, damageCoins: 0.15, mvpCoins: 250 },
-  lose: { coins: 100, xp: 200 },
+  win: { coins: 200, xp: 1200, mvpCoins: 150 },
+  lose: { coins: 100, xp: 300 },
+  // The prize pool, split by contribution: `even` of it equally between
+  // everyone who contributed, the rest in proportion to contribution.
+  pool: { base: 300, perAngler: 300, lose: 0.25, even: 0.3 },
 });
+
+// Areas of the deck a Slam can hit (the deck is x 680-1120, y 552-648).
+export const DECK_AREAS = Object.freeze({
+  bow: { name: 'the bow', x: 900, y: 548, w: 225, h: 104 },
+  stern: { name: 'the stern', x: 675, y: 548, w: 225, h: 104 },
+  port: { name: 'the port rail', x: 675, y: 548, w: 450, h: 52 },
+  starboard: { name: 'the starboard rail', x: 675, y: 600, w: 450, h: 52 },
+});
+
+export function inDeckArea(areaId, x, y) {
+  const a = DECK_AREAS[areaId];
+  return !!a && x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h;
+}
 
 export const BOSS_ATTACKS = Object.freeze({
   thrash: { name: 'Thrash', desc: 'Line tension spikes for anyone fighting a fish. Ease off!', tension: 0.35 },
   ink: { name: 'Ink Cloud', desc: 'Murky water: bites are half as fast for 10 seconds.', seconds: 10, mods: { biteSpeed: 0.5 } },
   whirlpool: { name: 'Whirlpool', desc: 'Fish fight 40% harder for 10 seconds.', seconds: 10, mods: { fight: 1.4 } },
+  slam: { name: 'Slam', desc: 'Get off the red part of the deck! Anyone caught there is dazed and loses their fish.', area: true },
 });
 
+// slam: the name of its Slam. grab: what seizes the rail.
 export const BOSSES = Object.freeze({
   kraken: {
     name: 'The Kraken', desc: 'Tentacles as long as the boat curl up from the deep.', color: '#9d4edd', hp: 1.0,
-    attacks: ['thrash', 'ink'], fish: { herring: 20, mackerel: 20, cod: 15, oarfish: 6, grouper: 4 },
+    attacks: ['thrash', 'ink', 'slam'], slam: 'Tentacle Slam', grab: 'Tentacle',
+    fish: { herring: 20, mackerel: 20, cod: 15, oarfish: 6, grouper: 4 },
   },
   megalodon: {
     name: 'Megalodon', desc: 'A shark the size of a whale circles the trawler.', color: '#8d99ae', hp: 1.15,
-    attacks: ['thrash', 'whirlpool'], fish: { mackerel: 25, herring: 15, bluefin: 10, swordfish: 6, seabass: 10 },
+    attacks: ['thrash', 'whirlpool', 'slam'], slam: 'Ramming Charge', grab: 'Snapping Jaws',
+    fish: { mackerel: 25, herring: 15, bluefin: 10, swordfish: 6, seabass: 10 },
   },
   serpent: {
     name: 'The Sea Serpent', desc: 'Coils of green scale break the surface all around.', color: '#2a9d8f', hp: 1.0,
-    attacks: ['ink', 'whirlpool'], fish: { herring: 20, cod: 15, sheephead: 12, oarfish: 8, seabass: 10 },
+    attacks: ['ink', 'whirlpool', 'slam'], slam: 'Coil Crush', grab: 'Coil',
+    fish: { herring: 20, cod: 15, sheephead: 12, oarfish: 8, seabass: 10 },
   },
   ghostwhale: {
     name: 'The Ghost Whale', desc: 'A pale, glowing whale rises silently beneath you.', color: '#bde0fe', hp: 0.9,
-    attacks: ['thrash', 'ink', 'whirlpool'], fish: { herring: 25, mackerel: 15, opah: 8, flounder: 12, cod: 10 },
+    attacks: ['thrash', 'ink', 'whirlpool', 'slam'], slam: 'Tail Slam', grab: 'Spectral Barnacles',
+    fish: { herring: 25, mackerel: 15, opah: 8, flounder: 12, cod: 10 },
   },
 });
 
 export function bossHp(bossId, crewSize) {
   return Math.round((BOSS.base + BOSS.perAngler * Math.max(1, crewSize)) * BOSSES[bossId].hp);
+}
+
+/** The fight's phase (index into BOSS.phases) at a fraction of health left. */
+export function bossPhase(fraction) {
+  let phase = 0;
+  BOSS.phases.forEach((ph, i) => { if (fraction <= ph.at) phase = i; });
+  return phase;
+}
+
+/** The prize pool for a fight: the full pool for a win, a share of it for a loss. */
+export function bossPool(bossId, crewSize, won) {
+  const full = (BOSS.pool.base + BOSS.pool.perAngler * Math.max(1, crewSize)) * BOSSES[bossId].hp;
+  return Math.round(won ? full : full * BOSS.pool.lose);
+}
+
+/**
+ * Split a prize pool by contribution. Everyone who contributed anything gets
+ * an even share of `BOSS.pool.even` of the pool; the rest is shared in
+ * proportion to contribution. Returns coins per entry, in the same order.
+ */
+export function splitPool(pool, contributions) {
+  const total = contributions.reduce((s, c) => s + Math.max(0, c), 0);
+  const helpers = contributions.filter((c) => c > 0).length;
+  if (!total || !helpers) return contributions.map(() => 0);
+  return contributions.map((c) => (c > 0
+    ? Math.floor(pool * BOSS.pool.even / helpers + pool * (1 - BOSS.pool.even) * (c / total))
+    : 0));
 }
 
 /** The water during the boss fight: the boss's own minions. */

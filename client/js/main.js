@@ -9,7 +9,7 @@ import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
 import { computeStats } from '/shared/gear.js';
 import { VERSION } from '/shared/version.js';
 import { DUEL } from '/shared/duel.js';
-import { BOAT, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
+import { BOAT, BOSS, BOSSES, DECK_AREAS, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
 import { PETS, ZOO } from '/shared/pets.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
@@ -250,9 +250,31 @@ function atBaitShop() {
   return Math.hypot(selfPos.x - shop.x, selfPos.y - shop.y) <= shop.range;
 }
 
+/** The nearest thing the boss has grabbing the rail, if it's within reach. */
+function nearGrab() {
+  const bs = buffer.latest()?.vy?.bs;
+  let best = null;
+  for (const g of bs?.gr ?? []) {
+    const d = Math.hypot(g.x - selfPos.x, g.y - selfPos.y);
+    if (d <= BOSS.grab.range && (!best || d < best.d)) best = { g, d, name: BOSSES[bs.id]?.grab ?? 'it' };
+  }
+  return best;
+}
+
 /** What pressing E would do right now: { text, run } or null. */
 function interaction(me) {
   if (!me) return null;
+  if (room === 'voyage') {
+    const near = nearGrab();
+    if (near && me.dz) return { text: 'You\'re dazed!', run: () => {} };
+    if (near && me.s !== FishingState.IDLE) return { text: `Reel in (Esc) to fight off the ${near.name}!`, run: () => {} };
+    if (near) {
+      return {
+        text: `E E E: mash to beat off the ${near.name} (${near.g.hp} left)`,
+        run: () => net.send({ t: MSG.STRIKE }),
+      };
+    }
+  }
   if (!me.ab && atZoo()) return { text: 'E: visit the Travelling Zoo', run: () => ui.openZoo() };
   if (!me.ab && !me.du && atBaitShop()) {
     return { text: room === 'voyage' ? 'E: buy bait from the deckhand' : 'E: open the Bait Shop', run: () => ui.openShop() };
@@ -558,21 +580,60 @@ net.on(MSG.EVENT, (ev) => {
       audio.play('bossRoar');
       break;
     case 'bossStart':
-      ui.banner(ev.name, 'Fish together to drive it off! Cast into the red weak spot for double damage.', '#ff4d6d', 4500);
-      ui.feed(`⚔ ${ev.name} attacks the trawler! Every fish you land hurts it. You have ${Math.round(ev.seconds / 60)} minutes.`, '#ff4d6d');
+      ui.banner(ev.name, 'Fish to hurt it, harpoon it when it breaches, and beat off anything that grabs the boat!', '#ff4d6d', 5000);
+      ui.feed(`⚔ ${ev.name} attacks the trawler! You have ${Math.round(ev.seconds / 60)} minutes. Every fish, harpoon and strike counts towards your share of the prize pool.`, '#ff4d6d');
+      audio.play('bossRoar');
+      break;
+    case 'bossPhase':
+      ui.banner(`${ev.boss}: ${ev.name}!`, ev.phase === 1 ? 'It\'s angry now. Attacks come faster.' : 'One last push! It\'s attacking constantly.', '#ff4d6d', 3500);
+      ui.feed(`⚔ ${ev.boss} is ${ev.name.toLowerCase()}!`, '#ff4d6d');
       audio.play('bossRoar');
       break;
     case 'bossWarn':
-      ui.banner(`${ev.name}!`, ev.desc, '#f8961e', ev.seconds * 1000);
+      ui.banner(`${ev.name}!`, ev.desc, ev.area ? '#ff4d4d' : '#f8961e', ev.seconds * 1000);
       audio.play('error');
       break;
     case 'bossAttack':
-      audio.play(ev.attack === 'thrash' ? 'snap' : 'bossRoar', { volume: 0.6 });
+      audio.play(ev.attack === 'thrash' || ev.area ? 'snap' : 'bossRoar', { volume: 0.6 });
+      if (ev.area) {
+        const a = DECK_AREAS[ev.area];
+        renderer.addEffect({ type: 'splash', x: a.x + a.w / 2, y: a.y + a.h / 2, duration: 900 });
+        if (ev.hit.length) ui.feed(`💥 ${ev.name} caught ${ev.hit.join(', ')}!`, '#ff8a80');
+      }
+      break;
+    case 'dazed':
+      ui.flash(`💫 ${ev.by} caught you! Dazed for ${ev.seconds} seconds.`, 2500);
+      break;
+    case 'breach':
+      ui.banner('BREACH!', `${ev.name} surfaced! Cast into the golden ring to harpoon it.`, '#ffd166', 2500);
+      audio.play('seaEvent');
+      break;
+    case 'breachEnd':
+      if (ev.strikes) ui.feed(`🎯 ${ev.strikes} harpoon${ev.strikes > 1 ? 's' : ''} struck home before it dived.`, '#ffd166');
+      break;
+    case 'grab':
+      ui.banner(`${ev.name}${ev.count > 1 ? 's' : ''} on the rail!`, `Walk over and mash E to beat ${ev.count > 1 ? 'them' : 'it'} off within ${ev.seconds} seconds, or the boss heals!`, '#c77dff', 3000);
+      audio.play('bossRoar', { volume: 0.5 });
+      break;
+    case 'strike':
+      renderer.addEffect({ type: 'text', text: ev.left > 0 ? 'WHACK!' : 'OFF!', x: ev.x, y: ev.y + 20, color: '#ffd166', duration: 700 });
+      audio.play('hook', { volume: 0.7 });
+      break;
+    case 'grabCleared':
+      ui.feed(`🪓 ${ev.by.join(', ')} beat off the ${ev.name} (-${ev.damage}).`, '#c3f0ca');
+      audio.play('mission');
+      break;
+    case 'grabFail':
+      ui.banner(`The ${ev.name} held on!`, ev.heal ? `${ev.boss} heals ${ev.heal} and the boat lurches.` : 'The boat lurches!', '#8d99ae', 2500);
+      ui.feed(`The ${ev.name} held on${ev.heal ? `: ${ev.boss} healed ${ev.heal}` : ''}.`, '#ff8a80');
+      audio.play('lose');
       break;
     case 'bossHit': {
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
-      if (p) renderer.addEffect({ type: 'text', text: `-${ev.damage}${ev.weak ? ' WEAK SPOT!' : ''}`, x: p.x, y: p.y - 30, color: ev.weak ? '#ff6b6b' : '#ffd166', duration: 1600 });
-      if (ev.weak || ev.damage >= 100) ui.feed(`⚔ ${mine ? 'You' : ev.name} hit the boss for ${ev.damage}${ev.weak ? ' (weak spot!)' : ''}.`, '#ffb4a2');
+      const label = ev.harpoon ? `HARPOON! -${ev.damage}` : `-${ev.damage}${ev.weak ? ' WEAK SPOT!' : ''}`;
+      if (p) renderer.addEffect({ type: 'text', text: label, x: p.x, y: p.y - 30, color: ev.harpoon ? '#ffd166' : ev.weak ? '#ff6b6b' : '#ffd166', duration: 1600 });
+      if (ev.harpoon && mine) audio.play('snap', { volume: 0.5 });
+      if (ev.weak || ev.harpoon || ev.damage >= 100) ui.feed(`⚔ ${mine ? 'You' : ev.name} ${ev.harpoon ? 'harpooned' : 'hit'} the boss for ${ev.damage}${ev.weak ? ' (weak spot!)' : ''}.`, '#ffb4a2');
       break;
     }
     case 'bossEnd':
@@ -641,6 +702,8 @@ function updateVoyagePanel(me, snap) {
     missions: voyage.missions.map((m, i) => ({ text: m.text, goal: m.goal, progress: vy.ms[i] ?? 0 })),
     myPoints: me?.vp ?? 0,
     myDamage: me?.bd ?? 0,
+    myContribution: me?.bc ?? 0,
+    crewContribution: snap.players.reduce((s, p) => s + (p.bc ?? 0), 0),
     boss: vy.bs ?? null,
     rank: Math.max(1, ranked.findIndex((p) => p.id === meId) + 1),
     crewSize: snap.players.length,
@@ -698,7 +761,17 @@ function frame(now) {
     let text = STATUS_TEXT[me.s] ?? '';
     if (me.s === FishingState.IDLE && charge) text = `Power ${Math.round(chargePower(now) * 100)}%. Release to cast.`;
     if (me.s === FishingState.IDLE && room === 'voyage' && !['fishing', 'boss'].includes(snap?.vy?.ph)) text = 'Lines in while the boat is moving. Get ready for the next stop!';
-    if (me.s === FishingState.IDLE && snap?.vy?.ph === 'boss') text = 'Fish to hurt the boss! Cast into the red weak spot for double damage.';
+    if (me.s === FishingState.IDLE && snap?.vy?.ph === 'boss') {
+      const bs = snap.vy.bs;
+      text = bs?.bk ? 'BREACH! Cast into the golden ring to harpoon it!' : 'Fish to hurt the boss! The red weak spot does double damage.';
+      if (bs?.gr?.length) text = `Something grabbed the rail! Walk to it and mash E.`;
+    }
+    if (snap?.vy?.ph === 'boss' && snap.vy.bs?.wa) {
+      const a = DECK_AREAS[snap.vy.bs.wa];
+      const inside = a && selfPos.x >= a.x && selfPos.x < a.x + a.w && selfPos.y >= a.y && selfPos.y < a.y + a.h;
+      if (inside) text = me.s === FishingState.IDLE ? `MOVE! Get off ${a.name}!` : `Reel in (Esc) and get off ${a.name}!`;
+    }
+    if (me.dz) text = 'You\'re dazed! Shake it off...';
     if (me.ab) text = snap?.boat?.ph === 'docked' ? 'Waiting aboard the boat. It sails when boarding closes.' : 'Sailing out to sea...';
     const pulling = me.s === FishingState.REELING && me.pl;
     if (pulling) text = 'It\'s pulling! Ease off or the line will snap!';

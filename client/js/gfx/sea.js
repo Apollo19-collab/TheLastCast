@@ -7,7 +7,7 @@
 
 import { Terrain } from './terrain.js';
 import { seeded } from './noise.js';
-import { BOSSES, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS } from '/shared/voyage.js';
+import { BOSSES, DECK_AREAS, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS } from '/shared/voyage.js';
 
 const TILE = 900; // scenery repeats every TILE world units as the sea scrolls by
 
@@ -191,6 +191,168 @@ export class SeaScene {
     for (const side of [-1, 1]) {
       ctx.beginPath();
       ctx.arc(bx + Math.cos(heading) * 70 + Math.cos(heading + Math.PI / 2) * side * 22, by + Math.sin(heading) * 70 + Math.sin(heading + Math.PI / 2) * side * 22, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ---- boss fight mechanics -----------------------------------------------------------
+
+  /** The boss breaching: a golden harpoon ring with its head rising through it. */
+  drawBreach(ctx, time, bk, bossId) {
+    const b = BOSSES[bossId];
+    const pulse = 0.5 + 0.5 * Math.sin(time / 120);
+    const urgent = bk.t < 2.5;
+    ctx.save();
+    // Churning white water.
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + time / 400;
+      ctx.beginPath();
+      ctx.arc(bk.x + Math.cos(a) * bk.r * 0.9, bk.y + Math.sin(a) * bk.r * 0.9, 9 + 4 * Math.sin(time / 150 + i), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The boss itself, surfacing.
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = b?.color ?? '#888';
+    ctx.beginPath();
+    ctx.ellipse(bk.x, bk.y + 6, bk.r * 0.55, bk.r * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffd166';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(bk.x + side * bk.r * 0.2, bk.y - 4, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The target ring.
+    ctx.strokeStyle = urgent && pulse > 0.5 ? '#ffffff' : '#ffd166';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([14, 10]);
+    ctx.lineDashOffset = -time / 40;
+    ctx.beginPath();
+    ctx.arc(bk.x, bk.y, bk.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Time left, as a shrinking arc.
+    ctx.strokeStyle = 'rgba(255,209,102,0.9)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(bk.x, bk.y, bk.r + 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, bk.t / 7));
+    ctx.stroke();
+    ctx.font = '900 14px Nunito, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+    ctx.strokeText('HARPOON! CAST HERE', bk.x, bk.y - bk.r - 18);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('HARPOON! CAST HERE', bk.x, bk.y - bk.r - 18);
+    ctx.restore();
+  }
+
+  /** The deck area a Slam is about to hit, flashing faster as it lands. */
+  drawSlamWarning(ctx, time, areaId, left) {
+    const a = DECK_AREAS[areaId];
+    if (!a) return;
+    const rate = left <= 1 ? 70 : 140;
+    const flash = 0.5 + 0.5 * Math.sin(time / rate);
+    ctx.save();
+    ctx.fillStyle = `rgba(255,40,40,${0.22 + 0.25 * flash})`;
+    ctx.fillRect(a.x, a.y, a.w, a.h);
+    ctx.strokeStyle = '#ff4d4d';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 6]);
+    ctx.strokeRect(a.x + 1.5, a.y + 1.5, a.w - 3, a.h - 3);
+    ctx.setLineDash([]);
+    // Hazard stripes along the edge.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#ffd166';
+    for (let x = a.x; x < a.x + a.w - 6; x += 16) ctx.fillRect(x, a.y, 8, 4);
+    ctx.globalAlpha = 1;
+    ctx.font = '900 13px Nunito, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    const label = `MOVE! ${Math.max(1, left)}`;
+    ctx.strokeText(label, a.x + a.w / 2, a.y + a.h / 2 + 5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, a.x + a.w / 2, a.y + a.h / 2 + 5);
+    ctx.restore();
+  }
+
+  /** Something grabbing the rail, with how many strikes it needs and its timer. */
+  drawGrab(ctx, time, g, bossId, near) {
+    const b = BOSSES[bossId];
+    const color = b?.color ?? '#9d4edd';
+    const outward = g.y < SEA_BOAT.y ? -1 : 1; // which side of the boat it comes from
+    const sway = Math.sin(time / 200 + g.id) * 6;
+    ctx.save();
+    // The limb reaching up over the rail from the water.
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(g.x - 20, g.y + outward * 70);
+    ctx.quadraticCurveTo(g.x + sway, g.y + outward * 35, g.x + sway * 0.5, g.y);
+    ctx.stroke();
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.moveTo(g.x - 18, g.y + outward * 66);
+    ctx.quadraticCurveTo(g.x + sway, g.y + outward * 33, g.x + sway * 0.5, g.y);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(g.x + sway * 0.5, g.y, 13, 0, Math.PI * 2);
+    ctx.fill();
+    // Suckers / scales.
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(g.x + sway * 0.5 + (i - 1) * 6, g.y - outward * 2, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Ring showing how close you must stand, highlighted when you're in range.
+    ctx.strokeStyle = near ? '#ffd166' : 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = near ? 3 : 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 34, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Strikes left and time left.
+    const w = 64;
+    const x = g.x - w / 2;
+    const y = g.y - outward * 30 - 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(x - 2, y - 2, w + 4, 12);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(x, y, w * (g.hp / g.mx), 8);
+    ctx.font = '800 11px Nunito, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    const label = near ? `MASH E! ${g.hp}` : `${g.hp} hits · ${g.t}s`;
+    ctx.strokeText(label, g.x, y - 5);
+    ctx.fillStyle = g.t <= 4 ? '#ff6b6b' : '#ffffff';
+    ctx.fillText(label, g.x, y - 5);
+    ctx.restore();
+  }
+
+  /** Stars circling a dazed angler's head. */
+  drawDazed(ctx, time, p) {
+    ctx.save();
+    ctx.fillStyle = '#ffd166';
+    for (let i = 0; i < 3; i++) {
+      const a = time / 250 + (i / 3) * Math.PI * 2;
+      const x = p.x + Math.cos(a) * 14;
+      const y = p.y - 24 + Math.sin(a) * 5;
+      ctx.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const r = k % 2 ? 1.6 : 4;
+        const t = (k / 10) * Math.PI * 2 - Math.PI / 2;
+        ctx.lineTo(x + Math.cos(t) * r, y + Math.sin(t) * r);
+      }
       ctx.fill();
     }
     ctx.restore();

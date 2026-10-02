@@ -143,6 +143,7 @@ function land(ctx, player) {
   line.timer = (4 + ctx.rng() * 8) / rate;
   line.hotspot = !!hotspot;
   ctx.emitTo(player, { kind: 'landed', zone: zone.name, hotspot: !!hotspot, crowd });
+  ctx.hooks?.onLand?.(player, line);
 }
 
 function bite(ctx, player) {

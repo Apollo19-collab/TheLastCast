@@ -135,6 +135,7 @@ export class Game {
     if (this.fishingClosed) return this.fishingClosed;
     if (player.aboard) return 'You are aboard the boat. Wait for it to sail, or press E to step off.';
     if (player.duel?.phase === 'countdown') return 'The duel is about to start!';
+    if (player.dazed > 0) return 'You\'re dazed! Wait a moment.';
     return null;
   }
 
@@ -157,6 +158,9 @@ export class Game {
         break;
       case MSG.CHUM:
         this.placeChum(player);
+        break;
+      case MSG.STRIKE:
+        this.hooks.onStrike?.(player);
         break;
       case MSG.BUY:
         if (msg.item === 'chum') { this.buyChum(player, msg.packs === 5 ? 5 : 1); return; }
@@ -495,6 +499,7 @@ export class Game {
     this.updateChums(dt);
     this.duels?.tick(dt);
     for (const p of this.players.values()) {
+      if (p.dazed > 0) p.dazed = Math.max(0, p.dazed - dt);
       // Players stand still while their line is out, or while aboard the boat.
       if (p.line.state === FishingState.IDLE && !p.aboard) {
         const next = stepMovement(this.world, p, p.input, PLAYER_SPEED, dt);

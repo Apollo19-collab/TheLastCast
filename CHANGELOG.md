@@ -2,6 +2,15 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.15.0 - Boss battles (2026-10-03)
+
+- Boss fights reworked: a 4-minute battle in three phases (Surfacing, Enraged, Desperate). The boss attacks faster and its weak spot moves quicker as it weakens.
+- Harpoons: the boss breaches beside the boat every 20-28 seconds. Land your bobber inside the golden ring within 7 seconds to harpoon it for 30 damage, once per breach.
+- Grabs: tentacles, jaws, coils or barnacles seize the rail. Walk over and mash E to beat them off within 15 seconds, or the boss heals 8% and the boat lurches.
+- Slams: the boss marks part of the deck in red. Get off it within 3 seconds or you're dazed for 5 seconds and lose your fish.
+- Prize pool: every fish, harpoon and strike earns contribution. The pool (300 + 300 per angler) is split between everyone who helped: 30% evenly, 70% by contribution. A smaller consolation pool is paid if the boss escapes. The top contributor is MVP.
+- Voyages now visit 3 stops instead of 4, to make room for the longer fight. Boss health and rewards are rebalanced so a new angler alone has about even odds and crews of any size have a fair fight (a test checks this).
+
 ## 0.14.0 - Myths of the deep (2026-10-03)
 
 - New rarity: Mythic. Five mythic fish, the rarest and hardest-fighting of all: Aurora Trout (Cold Spring), The Lake Wyrm (Deep Basin and Deep Water), The Ember Koi (Shallows), and at sea The Abyssal King and Tidemother. Landing one is announced to everyone.

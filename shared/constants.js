@@ -40,6 +40,7 @@ export const MSG = Object.freeze({
   DUEL: 'duel', // { op: 'challenge' | 'accept' | 'decline' | 'forfeit', target?, from? }
   BOARD: 'board', // board or leave the boat while it is docked
   CHUM: 'chum', // place a chum bucket where you stand
+  STRIKE: 'strike', // beat off whatever the voyage boss has grabbing the rail
   // server -> client
   WELCOME: 'welcome',
   STATE: 'state',
