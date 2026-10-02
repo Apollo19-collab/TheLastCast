@@ -231,6 +231,7 @@ export class Game {
         sc: p.profile.score,
         c: p.profile.catches,
         best: p.profile.best,
+        g: [p.profile.gear.rod, p.profile.gear.reel, p.profile.gear.bait], // for drawing their rod, reel and bait
       };
       if (line.state !== FishingState.IDLE) {
         s.bx = r1(line.x);

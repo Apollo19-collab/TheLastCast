@@ -47,6 +47,20 @@ The aim line previews where your cast will land and which zone it hits.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
+### Graphics
+
+All art is generated in code. There are no image files to download or license, and each piece sits behind a small interface so painted sprites can replace it later.
+
+- **Terrain:** grass, sand and rock textures. Wet, muddy banks and natural, wavy shorelines are worked out from the distance to the water. Trees (pines around Pine Point), bushes, flowers, boulders, driftwood and lily pads are scattered deterministically, so every player sees the same lake. Docks have planks, posts and shadows. The forest continues past the map edge, and the river keeps flowing.
+- **Water:** turquoise shallows fade to deep blue, and each zone gets its own tint (murky marsh, teal river, icy Cold Spring). Moving light patterns, sparkles, surf washing the shore, swaying reeds and river current animate on top.
+- **Anglers:** top-down characters with a hat, skin tone and shirt colour that stay the same per player, plus a walking motion.
+  - **Rods** show the rod tier (willow, fiberglass, carbon, golden Master's), bend under line tension, and their reel handle spins while reeling.
+  - **Bobbers and lures** show the bait tier.
+- **Fish:** a side-view sprite for each of the 36 species, built from its body shape, colours, markings and features (whiskers, beaks, scutes), with glows for legendaries. Catching a fish pops up a **"You caught..." card** with the sprite and makes the fish leap above the angler for everyone to see. The Fish Index shows sprites, with silhouettes until a fish is discovered, and catch history shows icons.
+- **Gear shop:** an icon for every rod, reel and bait tier.
+
+Terrain is drawn as 256×256-unit tiles, each rendered once with a per-frame time budget and cached. Nearby tiles are pre-rendered before you walk into view.
+
 ### Sound
 
 Everything is synthesized in the browser with the Web Audio API, so there are no audio files to download.
@@ -174,8 +188,14 @@ client/
   js/net.js            WebSocket wrapper
   js/input.js          Keyboard / mouse
   js/interpolation.js  Smooths other players between server snapshots
-  js/renderer.js       ALL canvas drawing (world, players, minimap)
-  js/theme.js          ALL colours and sizes used by the renderer
+  js/renderer.js       Puts the layers together each frame (and the minimap)
+  js/theme.js          Colour palette for terrain, water and effects
+  js/gfx/terrain.js    Distance field, per-pixel ground/water tiles, docks, scenery placement
+  js/gfx/sprites.js    Scenery sprites: trees, pines, bushes, rocks, flowers, lily pads
+  js/gfx/characters.js Anglers, rods (by tier), lines, bobbers/lures, name tags
+  js/gfx/fishArt.js    Fish sprite generator + per-species look (FISH_ART)
+  js/gfx/gearArt.js    How each gear tier looks, plus the shop icons
+  js/gfx/noise.js      Deterministic noise for textures
   js/ui.js             DOM HUD + menu (gear shop, fish index, catch history)
 test/                  node:test suites
 ```
@@ -193,7 +213,8 @@ The first version is deliberately small. Here is where planned features plug in:
 | Feature | Where |
 | --- | --- |
 | Better sound | Each sound in `client/js/sounds.js` is a named recipe. Replace one with a recorded sample (e.g. `client/assets/splash.ogg`) by adding a sample loader to the kit in `audio.js`. Callers use `audio.play('splash')` and don't change. |
-| Better graphics / animations | Replace `draw*` methods in `client/js/renderer.js` with sprites. Colours and sizes are in `theme.js`. Static assets can go in `client/assets/` and are served automatically. |
+| Painted art / sprite sheets | Each art module has one entry point to swap: `fishSprite(id)` in `gfx/fishArt.js`, `spritePools()` in `gfx/sprites.js`, `drawAngler()` in `gfx/characters.js`, `gearIconURL()` in `gfx/gearArt.js`. Put image files in `client/assets/`; they're served automatically. |
+| More animations | Animation state lives in `Renderer.updateAnims()` (walk cycle) and `drawEffects()` (splashes, fish leaps); add new effect types there. |
 | More places on this lake | Add `land`/`structures`/`zones` rectangles and an `areas` entry in `shared/world.js`. The renderer, minimap and HUD pick them up automatically, and a test checks that everything is reachable on foot. |
 | More lakes | Add an entry to `LOCATIONS` in `shared/world.js`. Then run one `Game` per location in `server/index.js` (rooms) and let the client pick one. `welcome` already sends `locationId`. |
 | More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables in `shared/world.js`. A test checks that every species lives somewhere. |

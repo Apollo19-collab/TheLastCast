@@ -205,7 +205,9 @@ net.on(MSG.EVENT, (ev) => {
       const where = ev.hotspot ? `${ev.zone}, hotspot` : ev.zone;
       ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}`, color);
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
-      if (p) renderer.addEffect({ type: 'text', text: `${ev.speciesName} +${ev.points}`, x: p.x, y: p.y, color, duration: 2200 });
+      const big = ev.rarity === 'rare' || ev.rarity === 'legendary';
+      if (p) renderer.addEffect({ type: 'fishPop', species: ev.species, big, text: `+${ev.points}`, x: p.x, y: p.y, color, duration: 2600 });
+      if (mine) ui.showCatch(ev);
       if (mine) audio.play('catch', { rarity: ev.rarity, isNew: ev.isNew });
       else audio.play('catchOther', { rarity: ev.rarity, ...playerPos(ev.playerId) });
       if (mine) {

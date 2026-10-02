@@ -1,30 +1,26 @@
-// Canvas renderer. All drawing lives here and reads its look from theme.js.
-// To upgrade graphics later, replace individual draw* methods (e.g. with
-// sprite drawing) without touching networking or game logic.
+// Canvas renderer: puts the layers together each frame.
+//
+//   terrain water tiles  ->  moving light / sparkles / river current
+//   terrain land tiles   ->  surf, reeds, place names
+//   hotspots, lines and bobbers, anglers, name tags, effects, minimap
+//
+// What things look like lives in gfx/ (terrain, sprites, characters, fish art)
+// and theme.js; this file only decides what to draw where.
 
 import { THEME } from './theme.js';
 import { castDistance, FishingState } from '/shared/constants.js';
-import { zoneAt, zoneRects, isWalkable } from '/shared/world.js';
+import { isWalkable, zoneAt, zoneRects } from '/shared/world.js';
+import { Terrain } from './gfx/terrain.js';
+import { seeded } from './gfx/noise.js';
+import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/characters.js';
+import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 
 // Approximate area of the world visible on screen, in world units.
-const VIEW_W = 1100;
-const VIEW_H = 750;
-const CAST_ANIM_MS = 600;
+const VIEW_W = 950;
+const VIEW_H = 650;
 const MINIMAP_WIDTH = 200; // CSS pixels (smaller on narrow screens)
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-
-function seededRandom(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 export class Renderer {
   constructor(canvas, world) {
@@ -33,7 +29,10 @@ export class Renderer {
     this.world = world;
     this.camera = { x: world.spawn.x, y: world.spawn.y, zoom: 1 };
     this.effects = [];
-    this.decor = this.buildDecor();
+    this.anims = new Map(); // player id -> { x, y, phase, moving }
+    this.terrain = new Terrain(world);
+    this.causticPattern = this.ctx.createPattern(Terrain.causticTile(), 'repeat');
+    this.dynamic = this.buildDynamicDecor();
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -56,14 +55,21 @@ export class Renderer {
     c.zoom = Math.min(w / VIEW_W, h / VIEW_H);
     c.x = focusX;
     c.y = focusY;
+    // Terrain tiles are rendered at (roughly) screen resolution, capped for speed.
+    this.terrain.setResolution(clamp(Math.round(c.zoom * 2) / 2, 1, 2));
   }
 
-  /** Is a world point (plus margin) on screen? Used to skip off-screen decoration. */
-  onScreen(x, y, margin = 60) {
+  viewRect(margin = 0) {
     const c = this.camera;
     const halfW = this.canvas.width / c.zoom / 2 + margin;
     const halfH = this.canvas.height / c.zoom / 2 + margin;
-    return Math.abs(x - c.x) < halfW && Math.abs(y - c.y) < halfH;
+    return { x0: c.x - halfW, y0: c.y - halfH, x1: c.x + halfW, y1: c.y + halfH };
+  }
+
+  onScreen(x, y, margin = 60) {
+    const c = this.camera;
+    return Math.abs(x - c.x) < this.canvas.width / c.zoom / 2 + margin
+      && Math.abs(y - c.y) < this.canvas.height / c.zoom / 2 + margin;
   }
 
   screenToWorld(clientX, clientY) {
@@ -74,13 +80,14 @@ export class Renderer {
     };
   }
 
-  // ---- effects (splashes, floating text) -------------------------------------
+  // ---- effects --------------------------------------------------------------
 
+  /** { type: 'splash' | 'text' | 'fishPop', x, y, duration?, ... } */
   addEffect(effect) {
     this.effects.push({ ...effect, t0: performance.now() });
   }
 
-  // ---- frame -------------------------------------------------------------------
+  // ---- frame ----------------------------------------------------------------
 
   /**
    * frame: { time, players, hotspots, meId, aim }
@@ -89,333 +96,295 @@ export class Renderer {
    */
   draw(frame) {
     const { ctx, canvas, camera: c } = this;
+    const time = frame.time;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = THEME.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(c.zoom, 0, 0, c.zoom, canvas.width / 2 - c.x * c.zoom, canvas.height / 2 - c.y * c.zoom);
+    ctx.imageSmoothingQuality = 'high';
 
-    this.drawWater(frame.time);
-    this.drawWaterDecor(frame.time);
-    this.drawLand();
-    this.drawStructures();
+    const view = this.viewRect(0);
+    // Time allowed for rendering new terrain tiles this frame; more while on
+    // the join screen. At least one visible tile is always rendered.
+    const budget = { until: performance.now() + (frame.meId ? 8 : 40), first: true };
+    this.terrain.draw(ctx, view, 'water', budget);
+    this.drawCaustics(view, time);
+    this.drawGlints(time);
+    this.drawCurrent(time);
+    this.drawZoneLabels();
+    this.terrain.draw(ctx, view, 'land', null);
+    this.drawSurf(time);
+    this.drawReeds(time);
     this.drawAreaLabels();
-    this.drawReeds(frame.time);
-    for (const h of frame.hotspots) this.drawHotspot(h, frame.time);
-    for (const p of frame.players) if (p.s !== FishingState.IDLE) this.drawLineAndBobber(p, frame.time);
+
+    for (const h of frame.hotspots) this.drawHotspot(h, time);
+    this.updateAnims(frame.players);
+    for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
     if (frame.aim) this.drawAim(frame.aim);
-    for (const p of frame.players) this.drawPlayer(p, p.id === frame.meId);
-    for (const p of frame.players) if (p.s === FishingState.REELING) this.drawReelBars(p);
-    this.drawEffects(frame.time);
+    const sorted = [...frame.players].sort((a, b) => a.y - b.y);
+    for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
+    for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
+    for (const p of frame.players) if (p.s === FishingState.REELING) drawReelBars(ctx, p);
+    this.drawEffects(time);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawMinimap(frame);
+    this.terrain.prefetch(view, budget);
   }
 
-  // ---- world -------------------------------------------------------------------
+  updateAnims(players) {
+    const seen = new Set();
+    for (const p of players) {
+      seen.add(p.id);
+      let a = this.anims.get(p.id);
+      if (!a) {
+        a = { x: p.x, y: p.y, phase: 0, moving: false };
+        this.anims.set(p.id, a);
+      }
+      const d = Math.hypot(p.x - a.x, p.y - a.y);
+      a.moving = d > 0.15;
+      a.phase += d * 0.22;
+      a.x = p.x;
+      a.y = p.y;
+    }
+    for (const id of this.anims.keys()) if (!seen.has(id)) this.anims.delete(id);
+  }
 
-  buildDecor() {
-    const rnd = seededRandom(1337);
+  // ---- water ------------------------------------------------------------------
+
+  buildDynamicDecor() {
+    const rnd = seeded(4242);
     const w = this.world;
-    const decor = { reeds: [], lilies: [], current: [], trees: [], stones: [], waves: [] };
-
-    // Water decoration, per zone (see `decor` in world.js).
+    const t = this.terrain;
+    const glints = [];
+    for (let i = 0; i < 1400; i++) {
+      const x = -400 + rnd() * (w.width + 800);
+      const y = -400 + rnd() * (w.height + 800);
+      if (t.sdf(x, y) < -12) glints.push({ x, y, phase: rnd() * 100, speed: 0.6 + rnd() * 0.8 });
+    }
+    const reeds = [];
+    const current = [];
     for (const z of w.zones) {
-      if (!z.decor) continue;
       for (const r of zoneRects(z) || []) {
-        const density = { reeds: 1200, lilies: 2200, current: 2500 }[z.decor];
-        for (let i = 0; i < (r.w * r.h) / density; i++) {
-          const x = r.x + rnd() * r.w;
-          const y = r.y + rnd() * r.h;
-          if (zoneAt(w, x, y) !== z) continue;
-          if (z.decor === 'reeds') decor.reeds.push({ x, y, h: 10 + rnd() * 14, phase: rnd() * 6 });
-          if (z.decor === 'lilies') decor.lilies.push({ x, y, r: 6 + rnd() * 7, rot: rnd() * 6, flower: rnd() < 0.15 });
-          if (z.decor === 'current') decor.current.push({ x, y, len: 14 + rnd() * 18, phase: rnd() * 1000, min: r.x, span: r.w });
+        if (z.decor === 'reeds') {
+          for (let i = 0; i < (r.w * r.h) / 900; i++) {
+            const x = r.x + rnd() * r.w;
+            const y = r.y + rnd() * r.h;
+            if (zoneAt(w, x, y) === z && t.sdf(x, y) > -160) {
+              reeds.push({ x, y, h: 10 + rnd() * 14, phase: rnd() * 6, blades: 2 + Math.floor(rnd() * 3), cattail: rnd() < 0.35 });
+            }
+          }
+        }
+        if (z.decor === 'current') {
+          for (let i = 0; i < (r.w * r.h) / 1800; i++) {
+            const x = r.x + rnd() * r.w;
+            const y = r.y + rnd() * r.h;
+            if (zoneAt(w, x, y) === z) current.push({ x, y, len: 14 + rnd() * 22, phase: rnd() * 1000, min: r.x, span: r.w });
+          }
         }
       }
     }
-
-    // Trees on grass, kept back from the water so the shore path stays clear.
-    const inland = (x, y) => [[70, 0], [-70, 0], [0, 70], [0, -70]].every(([dx, dy]) => {
-      const px = x + dx;
-      const py = y + dy;
-      const offMap = px < 0 || py < 0 || px >= w.width || py >= w.height;
-      return offMap || isWalkable(w, px, py);
-    });
-    for (const land of w.land) {
-      const count = Math.floor((land.w * land.h) / 5000);
-      for (let i = 0; i < count; i++) {
-        const x = land.x + rnd() * land.w;
-        const y = land.y + rnd() * land.h;
-        if (land.type === 'grass' && inland(x, y) && !w.structures.some((st) => Math.abs(st.x + st.w / 2 - x) < 90 && Math.abs(st.y + st.h / 2 - y) < st.h / 2 + 90)) {
-          decor.trees.push({ x, y, r: 14 + rnd() * 12 });
-        }
-        if (land.type === 'rock' && rnd() < 0.5) decor.stones.push({ x, y, r: 6 + rnd() * 12 });
+    // The river keeps flowing past the edge of the map.
+    const river = w.zones.find((z) => z.decor === 'current');
+    const channel = river && zoneRects(river).find((r) => r.x + r.w >= w.width);
+    if (channel) {
+      for (let i = 0; i < 60; i++) {
+        current.push({ x: w.width + rnd() * 600, y: channel.y + rnd() * channel.h, len: 14 + rnd() * 22, phase: rnd() * 1000, min: channel.x, span: 600 + (w.width - channel.x) });
       }
     }
-
-    for (let i = 0; i < (w.width * w.height) / 25000; i++) {
-      const x = rnd() * w.width;
-      const y = rnd() * w.height;
-      if (zoneAt(w, x, y)) decor.waves.push({ x, y, phase: rnd() * 6 });
-    }
-    return decor;
+    reeds.sort((a, b) => a.y - b.y);
+    return { glints, reeds, current };
   }
 
-  drawWaterDecor(time) {
+  drawCaustics(view, time) {
     const { ctx } = this;
-    // Lily pads: green discs with a notch, some with a flower.
-    for (const l of this.decor.lilies) {
-      if (!this.onScreen(l.x, l.y)) continue;
-      ctx.fillStyle = THEME.lilyPad;
-      ctx.beginPath();
-      ctx.moveTo(l.x, l.y);
-      ctx.arc(l.x, l.y, l.r, l.rot, l.rot + Math.PI * 1.8);
-      ctx.closePath();
-      ctx.fill();
-      if (l.flower) {
-        ctx.fillStyle = THEME.lilyFlower;
-        ctx.beginPath();
-        ctx.arc(l.x, l.y, l.r * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    const p = this.causticPattern;
+    if (!p) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [alpha, sx, sy, scale] of [[THEME.caustics.alpha, 0.011, 0.007, 1.4], [THEME.caustics.alpha2, -0.008, 0.01, 2.3]]) {
+      p.setTransform(new DOMMatrix().translateSelf(time * sx, time * sy).scaleSelf(scale, scale));
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p;
+      ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
     }
-    // River current: streaks drifting into the lake (westward).
+    ctx.restore();
+  }
+
+  drawGlints(time) {
+    const { ctx } = this;
+    ctx.fillStyle = '#ffffff';
+    for (const g of this.dynamic.glints) {
+      const s = Math.sin(time * 0.0016 * g.speed + g.phase);
+      if (s < 0.94 || !this.onScreen(g.x, g.y)) continue;
+      const k = (s - 0.94) / 0.06;
+      const r = 1 + k * 2.4;
+      ctx.globalAlpha = k * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(g.x - r, g.y);
+      ctx.lineTo(g.x, g.y - r * 0.3);
+      ctx.lineTo(g.x + r, g.y);
+      ctx.lineTo(g.x, g.y + r * 0.3);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  drawCurrent(time) {
+    const { ctx } = this;
     ctx.strokeStyle = THEME.current;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    for (const c of this.decor.current) {
-      const x = c.min + (((c.x - c.min) - time * 0.04 - c.phase) % c.span + c.span) % c.span;
+    for (const c of this.dynamic.current) {
+      // Streaks drift west, into the lake.
+      const x = c.min + ((((c.x - c.min) - time * 0.045 - c.phase) % c.span) + c.span) % c.span;
       if (!this.onScreen(x, c.y)) continue;
       ctx.moveTo(x, c.y);
-      ctx.lineTo(x + c.len, c.y);
+      ctx.lineTo(x + c.len, c.y + Math.sin(x * 0.05) * 1.5);
     }
     ctx.stroke();
   }
 
-  drawWater(time) {
-    const { ctx, world } = this;
-    ctx.fillStyle = THEME.water;
-    ctx.fillRect(0, 0, world.width, world.height);
-    for (const z of world.zones) {
-      const rects = zoneRects(z);
-      if (!rects || !THEME.zoneTint[z.id]) continue;
-      ctx.fillStyle = THEME.zoneTint[z.id];
-      for (const r of rects) ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
-    ctx.strokeStyle = THEME.waterHighlight;
-    ctx.lineWidth = 2;
-    for (const wv of this.decor.waves) {
-      if (!this.onScreen(wv.x, wv.y)) continue;
-      const dx = Math.sin(time / 1500 + wv.phase) * 8;
-      ctx.beginPath();
-      ctx.moveTo(wv.x + dx - 10, wv.y);
-      ctx.quadraticCurveTo(wv.x + dx, wv.y - 4, wv.x + dx + 10, wv.y);
-      ctx.stroke();
-    }
-    ctx.font = '700 28px system-ui, sans-serif';
+  drawZoneLabels() {
+    const { ctx } = this;
+    ctx.font = '700 24px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = THEME.zoneLabel;
-    for (const z of world.zones) {
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '4px';
+    for (const z of this.world.zones) {
       const r = zoneRects(z)?.[0];
-      if (r && z.label !== false) ctx.fillText(z.name.toUpperCase(), r.x + r.w / 2, r.y + r.h / 2);
+      if (!r || z.label === false || !this.onScreen(r.x + r.w / 2, r.y + r.h / 2, 200)) continue;
+      ctx.fillText(z.name.toUpperCase(), r.x + r.w / 2, r.y + r.h / 2);
     }
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
   }
 
-  drawLand() {
-    const { ctx, world } = this;
-    // Foam along the shoreline: a thick stroke that the land fill half-covers.
-    ctx.strokeStyle = THEME.shoreEdge;
-    ctx.lineWidth = 8;
-    for (const r of world.land) ctx.strokeRect(r.x, r.y, r.w, r.h);
-    for (const r of world.land) {
-      ctx.fillStyle = THEME.land[r.type] || THEME.land.grass;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
-    for (const s of this.decor.stones) {
-      ctx.fillStyle = THEME.stone;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    for (const t of this.decor.trees) {
-      if (!this.onScreen(t.x, t.y)) continue;
-      ctx.fillStyle = THEME.treeDark;
-      ctx.beginPath();
-      ctx.arc(t.x + 3, t.y + 4, t.r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = THEME.tree;
-      ctx.beginPath();
-      ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  drawStructures() {
-    const { ctx, world } = this;
-    for (const s of world.structures) {
-      ctx.fillStyle = s.type === 'bridge' ? THEME.bridge : THEME.dock;
-      ctx.fillRect(s.x, s.y, s.w, s.h);
-      if (s.type === 'bridge') {
-        ctx.fillStyle = THEME.bridgeRail;
-        ctx.fillRect(s.x - 3, s.y, 4, s.h);
-        ctx.fillRect(s.x + s.w - 1, s.y, 4, s.h);
-      }
-      ctx.strokeStyle = THEME.dockPlank;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      const vertical = s.h > s.w;
-      for (let i = 10; i < (vertical ? s.h : s.w); i += 12) {
-        if (vertical) { ctx.moveTo(s.x, s.y + i); ctx.lineTo(s.x + s.w, s.y + i); }
-        else { ctx.moveTo(s.x + i, s.y); ctx.lineTo(s.x + i, s.y + s.h); }
-      }
-      ctx.stroke();
-    }
-  }
-
-  /** Big place names painted on the land ("Pine Point", "River Mouth", ...). */
-  drawAreaLabels() {
+  drawSurf(time) {
     const { ctx } = this;
-    ctx.font = THEME.areaLabel.font;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (const a of this.world.areas || []) {
-      if (!a.label || !this.onScreen(a.label.x, a.label.y, 300)) continue;
-      ctx.fillStyle = THEME.areaLabel.shadow;
-      ctx.fillText(a.name.toUpperCase(), a.label.x + 2, a.label.y + 2);
-      ctx.fillStyle = THEME.areaLabel.color;
-      ctx.fillText(a.name.toUpperCase(), a.label.x, a.label.y);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 1.6;
+    for (const p of this.terrain.coast) {
+      if (!this.onScreen(p.x, p.y, 20)) continue;
+      // Each bit of shoreline washes in and out on its own rhythm.
+      const wave = 0.5 + 0.5 * Math.sin(time * 0.0016 + p.phase);
+      const off = 2 + wave * 6;
+      const x = p.x + p.nx * off;
+      const y = p.y + p.ny * off;
+      ctx.strokeStyle = `rgba(255,255,255,${0.12 + (1 - wave) * 0.4})`;
+      ctx.beginPath();
+      ctx.moveTo(x - p.ny * p.len, y + p.nx * p.len);
+      ctx.quadraticCurveTo(x + p.nx * 1.5, y + p.ny * 1.5, x + p.ny * p.len, y - p.nx * p.len);
+      ctx.stroke();
     }
   }
 
   drawReeds(time) {
     const { ctx } = this;
-    ctx.strokeStyle = THEME.reed;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (const r of this.decor.reeds) {
-      if (!this.onScreen(r.x, r.y)) continue;
+    const R = THEME.reed;
+    ctx.lineCap = 'round';
+    for (const r of this.dynamic.reeds) {
+      if (!this.onScreen(r.x, r.y, 30)) continue;
       const sway = Math.sin(time / 900 + r.phase) * 3;
-      ctx.moveTo(r.x, r.y);
-      ctx.quadraticCurveTo(r.x, r.y - r.h / 2, r.x + sway, r.y - r.h);
+      for (let b = 0; b < r.blades; b++) {
+        const dx = (b - r.blades / 2) * 2.2;
+        const h = r.h * (0.75 + 0.25 * ((b * 7) % 3) / 2);
+        ctx.strokeStyle = b % 2 ? R.dark : R.blade;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(r.x + dx, r.y);
+        ctx.quadraticCurveTo(r.x + dx, r.y - h / 2, r.x + dx + sway * (1 + b * 0.2), r.y - h);
+        ctx.stroke();
+      }
+      if (r.cattail) {
+        ctx.strokeStyle = R.head;
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.moveTo(r.x + sway, r.y - r.h + 1);
+        ctx.lineTo(r.x + sway * 1.1, r.y - r.h - 5);
+        ctx.stroke();
+      }
     }
-    ctx.stroke();
   }
+
+  drawAreaLabels() {
+    const { ctx } = this;
+    const L = THEME.areaLabel;
+    ctx.font = L.font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '3px';
+    ctx.lineJoin = 'round';
+    for (const a of this.world.areas || []) {
+      if (!a.label || !this.onScreen(a.label.x, a.label.y, 300)) continue;
+      ctx.strokeStyle = L.outline;
+      ctx.lineWidth = 6;
+      ctx.strokeText(a.name.toUpperCase(), a.label.x, a.label.y);
+      ctx.fillStyle = L.color;
+      ctx.fillText(a.name.toUpperCase(), a.label.x, a.label.y);
+    }
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  }
+
+  // ---- hotspots ----------------------------------------------------------------
 
   drawHotspot(h, time) {
     const { ctx } = this;
+    if (!this.onScreen(h.x, h.y, h.r)) return;
+    const H = THEME.hotspot;
     const fade = clamp(h.life / 5, 0, 1);
+    ctx.save();
     ctx.globalAlpha = fade;
-    ctx.fillStyle = THEME.hotspotFill;
+    // Warm glow of churned-up water.
+    const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r);
+    g.addColorStop(0, `${H.glow}0.22)`);
+    g.addColorStop(1, `${H.glow}0)`);
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(h.x, h.y, h.r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = THEME.hotspot;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 3; i++) {
-      const t = ((time / 2000 + i / 3) % 1);
-      ctx.globalAlpha = fade * (1 - t);
+    // Rotating dashed ring.
+    ctx.strokeStyle = H.ring;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([8, 10]);
+    ctx.lineDashOffset = -time / 40;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, h.r * 0.92, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // A small school circling under the surface.
+    ctx.fillStyle = H.fish;
+    for (let i = 0; i < 5; i++) {
+      const a = time / 1400 + (i / 5) * Math.PI * 2 + (h.id % 7);
+      const rr = h.r * (0.35 + 0.12 * Math.sin(i * 2.1 + time / 900));
+      ctx.save();
+      ctx.translate(h.x + Math.cos(a) * rr, h.y + Math.sin(a) * rr);
+      ctx.rotate(a + Math.PI / 2);
       ctx.beginPath();
-      ctx.arc(h.x, h.y, h.r * t, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 5, 2, 0, 0, Math.PI * 2);
+      ctx.moveTo(-4, 0);
+      ctx.lineTo(-8, -2.5);
+      ctx.lineTo(-8, 2.5);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Bubbles popping up.
+    ctx.strokeStyle = H.bubble;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 7; i++) {
+      const cycle = (time / 1100 + i * 0.37 + h.id * 0.13) % 1;
+      const a = i * 2.4 + h.id;
+      const d = h.r * 0.6 * ((i * 0.37) % 1);
+      ctx.globalAlpha = fade * (1 - cycle);
+      ctx.beginPath();
+      ctx.arc(h.x + Math.cos(a) * d, h.y + Math.sin(a) * d, 1 + cycle * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
-  // ---- players and lines ---------------------------------------------------------
-
-  rodTip(p) {
-    const len = THEME.player.rodLength;
-    return { x: p.x + Math.cos(p.f) * len, y: p.y + Math.sin(p.f) * len };
-  }
-
-  bobberPos(p, time) {
-    if (p.s === FishingState.CASTING) {
-      const t = clamp((time - (p.castStart ?? time)) / CAST_ANIM_MS, 0, 1);
-      return { x: lerp(p.x, p.bx, t), y: lerp(p.y, p.by, t) - Math.sin(Math.PI * t) * 40, inAir: t < 1 };
-    }
-    if (p.s === FishingState.REELING) {
-      const k = clamp(p.pg ?? 0, 0, 1) * 0.8;
-      const shake = p.pl ? Math.sin(time / 25) * 2.5 : 0;
-      return { x: lerp(p.bx, p.x, k) + shake, y: lerp(p.by, p.y, k) };
-    }
-    if (p.s === FishingState.BITE) return { x: p.bx, y: p.by + 2 + Math.sin(time / 50) * 2.5 };
-    return { x: p.bx, y: p.by + Math.sin(time / 400) * 1.5 };
-  }
-
-  drawLineAndBobber(p, time) {
-    const { ctx } = this;
-    const tip = this.rodTip(p);
-    const b = this.bobberPos(p, time);
-    const tight = p.s === FishingState.REELING;
-    ctx.strokeStyle = THEME.line;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(tip.x, tip.y);
-    ctx.quadraticCurveTo((tip.x + b.x) / 2, (tip.y + b.y) / 2 + (tight ? 0 : 18), b.x, b.y);
-    ctx.stroke();
-
-    const r = THEME.bobberRadius;
-    ctx.fillStyle = THEME.bobberBottom;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = THEME.bobberTop;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, r, Math.PI, Math.PI * 2);
-    ctx.fill();
-
-    if (p.s === FishingState.BITE) {
-      ctx.font = '800 18px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText('!', b.x, b.y - 14);
-    }
-  }
-
-  drawPlayer(p, isSelf) {
-    const { ctx } = this;
-    const P = THEME.player;
-    const tip = this.rodTip(p);
-    ctx.strokeStyle = P.rod;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(tip.x, tip.y);
-    ctx.stroke();
-
-    ctx.fillStyle = p.color;
-    ctx.strokeStyle = isSelf ? P.selfRing : P.outline;
-    ctx.lineWidth = isSelf ? 3 : 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, P.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.font = THEME.name.font;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = THEME.name.shadow;
-    ctx.fillText(p.name, p.x + 1, p.y - P.radius - 7);
-    ctx.fillStyle = THEME.name.color;
-    ctx.fillText(p.name, p.x, p.y - P.radius - 8);
-  }
-
-  drawReelBars(p) {
-    const { ctx } = this;
-    const B = THEME.bars;
-    const x = p.x - B.width / 2;
-    let y = p.y + THEME.player.radius + 8;
-    const bar = (value, color) => {
-      ctx.fillStyle = B.back;
-      ctx.fillRect(x - 1, y - 1, B.width + 2, B.height + 2);
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, B.width * clamp(value, 0, 1), B.height);
-      y += B.height + 4;
-    };
-    bar(p.pg ?? 0, B.progress);
-    bar(p.tn ?? 0, (p.tn ?? 0) > 0.7 ? B.tension : B.tensionSafe);
-  }
+  // ---- aiming ------------------------------------------------------------------
 
   drawAim(aim) {
     const { ctx, world } = this;
@@ -423,23 +392,46 @@ export class Renderer {
     const tx = aim.x + Math.cos(aim.angle) * dist;
     const ty = aim.y + Math.sin(aim.angle) * dist;
     const zone = zoneAt(world, tx, ty);
-    ctx.strokeStyle = zone ? THEME.aim : THEME.aimBad;
+    const color = zone ? THEME.aim.line : THEME.aim.bad;
+    // Dotted arc showing the cast's flight.
+    ctx.fillStyle = color;
+    const n = Math.max(6, Math.floor(dist / 14));
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const x = aim.x + (tx - aim.x) * t;
+      const y = aim.y + (ty - aim.y) * t - Math.sin(Math.PI * t) * Math.min(60, dist * 0.18);
+      ctx.globalAlpha = 0.35 + 0.5 * t;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 6]);
     ctx.beginPath();
-    ctx.moveTo(aim.x, aim.y);
-    ctx.lineTo(tx, ty);
+    ctx.ellipse(tx, ty, 9, 6, 0, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+    ctx.moveTo(tx - 4, ty);
+    ctx.lineTo(tx + 4, ty);
+    ctx.moveTo(tx, ty - 3);
+    ctx.lineTo(tx, ty + 3);
     ctx.stroke();
-    ctx.font = THEME.aimFont;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = zone ? '#fff' : THEME.aimBad;
     const label = zone ? zone.name : isWalkable(world, tx, ty) ? 'Dry land' : 'Out of reach';
-    ctx.fillText(label, tx, ty - 14);
+    ctx.font = '700 11px system-ui, sans-serif';
+    const w = ctx.measureText(label).width + 12;
+    ctx.fillStyle = THEME.aim.pill;
+    ctx.beginPath();
+    ctx.roundRect(tx - w / 2, ty - 27, w, 15, 7.5);
+    ctx.fill();
+    ctx.fillStyle = zone ? '#fff' : THEME.aim.bad;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, tx, ty - 19);
+    ctx.textBaseline = 'alphabetic';
   }
+
+  // ---- effects -----------------------------------------------------------------
 
   drawEffects(time) {
     const { ctx } = this;
@@ -451,73 +443,79 @@ export class Renderer {
         ctx.globalAlpha = 1 - t;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(e.x, e.y, 4 + t * 22, 0, Math.PI * 2);
+        ctx.ellipse(e.x, e.y, 4 + t * 24, 3 + t * 15, 0, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.fillStyle = THEME.splash;
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const d = 4 + t * 14;
+          ctx.beginPath();
+          ctx.arc(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d * 0.6 - Math.sin(t * Math.PI) * 8, 1.4 * (1 - t), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (e.type === 'fishPop') {
+        // The caught fish leaps up above the angler, then fades.
+        const rise = Math.sin((Math.min(t * 2.2, 1) * Math.PI) / 2);
+        const w = e.big ? 74 : 54;
+        const h = w * (FISH_SPRITE_SIZE.h / FISH_SPRITE_SIZE.w);
+        const x = e.x;
+        const y = e.y - 30 - rise * 34;
+        ctx.globalAlpha = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(time / 180) * 0.12);
+        const s = t < 0.15 ? 0.4 + (t / 0.15) * 0.75 : 1.15 - Math.min(0.15, (t - 0.15) * 0.6);
+        ctx.scale(s, s);
+        ctx.drawImage(fishSprite(e.species), -w / 2, -h / 2, w, h);
+        ctx.restore();
+        if (e.text) {
+          ctx.font = THEME.floatFont;
+          ctx.textAlign = 'center';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+          ctx.strokeText(e.text, x, y + h / 2 + 10);
+          ctx.fillStyle = e.color || '#fff';
+          ctx.fillText(e.text, x, y + h / 2 + 10);
+        }
       } else if (e.type === 'text') {
         ctx.globalAlpha = 1 - t * t;
         ctx.font = THEME.floatFont;
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillText(e.text, e.x + 1, e.y - 30 - t * 30 + 1);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.strokeText(e.text, e.x, e.y - 40 - t * 30);
         ctx.fillStyle = e.color || '#fff';
-        ctx.fillText(e.text, e.x, e.y - 30 - t * 30);
+        ctx.fillText(e.text, e.x, e.y - 40 - t * 30);
       }
     }
     ctx.globalAlpha = 1;
   }
 
-  // ---- minimap (screen space, bottom-right) ---------------------------------------
-
-  /** The lake drawn once to an offscreen canvas; players and hotspots go on top each frame. */
-  buildMinimap(width) {
-    const w = this.world;
-    const scale = width / w.width;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(width);
-    canvas.height = Math.round(w.height * scale);
-    const g = canvas.getContext('2d');
-    g.scale(scale, scale);
-    g.fillStyle = THEME.water;
-    g.fillRect(0, 0, w.width, w.height);
-    for (const z of w.zones) {
-      if (!THEME.zoneTint[z.id]) continue;
-      g.fillStyle = THEME.zoneTint[z.id];
-      for (const r of zoneRects(z) || []) g.fillRect(r.x, r.y, r.w, r.h);
-    }
-    for (const r of w.land) {
-      g.fillStyle = THEME.land[r.type] || THEME.land.grass;
-      g.fillRect(r.x, r.y, r.w, r.h);
-    }
-    g.fillStyle = THEME.dock;
-    for (const r of w.structures) g.fillRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20); // thickened so they show up
-    this.minimap = { canvas, scale, width };
-  }
+  // ---- minimap (screen space, bottom-right) --------------------------------------
 
   drawMinimap(frame) {
     const { ctx, dpr } = this;
     const cssWidth = window.innerWidth < 800 ? 140 : MINIMAP_WIDTH;
-    const width = cssWidth * dpr;
-    if (!this.minimap || this.minimap.width !== width) this.buildMinimap(width);
+    const width = Math.round(cssWidth * dpr);
+    if (!this.minimap || this.minimap.width !== width) {
+      this.minimap = { canvas: this.terrain.minimapImage(width), width, scale: width / this.world.width };
+    }
     const { canvas: mm, scale } = this.minimap;
     const margin = 12 * dpr;
     const x0 = this.canvas.width - mm.width - margin;
     const y0 = this.canvas.height - mm.height - (window.innerWidth < 800 ? 12 : 56) * dpr;
 
-    ctx.globalAlpha = 0.9;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, mm.width, mm.height, 8 * dpr);
+    ctx.clip();
+    ctx.globalAlpha = 0.95;
     ctx.drawImage(mm, x0, y0);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = THEME.minimap.border;
-    ctx.lineWidth = 2 * dpr;
-    ctx.strokeRect(x0, y0, mm.width, mm.height);
 
-    // What the main view currently shows.
     const c = this.camera;
     const vw = (this.canvas.width / c.zoom) * scale;
     const vh = (this.canvas.height / c.zoom) * scale;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, y0, mm.width, mm.height);
-    ctx.clip();
     ctx.strokeStyle = THEME.minimap.view;
     ctx.lineWidth = 1 * dpr;
     ctx.strokeRect(x0 + c.x * scale - vw / 2, y0 + c.y * scale - vh / 2, vw, vh);
@@ -541,5 +539,10 @@ export class Renderer {
       }
     }
     ctx.restore();
+    ctx.strokeStyle = THEME.minimap.border;
+    ctx.lineWidth = 2 * dpr;
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, mm.width, mm.height, 8 * dpr);
+    ctx.stroke();
   }
 }

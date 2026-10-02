@@ -4,6 +4,8 @@
 import { RARITY, SPECIES } from '/shared/fish.js';
 import { GEAR, GEAR_SLOTS, nextTier } from '/shared/gear.js';
 import { VOLUME_CHANNELS } from './audio.js';
+import { fishImageURL } from './gfx/fishArt.js';
+import { gearIconURL } from './gfx/gearArt.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_FEED = 8;
@@ -153,11 +155,15 @@ export class UI {
           h('div', { class: 'gear-head' },
             h('span', { class: 'gear-slot' }, GEAR[slot].label),
             h('span', { class: 'gear-tier' }, `Tier ${gear[slot] + 1}/${tiers.length}`)),
-          h('div', { class: 'gear-name' }, current.name),
-          h('div', { class: 'gear-stats' }, statLine(slot, current)),
+          h('div', { class: 'gear-current' },
+            h('img', { class: 'gear-icon', src: gearIconURL(slot, gear[slot]), alt: '' }),
+            h('div', {},
+              h('div', { class: 'gear-name' }, current.name),
+              h('div', { class: 'gear-stats' }, statLine(slot, current)))),
           next
             ? h('div', { class: 'gear-next' },
-              h('div', {},
+              h('img', { class: 'gear-icon small', src: gearIconURL(slot, gear[slot] + 1), alt: '' }),
+              h('div', { class: 'gear-next-text' },
                 h('div', {}, 'Next: ', h('b', {}, next.name)),
                 h('div', { class: 'gear-stats' }, `${statLine(slot, next)}. ${next.desc}`)),
               h('button', { disabled: coins < next.price, onclick: () => this.onBuy(slot) }, `Buy · ${next.price}`))
@@ -178,6 +184,7 @@ export class UI {
         const e = index[id];
         const rarity = RARITY[s.rarity];
         return h('div', { class: `index-card${e ? '' : ' unknown'}`, style: { borderColor: e ? rarity.color : '' } },
+          h('img', { class: 'index-fish', src: fishImageURL(id, { silhouette: !e }), alt: '' }),
           h('div', { class: 'index-name' }, e ? s.name : '???'),
           h('div', { class: 'index-rarity', style: { color: rarity.color } }, rarity.label),
           e
@@ -199,7 +206,8 @@ export class UI {
           const s = SPECIES[c.species];
           return h('tr', {},
             h('td', {}, timeAgo(c.at)),
-            h('td', { style: { color: RARITY[s?.rarity]?.color } }, s?.name ?? c.species),
+            h('td', { class: 'history-fish', style: { color: RARITY[s?.rarity]?.color } },
+              s ? h('img', { src: fishImageURL(c.species), alt: '' }) : null, s?.name ?? c.species),
             h('td', {}, `${c.kg} kg`),
             h('td', {}, `+${c.points}`),
             h('td', {}, c.hotspot ? `${c.zone} ★` : c.zone));
@@ -230,6 +238,31 @@ export class UI {
       action.onclick = onSignup;
       action.hidden = tempGuest;
     }
+  }
+
+  /** The "You caught..." card with the fish's picture. Click to dismiss. */
+  showCatch(ev) {
+    const el = $('catch-popup');
+    const rarity = RARITY[ev.rarity] || RARITY.common;
+    el.className = `catch-popup rarity-${ev.rarity}`;
+    el.style.setProperty('--rarity', rarity.color);
+    el.replaceChildren(
+      h('div', { class: 'catch-rays' }),
+      h('div', { class: 'catch-title' }, ev.isNew ? 'New species!' : 'You caught'),
+      h('img', { class: 'catch-fish', src: fishImageURL(ev.species), alt: '' }),
+      h('div', { class: 'catch-name' }, ev.speciesName),
+      h('div', { class: 'catch-meta' },
+        h('span', { class: 'catch-rarity' }, rarity.label),
+        ` · ${ev.kg} kg · +${ev.points} pts`,
+        ev.hotspot ? ' · hotspot bonus' : ''),
+    );
+    el.hidden = false;
+    el.style.animation = 'none';
+    void el.offsetWidth; // restart the pop-in animation
+    el.style.animation = '';
+    el.onclick = () => { el.hidden = true; };
+    clearTimeout(this.catchTimer);
+    this.catchTimer = setTimeout(() => { el.hidden = true; }, ev.rarity === 'legendary' ? 5500 : 3400);
   }
 
   showGame() {
