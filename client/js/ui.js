@@ -34,7 +34,7 @@ import { fishImageURL } from './gfx/fishArt.js';
 import { gearIconURL } from './gfx/gearArt.js';
 
 const $ = (id) => document.getElementById(id);
-const MAX_FEED = 8;
+const MAX_FEED = 6;
 
 /** Tiny DOM builder: h('div', { class: 'x' }, 'text', childEl). Text is never parsed as HTML. */
 function h(tag, attrs = {}, ...children) {
@@ -374,7 +374,7 @@ export class UI {
   /** Level badge and XP bar in the player panel. */
   setLevel(xp = 0) {
     const pr = levelProgress(xp);
-    setText($('level-badge'), `Lv ${pr.level}`);
+    setText($('level-badge'), String(pr.level));
     $('xp-fill').style.width = `${Math.round(pr.fraction * 100)}%`;
     setText($('xp-text'), pr.level >= MAX_LEVEL ? 'MAX' : `${num(pr.into)} / ${num(pr.needed)} XP`);
   }
@@ -601,7 +601,8 @@ export class UI {
   /** Sound on/off button; onClick is only bound the first time. */
   setSoundButton(muted, onClick) {
     const btn = $('sound-toggle');
-    btn.firstChild.textContent = muted ? 'Sound off ' : 'Sound on ';
+    btn.querySelector('.dock-icon').textContent = muted ? '🔇' : '🔊';
+    btn.querySelector('.dock-label').textContent = muted ? 'Muted' : 'Sound';
     btn.classList.toggle('off', muted);
     if (this.optionsMute) this.optionsMute.checked = muted;
     if (onClick && !btn.onclick) btn.onclick = () => { onClick(); btn.blur(); };
@@ -666,7 +667,7 @@ export class UI {
     setText($('me-name'), me.name);
     setText($('me-score'), String(me.sc));
     setText($('me-catches'), String(me.c));
-    setText($('aim-zone'), zoneName ? `Aiming at: ${zoneName}` : '');
+
   }
 
   /** room: 'lake' ranks by score; 'voyage' ranks by points this voyage. */
@@ -921,7 +922,7 @@ export class UI {
     const el = document.createElement('div');
     el.className = 'feed-item';
     el.textContent = text;
-    if (color) el.style.color = color;
+    if (color) el.style.setProperty('--tint', color);
     const feed = $('feed');
     feed.prepend(el);
     while (feed.children.length > MAX_FEED) feed.lastChild.remove();

@@ -650,7 +650,7 @@ export class Renderer {
     const { canvas: mm, scale } = this.minimap;
     const margin = 12 * dpr;
     const x0 = this.canvas.width - mm.width - margin;
-    const y0 = this.canvas.height - mm.height - (window.innerWidth < 800 ? 12 : 56) * dpr;
+    const y0 = this.canvas.height - mm.height - 16 * dpr;
 
     ctx.save();
     ctx.beginPath();

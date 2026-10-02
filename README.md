@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.13.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.13.1** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -17,7 +17,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Open the Bait Shop / board the boat / challenge an angler to a duel | `E` when you're next to the shop, the boat or another angler |
 | Accept / decline a duel | `Y` / `N` |
 | Put down a chum bucket | `C` |
-| Tackle / Armour / Pets / Fish Index / Achievements / Catch History | `G` / `R` / `P` / `I` / `T` / `H` (or the buttons under your score) |
+| Tackle / Armour / Pets / Fish Index / Achievements / Catch History | `G` / `R` / `P` / `I` / `T` / `H` (or the icon dock at the bottom of the screen) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
 

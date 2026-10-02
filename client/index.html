@@ -4,57 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The Last Cast</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <canvas id="game"></canvas>
 
   <div id="hud" hidden>
-    <div id="me-panel" class="panel">
-      <div id="me-name"></div>
-      <div id="level-line"><span id="level-badge">Lv 1</span><span class="xpbar"><span id="xp-fill"></span></span><span id="xp-text"></span></div>
-      <div id="account-line">
-        <span id="account-label"></span>
-        <button type="button" id="account-action"></button>
+    <section id="me-panel" class="panel" aria-label="Your angler">
+      <div class="card-head">
+        <div id="level-badge" class="level-badge" title="Your level">1</div>
+        <div class="card-title">
+          <div id="me-name"></div>
+          <div id="account-line">
+            <span id="account-label"></span>
+            <button type="button" id="account-action"></button>
+          </div>
+        </div>
       </div>
-      <div>Score <b id="me-score">0</b> · Catches <b id="me-catches">0</b></div>
-      <div>Coins <b id="me-coins">0</b></div>
-      <div id="bait-line"></div>
-      <div id="pet-line"></div>
-      <div id="me-location"></div>
-      <div id="boat-line"></div>
-      <div id="aim-zone"></div>
-      <div class="menu-buttons">
-        <button data-tab="gear" title="Tackle shop and loadout (G)">Tackle <kbd>G</kbd></button>
-        <button data-tab="index" title="Fish index (I)">Fish Index <kbd>I</kbd></button>
-        <button data-tab="armour" title="Armour (R)">Armour <kbd>R</kbd></button>
-        <button data-tab="pets" title="Pets (P)">Pets <kbd>P</kbd></button>
-        <button data-tab="achievements" title="Achievements (T)">Achievements <kbd>T</kbd></button>
-        <button data-tab="history" title="Catch history (H)">History <kbd>H</kbd></button>
-        <button data-tab="options" title="Options (O)">Options <kbd>O</kbd></button>
-        <button id="sound-toggle" type="button" title="Sound on/off (M)">Sound on <kbd>M</kbd></button>
+      <div class="xp-row" title="Experience to the next level"><span class="xpbar"><span id="xp-fill"></span></span><span id="xp-text"></span></div>
+      <div class="stat-row">
+        <div class="stat" title="Coins to spend"><span class="stat-icon">🪙</span><b id="me-coins">0</b></div>
+        <div class="stat" title="Score"><span class="stat-icon">🏆</span><b id="me-score">0</b></div>
+        <div class="stat" title="Fish caught"><span class="stat-icon">🐟</span><b id="me-catches">0</b></div>
       </div>
-      <button type="button" class="version-label"></button>
-    </div>
-    <div id="toasts"></div>
+      <div class="info-list">
+        <div id="me-location"></div>
+        <div id="bait-line"></div>
+        <div id="pet-line"></div>
+        <div id="boat-line"></div>
+      </div>
+    </section>
 
-    <div id="leaderboard" class="panel">
+    <section id="leaderboard" class="panel" aria-label="Leaderboard">
       <h3 id="leaderboard-title">Anglers</h3>
       <ol id="leaderboard-list"></ol>
-    </div>
+    </section>
 
+    <div id="toasts"></div>
     <div id="event-panel" class="panel event-panel" hidden></div>
     <div id="prompt" hidden></div>
     <div id="banner" hidden></div>
     <div id="dialog" class="dialog" role="dialog" aria-label="Duel challenge" hidden></div>
     <div id="catch-popup" class="catch-popup" hidden></div>
-    <div id="feed" class="panel"></div>
+    <div id="feed" aria-live="polite"></div>
     <div id="status"></div>
 
-    <div id="help" class="panel">
-      <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
-      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>E</b> Bait Shop / board the boat / duel an angler · <b>C</b> chum bucket · <b>G</b> tackle · <b>R</b> armour · <b>P</b> pets · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
-    </div>
+    <nav id="dock" aria-label="Menus">
+      <button type="button" data-tab="gear" title="Tackle (G)"><span class="dock-icon">🎣</span><span class="dock-label">Tackle</span></button>
+      <button type="button" data-tab="armour" title="Armour (R)"><span class="dock-icon">🛡️</span><span class="dock-label">Armour</span></button>
+      <button type="button" data-tab="pets" title="Pets (P)"><span class="dock-icon">🐾</span><span class="dock-label">Pets</span></button>
+      <button type="button" data-tab="index" title="Fish Index (I)"><span class="dock-icon">📖</span><span class="dock-label">Index</span></button>
+      <button type="button" data-tab="achievements" title="Achievements (T)"><span class="dock-icon">🏅</span><span class="dock-label">Goals</span></button>
+      <button type="button" data-tab="history" title="Catch history (H)"><span class="dock-icon">📜</span><span class="dock-label">History</span></button>
+      <span class="dock-sep"></span>
+      <button type="button" data-tab="options" title="Options and controls (O)"><span class="dock-icon">⚙️</span><span class="dock-label">Options</span></button>
+      <button type="button" id="sound-toggle" title="Sound on/off (M)"><span class="dock-icon">🔊</span><span class="dock-label">Sound</span></button>
+      <button type="button" data-tab="news" title="What's new"><span class="dock-icon">📰</span><span class="dock-label">News</span></button>
+    </nav>
   </div>
 
   <div id="menu" class="overlay" hidden>

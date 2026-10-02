@@ -2,6 +2,13 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.13.1 - A tidier look (2026-10-02)
+
+- A cleaner, friendlier HUD: a player card with your level badge, XP bar and coins, score and fish at a glance.
+- The key list at the bottom of the screen is gone. Menus now live in an icon dock at the bottom (hover for the keyboard shortcut), and every control is listed under Options.
+- Feed messages are tinted by type and fade away on their own. The leaderboard shows ranks, and the menu windows and tabs have a fresh look.
+- Works better on small screens: the status line no longer covers the middle of the screen.
+
 ## 0.13.0 - Voyage bosses (2026-10-02)
 
 - Boss fight at the end of every voyage: after the last stop, The Kraken, Megalodon, The Sea Serpent or The Ghost Whale rises from the deep.

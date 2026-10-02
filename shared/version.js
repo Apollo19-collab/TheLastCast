@@ -2,9 +2,20 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.13.0';
+export const VERSION = '0.13.1';
 
 export const CHANGELOG = [
+  {
+    version: '0.13.1',
+    date: '2026-10-02',
+    title: 'A tidier look',
+    changes: [
+      'A cleaner, friendlier HUD: a player card with your level badge, XP bar and coins, score and fish at a glance.',
+      'The key list at the bottom of the screen is gone. Menus now live in an icon dock at the bottom (hover for the keyboard shortcut), and every control is listed under Options.',
+      'Feed messages are tinted by type and fade away on their own. The leaderboard shows ranks, and the menu windows and tabs have a fresh look.',
+      'Works better on small screens: the status line no longer covers the middle of the screen.',
+    ],
+  },
   {
     version: '0.13.0',
     date: '2026-10-02',
