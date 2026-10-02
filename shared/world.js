@@ -5,7 +5,9 @@
 //   structures  docks, jetties, bridges: walkable, sitting on top of water
 //   zones       water areas that decide what bites where
 //   areas       named places around the lake (HUD + map labels only)
-// To add a new lake, add another object to LOCATIONS.
+//   solid       optional: neither walkable nor water (e.g. a boat's cabin)
+// To add a new lake, add another object to LOCATIONS. The sea "world" used on
+// boat voyages is built by makeSeaWorld() in voyage.js.
 
 export const LOCATIONS = {
   mirrorLake: {
@@ -196,12 +198,16 @@ function onStructure(world, x, y) {
   return world.structures.some((r) => inRect(r, x, y));
 }
 
+function onSolid(world, x, y) {
+  return !!world.solid?.some((r) => inRect(r, x, y));
+}
+
 export function isWalkable(world, x, y) {
-  return inBounds(world, x, y) && (onLand(world, x, y) || onStructure(world, x, y));
+  return inBounds(world, x, y) && !onSolid(world, x, y) && (onLand(world, x, y) || onStructure(world, x, y));
 }
 
 export function isWater(world, x, y) {
-  return inBounds(world, x, y) && !onLand(world, x, y) && !onStructure(world, x, y);
+  return inBounds(world, x, y) && !onLand(world, x, y) && !onStructure(world, x, y) && !onSolid(world, x, y);
 }
 
 /** The water zone at a point, or null if the point is not water. */

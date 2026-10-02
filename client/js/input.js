@@ -1,5 +1,7 @@
 // Keyboard + mouse input. Exposes held movement keys, the mouse position and
 // an "action" button (Space or left mouse) used for cast / hook / reel.
+// E interacts with what's nearby (board the boat, challenge an angler);
+// Y / N answer a duel challenge.
 // While `isBlocked()` is true (a menu is open) gameplay input is ignored.
 
 const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements' };
@@ -12,7 +14,10 @@ const MOVE_KEYS = {
 };
 
 export class Input {
-  constructor(canvas, { onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute, isBlocked = () => false }) {
+  constructor(canvas, {
+    onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute,
+    onInteract = () => {}, onAnswer = () => {}, isBlocked = () => false,
+  }) {
     this.move = { up: false, down: false, left: false, right: false };
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     this.actionHeld = false;
@@ -36,6 +41,7 @@ export class Input {
       if (e.target instanceof HTMLInputElement) return;
       if (MENU_KEYS[e.code] && !e.repeat) { onMenu(MENU_KEYS[e.code]); return; }
       if (e.code === 'KeyM' && !e.repeat) { onMute(); return; }
+      if ((e.code === 'KeyY' || e.code === 'KeyN') && !e.repeat) { onAnswer(e.code === 'KeyY'); return; }
       if (isBlocked()) return;
       const dir = MOVE_KEYS[e.code];
       if (dir) {
@@ -44,8 +50,8 @@ export class Input {
       } else if (e.code === 'Space') {
         e.preventDefault();
         setAction(true);
-      } else if (e.code === 'KeyE') {
-        onCancel();
+      } else if (e.code === 'KeyE' && !e.repeat) {
+        onInteract();
       }
     });
     window.addEventListener('keyup', (e) => {

@@ -2,9 +2,24 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.7.2';
+export const VERSION = '0.8.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.0',
+    date: '2026-10-02',
+    title: 'Duels & the boat',
+    changes: [
+      'Fishing duels: stand next to another angler and press E to challenge them. If they accept (Y), you both fish for 3 minutes with the same matched tackle, and the most points wins.',
+      'Duel fish give no coins, score or Fish Index entries. The winner gets 1,000 coins, and your own tackle comes back when the duel ends.',
+      'The boat: every 15 minutes a boat sails in through the River Mouth and docks beside the South Beach dock. Press E next to it within 2 minutes to board.',
+      'Ocean voyages: the boat visits 4 of 8 sea locations, from Morning to Night. Each location has its own fish, a legendary and a special event: Feeding Frenzy, Spectral Current, Whale Song, Treasure Tide, Squall, Golden Hour, Leviathan Rising and Glowtide.',
+      'Crew missions, a points table and bonus coins at the end of every voyage.',
+      '21 new sea fish, including 8 sea legendaries. The Leviathan only bites while it is rising.',
+      'New tackle (Deep Sea Rod, Squid Strips) and 5 new achievements for duels and voyages.',
+      'Fish Index: Collector now needs 40 species, and Completionist needs every species, lake and sea.',
+    ],
+  },
   {
     version: '0.7.2',
     date: '2026-10-02',

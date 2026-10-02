@@ -29,6 +29,13 @@ const SHAPES = {
   gar: { h: 0.14, peak: 0.55, ped: 0.45, tail: 'round', tailLen: 0.16, dorsal: [[0.74, 0.82, 0.24]], anal: [[0.74, 0.82, 0.22]], snout: 0.26 },
   bowfin: { h: 0.26, peak: 0.36, ped: 0.4, tail: 'round', tailLen: 0.18, dorsal: [[0.36, 0.88, 0.16]], anal: [[0.72, 0.84, 0.12]] },
   sturgeon: { h: 0.18, peak: 0.32, ped: 0.3, tail: 'hetero', tailLen: 0.26, dorsal: [[0.66, 0.74, 0.18]], anal: [[0.7, 0.78, 0.14]], snout: 0.1 },
+  // sea fish
+  tuna: { h: 0.32, peak: 0.42, ped: 0.1, tail: 'forked', tailLen: 0.3, dorsal: [[0.28, 0.4, 0.24, 'spiny'], [0.48, 0.6, 0.22]], anal: [[0.56, 0.66, 0.18]] },
+  sword: { h: 0.22, peak: 0.42, ped: 0.12, tail: 'forked', tailLen: 0.28, dorsal: [[0.3, 0.42, 0.5]], anal: [[0.64, 0.72, 0.14]], snout: 0.3, snoutW: [0.04, 0.2] },
+  grouper: { h: 0.42, peak: 0.4, ped: 0.32, tail: 'round', tailLen: 0.2, dorsal: [[0.24, 0.5, 0.18, 'spiny'], [0.52, 0.76, 0.18]], anal: [[0.6, 0.78, 0.15]] },
+  flat: { h: 0.56, peak: 0.46, ped: 0.18, tail: 'round', tailLen: 0.16, dorsal: [[0.1, 0.86, 0.1]], anal: [[0.3, 0.86, 0.1]] },
+  eel: { h: 0.15, peak: 0.2, ped: 0.4, tail: 'round', tailLen: 0.08, dorsal: [[0.06, 0.98, 0.45]], anal: [[0.55, 0.98, 0.14]] },
+  opah: { h: 0.66, peak: 0.42, ped: 0.16, tail: 'forked', tailLen: 0.2, dorsal: [[0.22, 0.6, 0.3]], anal: [[0.56, 0.78, 0.14]] },
 };
 
 // Per-species look: shape, back colour, belly colour, and options.
@@ -71,6 +78,29 @@ export const FISH_ART = {
   frostfin: A('trout', '#a8dadc', '#f1faff', { pattern: 'spots', patternColor: '#ffffff', fin: '#caf0f8', finEdge: '#ffffff', legendary: '#90e0ef' }),
   marshqueen: A('bowfin', '#2d4a2a', '#b9b26a', { fin: '#3a5a2a', tailSpot: '#ffd166', legendary: '#ffd166', crown: true }),
   riverking: A('trout', '#7a2e2e', '#e9d8c9', { pattern: 'spots', patternColor: '#2a1515', fin: '#8a3a3a', legendary: '#ff7b54', hookJaw: true, tall: 1.15 }),
+
+  // ---- sea fish ----
+  herring: A('minnow', '#3f6f99', '#eef3f7', { fin: '#9fb7cc', scales: true }),
+  mackerel: A('tuna', '#2a6f5a', '#f1f5f2', { pattern: 'bars', patternColor: 'rgba(10,35,30,0.6)', fin: '#4f8a76', tall: 0.75 }),
+  cod: A('trout', '#7a6f4f', '#ece6d0', { pattern: 'mottled', patternColor: 'rgba(70,60,30,0.45)', fin: '#8a7f5f', whiskers: 'chin', tall: 1.15 }),
+  seabass: A('bass', '#55606e', '#eef1f3', { pattern: 'stripes', patternColor: 'rgba(30,38,48,0.75)', fin: '#6b7787' }),
+  sheephead: A('bass', '#c44536', '#f3a68f', { pattern: 'ends', patternColor: '#1d1d1f', fin: '#2a2a2a', redEye: true }),
+  flounder: A('flat', '#a7b8b0', '#d6e3de', { pattern: 'spots', patternColor: 'rgba(80,95,90,0.5)', fin: '#b9c9c2', translucent: true }),
+  parrotfish: A('grouper', '#2a9d8f', '#90e0ef', { pattern: 'mottled', patternColor: 'rgba(244,162,97,0.55)', fin: '#f4a261', scales: true, tall: 0.85 }),
+  bluefin: A('tuna', '#1d3557', '#e9eef2', { fin: '#457b9d', finEdge: '#ffd166', stripe: '#a8dadc' }),
+  grouper: A('grouper', '#6b5b3e', '#d9c8a0', { pattern: 'mottled', patternColor: 'rgba(50,40,20,0.5)', fin: '#5b4b2e', bigMouth: true }),
+  swordfish: A('sword', '#4a4e69', '#d8d8e0', { fin: '#3c3f58' }),
+  oarfish: A('eel', '#c9d6df', '#f4f7f9', { fin: '#e63946', pattern: 'spots', patternColor: 'rgba(60,70,90,0.5)' }),
+  opah: A('opah', '#c85a54', '#f4a7a0', { pattern: 'spots', patternColor: '#fff4f0', fin: '#e63946', bigEye: true }),
+  treasure: { shape: 'chest' },
+  kelpbeard: A('grouper', '#3e5a2a', '#b9c48a', { pattern: 'mottled', patternColor: 'rgba(120,160,60,0.6)', fin: '#4a6a2a', legendary: '#9be564', whiskers: true, bigMouth: true }),
+  prismwrasse: A('grouper', '#5a3fd6', '#f1e6ff', { pattern: 'rainbow', fin: '#ff8fab', legendary: '#e0aaff', scales: true, tall: 0.85 }),
+  thunderfin: A('tuna', '#14213d', '#e9eef2', { fin: '#fca311', finEdge: '#ffffff', stripe: '#ffd166', legendary: '#ffd166' }),
+  drownedcaptain: A('grouper', '#4f6d6a', '#c9dcd4', { pattern: 'mottled', patternColor: 'rgba(30,50,48,0.55)', fin: '#3e5755', legendary: '#7fffd4', translucent: true, crown: true, bigMouth: true }),
+  stormcaller: A('sword', '#2b2d42', '#adb5bd', { fin: '#1d1e30', stripe: '#4cc9f0', legendary: '#90e0ef' }),
+  glasshalibut: A('flat', '#cfeff3', '#ffffff', { fin: '#e0fbfc', legendary: '#e0fbfc', translucent: true, pattern: 'spots', patternColor: 'rgba(150,200,210,0.5)' }),
+  leviathan: A('eel', '#0b2545', '#3c5a80', { fin: '#e63946', pattern: 'spots', patternColor: '#90e0ef', legendary: '#ff4d6d', redEye: true, tall: 1.3 }),
+  silvermoon: A('opah', '#b8c0cc', '#eef2f7', { pattern: 'spots', patternColor: '#ffffff', fin: '#ff6b6b', legendary: '#e0e7ff', bigEye: true }),
 };
 
 const cache = new Map();
@@ -116,6 +146,7 @@ function render(id) {
   g.lineJoin = 'round';
   g.lineCap = 'round';
   if (art.shape === 'boot') drawBoot(g);
+  else if (art.shape === 'chest') drawChest(g);
   else drawFish(g, art, seeded(seedFrom('fish', id)));
   return c;
 }
@@ -432,6 +463,30 @@ function drawPattern(g, art, rnd, X, top, bot, cy, BL, HB) {
         }
       }
       break;
+    case 'stripes':
+      // Horizontal lines along the body (sea bass).
+      g.strokeStyle = c;
+      g.lineWidth = 1.4;
+      for (let i = 0; i < 6; i++) {
+        const k = -0.32 + i * 0.11;
+        g.beginPath();
+        g.moveTo(X(0.12), cy + HB * k);
+        g.quadraticCurveTo(X(0.55), cy + HB * (k - 0.03), X(0.98), cy + HB * k * 0.3);
+        g.stroke();
+      }
+      break;
+    case 'ends':
+      // Dark head and tail with a bright middle (sheephead).
+      g.fillStyle = c;
+      g.fillRect(X(0.28), 0, W, H);
+      g.fillRect(0, 0, X(0.72), H);
+      break;
+    case 'rainbow':
+      for (let i = 0; i < 7; i++) {
+        g.fillStyle = `hsla(${i * 50}, 85%, 62%, 0.55)`;
+        g.fillRect(X(0.1 + (i + 1) * 0.12), 0, BL * 0.12 + 1, H);
+      }
+      break;
     case 'koi':
       g.fillStyle = c;
       for (let i = 0; i < 4; i++) {
@@ -584,6 +639,57 @@ function drawBoot(g) {
   g.beginPath();
   g.arc(96, 84, 2.5, 0, Math.PI * 2);
   g.fill();
+  g.restore();
+}
+
+function drawChest(g) {
+  g.save();
+  g.translate(W / 2 - 52, H / 2 - 38);
+  const wood = g.createLinearGradient(0, 0, 0, 76);
+  wood.addColorStop(0, '#8a5a2b');
+  wood.addColorStop(1, '#4a2f14');
+  // Lid (slightly open) and body.
+  g.fillStyle = wood;
+  g.strokeStyle = '#2b1a0d';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(4, 30);
+  g.quadraticCurveTo(52, -6, 100, 30);
+  g.lineTo(100, 34);
+  g.lineTo(4, 34);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  // Gold glinting out of the gap.
+  g.fillStyle = '#ffd166';
+  g.shadowColor = '#ffd166';
+  g.shadowBlur = 14;
+  g.fillRect(8, 33, 88, 6);
+  g.shadowBlur = 0;
+  g.fillStyle = wood;
+  g.beginPath();
+  g.rect(4, 38, 96, 38);
+  g.fill();
+  g.stroke();
+  // Iron bands, lock and barnacles.
+  g.fillStyle = '#6c757d';
+  for (const x of [16, 82]) g.fillRect(x, 6, 8, 70);
+  g.fillStyle = '#d4af37';
+  g.fillRect(45, 36, 14, 16);
+  g.fillStyle = '#2b1a0d';
+  g.fillRect(50, 42, 4, 6);
+  g.fillStyle = 'rgba(230,225,210,0.85)';
+  for (const [x, y, r] of [[10, 70, 3], [14, 66, 2], [92, 44, 2.5], [70, 72, 2]]) {
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#5a8a3a';
+  g.lineWidth = 2.5;
+  g.beginPath();
+  g.moveTo(96, 40);
+  g.quadraticCurveTo(110, 56, 104, 74);
+  g.stroke();
   g.restore();
 }
 

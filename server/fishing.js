@@ -4,7 +4,11 @@
 //
 // Every function takes a `ctx` (the Game) that provides: world, rng(),
 // hotspotAt(x, y), countBobbersNear(player, x, y, r), emitTo(player, ev),
-// emitAll(ev), profileChanged(player), checkAchievements(player).
+// emitAll(ev), profileChanged(player), checkAchievements(player),
+// castBlocked(player), mods (special-event modifiers at sea), duels and hooks.
+//
+// Fish caught in a duel go to the duel's scoreboard instead of the profile
+// (see duel.js).
 //
 // Tackle modifies the line through `player.stats` (see computeStats in
 // shared/gear.js): castRange, lineStrength, reelSpeed, drag, biteSpeed,
@@ -40,12 +44,18 @@ function resetLine(player) {
 }
 
 function zoneById(world, id) {
-  return world.zones.find((z) => z.id === id);
+  // At sea the zone changes from stop to stop; fall back to the current one.
+  return world.zones.find((z) => z.id === id) ?? world.zones[0];
 }
 
 export function tryCast(ctx, player, angle, power) {
   if (player.line.state !== IDLE) return;
   if (!Number.isFinite(angle) || !Number.isFinite(power)) return;
+  const blocked = ctx.castBlocked?.(player);
+  if (blocked) {
+    ctx.emitTo(player, { kind: 'castFail', message: blocked });
+    return;
+  }
 
   const dist = castDistance(power, player.stats.castRange);
   const x = player.x + Math.cos(angle) * dist;
@@ -54,7 +64,7 @@ export function tryCast(ctx, player, angle, power) {
 
   const zone = zoneAt(ctx.world, x, y);
   if (!zone) {
-    ctx.emitTo(player, { kind: 'castFail', message: 'Your cast landed on dry ground. Aim for the water.' });
+    ctx.emitTo(player, { kind: 'castFail', message: ctx.world.castFail ?? 'Your cast landed on dry ground. Aim for the water.' });
     return;
   }
   player.line = { state: CASTING, x, y, timer: CAST_FLIGHT_TIME, zoneId: zone.id };
@@ -63,7 +73,8 @@ export function tryCast(ctx, player, angle, power) {
 export function hook(ctx, player) {
   const line = player.line;
   if (line.state !== BITE) return;
-  const fight = fishDifficulty(line.fish.species, line.fish.kg);
+  const mods = ctx.mods ?? {};
+  const fight = fishDifficulty(line.fish.species, line.fish.kg) * (mods.fight ?? 1);
   Object.assign(line, {
     state: REELING,
     progress: 0.1 + 0.07 * Math.min(fight, 2), // weak fish start further out, so even they need reeling in
@@ -73,8 +84,8 @@ export function hook(ctx, player) {
     pullTimer: 0.5 + ctx.rng(),
     fight, // difficulty: rarity x size (see fishDifficulty)
     tier: strengthTier(fight),
-    reelSpeed: player.stats.reelSpeed,
-    lineStrength: player.stats.lineStrength,
+    reelSpeed: player.stats.reelSpeed * (mods.reelSpeed ?? 1),
+    lineStrength: player.stats.lineStrength / (mods.tension ?? 1),
     drag: player.stats.drag,
   });
   ctx.emitTo(player, { kind: 'hooked', strength: STRENGTH_TIERS[strengthTier(fight)].label });
@@ -121,8 +132,8 @@ function land(ctx, player) {
   const hotspot = ctx.hotspotAt(line.x, line.y);
   const crowd = ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
 
-  const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1))
-    / (1 + CROWD_PENALTY * crowd);
+  const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1))
+    / (1 + (ctx.world.crowdPenalty ?? CROWD_PENALTY) * crowd);
   line.state = WAITING;
   line.timer = (4 + ctx.rng() * 8) / rate;
   line.hotspot = !!hotspot;
@@ -132,7 +143,11 @@ function land(ctx, player) {
 function bite(ctx, player) {
   const line = player.line;
   const zone = zoneById(ctx.world, line.zoneId);
-  const species = pickSpecies(ctx.rng, zone, line.hotspot, player.stats);
+  const mods = ctx.mods ?? {};
+  const species = pickSpecies(ctx.rng, zone, line.hotspot, {
+    rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1),
+    affinity: player.stats.affinity,
+  }, mods.extraFish);
   const s = SPECIES[species];
   // Squared roll skews towards smaller fish; trophies are uncommon.
   const kg = s.minKg + (s.maxKg - s.minKg) * ctx.rng() ** 2;
@@ -150,10 +165,14 @@ function baitBoost(rarity, rareBoost) {
   return 1;
 }
 
-/** mods: tackle stats ({ rareBoost, affinity }); only those two are used here. */
-export function pickSpecies(rng, zone, hotspot, mods = {}) {
+/**
+ * mods: tackle stats ({ rareBoost, affinity }); only those two are used here.
+ * extraFish: { speciesId: weight } added to the zone's fish (special events).
+ */
+export function pickSpecies(rng, zone, hotspot, mods = {}, extraFish = null) {
   const rareBoost = mods.rareBoost ?? 1;
-  const entries = Object.entries(zone.fish).map(([id, w]) => {
+  const fish = extraFish ? { ...zone.fish, ...extraFish } : zone.fish;
+  const entries = Object.entries(fish).map(([id, w]) => {
     const { rarity } = SPECIES[id];
     const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id);
     return [id, w * boost];
@@ -203,9 +222,11 @@ function fight(ctx, player, dt) {
 
   if (line.tension >= 1) {
     resetLine(player);
-    player.profile.counters.snaps += 1;
-    ctx.checkAchievements(player);
-    ctx.profileChanged(player);
+    if (!player.duel) {
+      player.profile.counters.snaps += 1;
+      ctx.checkAchievements(player);
+      ctx.profileChanged(player);
+    }
     ctx.emitAll({ kind: 'snap', playerId: player.id, name: player.name });
   } else if (line.progress >= 1) {
     landCatch(ctx, player);
@@ -218,8 +239,20 @@ function fight(ctx, player, dt) {
 function landCatch(ctx, player) {
   const { fish, hotspot, zoneId } = player.line;
   const s = SPECIES[fish.species];
-  const points = scoreCatch(fish.species, fish.kg, hotspot ? HOTSPOT_SCORE_BONUS : 1);
+  const event = ctx.mods?.event ?? null; // a special event at sea is on
+  const points = scoreCatch(fish.species, fish.kg, (hotspot ? HOTSPOT_SCORE_BONUS : 1) * (ctx.mods?.points ?? 1));
   const zone = zoneById(ctx.world, zoneId);
+
+  if (player.duel) {
+    // Duel catches only count on the duel scoreboard: no coins, score or index.
+    resetLine(player);
+    ctx.duels.recordCatch(player, points);
+    ctx.emitAll({
+      kind: 'catch', playerId: player.id, name: player.name, species: fish.species, speciesName: s.name,
+      rarity: s.rarity, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, isNew: false, duel: true,
+    });
+    return;
+  }
 
   const profile = player.profile;
   profile.score += points;
@@ -238,6 +271,7 @@ function landCatch(ctx, player) {
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, points);
+  ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event });
 
   resetLine(player);
   ctx.checkAchievements(player);
@@ -254,6 +288,7 @@ function landCatch(ctx, player) {
     zone: zone.name,
     hotspot: !!hotspot,
     isNew,
+    event: event ? true : undefined,
   });
 }
 

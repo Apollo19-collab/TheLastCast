@@ -19,6 +19,7 @@
       <div>Score <b id="me-score">0</b> · Catches <b id="me-catches">0</b></div>
       <div>Coins <b id="me-coins">0</b></div>
       <div id="me-location"></div>
+      <div id="boat-line"></div>
       <div id="aim-zone"></div>
       <div class="menu-buttons">
         <button data-tab="gear" title="Tackle shop and loadout (G)">Tackle <kbd>G</kbd></button>
@@ -33,17 +34,21 @@
     <div id="toasts"></div>
 
     <div id="leaderboard" class="panel">
-      <h3>Anglers</h3>
+      <h3 id="leaderboard-title">Anglers</h3>
       <ol id="leaderboard-list"></ol>
     </div>
 
+    <div id="event-panel" class="panel event-panel" hidden></div>
+    <div id="prompt" hidden></div>
+    <div id="banner" hidden></div>
+    <div id="dialog" class="dialog" role="dialog" aria-label="Duel challenge" hidden></div>
     <div id="catch-popup" class="catch-popup" hidden></div>
     <div id="feed" class="panel"></div>
     <div id="status"></div>
 
     <div id="help" class="panel">
       <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
-      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>G</b> tackle · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
+      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>E</b> board the boat / duel an angler · <b>G</b> tackle · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
     </div>
   </div>
 
@@ -60,6 +65,10 @@
       </div>
       <div id="menu-body"></div>
     </div>
+  </div>
+
+  <div id="results" class="overlay" hidden>
+    <div id="results-body" class="results-window" role="dialog" aria-label="Results"></div>
   </div>
 
   <div id="join" class="overlay">

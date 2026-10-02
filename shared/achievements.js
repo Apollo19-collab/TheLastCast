@@ -15,6 +15,9 @@
 // Which items each achievement unlocks is defined on the items (gear.js).
 
 import { ITEMS } from './gear.js';
+import { SPECIES } from './fish.js';
+
+const SPECIES_COUNT = Object.keys(SPECIES).length;
 
 export const ACHIEVEMENTS = [
   { id: 'first_catch', name: 'First Catch', desc: 'Land your very first fish.', metric: 'catches', goal: 1, coins: 10 },
@@ -37,14 +40,20 @@ export const ACHIEVEMENTS = [
   { id: 'heavyweight', name: 'Heavyweight', desc: 'Land a fish of 35 kg or more.', metric: 'heaviest', goal: 35, coins: 500, unit: 'kg' },
   { id: 'hotspot_hopper', name: 'Hotspot Hopper', desc: 'Catch 200 fish inside hotspots.', metric: 'hotspotCatches', goal: 200, coins: 400 },
   { id: 'bait_shop', name: 'Bait Shop Regular', desc: 'Spend 6,000 coins on tackle.', metric: 'coinsSpent', goal: 6000, coins: 400 },
-  { id: 'collector', name: 'Collector', desc: 'Discover 30 species for your Fish Index.', metric: 'species', goal: 30, coins: 800 },
+  { id: 'collector', name: 'Collector', desc: 'Discover 40 species for your Fish Index.', metric: 'species', goal: 40, coins: 800 },
   { id: 'ghost_hunter', name: 'Ghost Hunter', desc: 'Catch The Pale Ghost.', metric: 'index.ghost', goal: 1, coins: 1000 },
   { id: 'living_legend', name: 'Living Legend', desc: 'Catch 3 legendary fish.', metric: 'legendaryCatches', goal: 3, coins: 1500 },
-  { id: 'completionist', name: 'Completionist', desc: 'Discover all 36 species.', metric: 'species', goal: 36, coins: 5000 },
+  { id: 'completionist', name: 'Completionist', desc: `Discover all ${SPECIES_COUNT} species, lake and sea.`, metric: 'species', goal: SPECIES_COUNT, coins: 5000 },
   { id: 'trash_collector', name: 'One Angler\'s Trash', desc: 'Reel in 50 old boots.', metric: 'index.boot', goal: 50, coins: 250 },
   { id: 'lessons_learned', name: 'Lessons Learned', desc: 'Snap your line 25 times.', metric: 'snaps', goal: 25, coins: 100 },
   { id: 'high_roller', name: 'High Roller', desc: 'Earn 50,000 coins in total.', metric: 'coinsEarned', goal: 50000, coins: 1500 },
   { id: 'lake_legend', name: 'Lake Legend', desc: 'Reach a score of 100,000.', metric: 'score', goal: 100000, coins: 3000 },
+  // Multiplayer: duels and boat voyages
+  { id: 'duelist', name: 'Duelist', desc: 'Win 10 fishing duels.', metric: 'duelsWon', goal: 10, coins: 500 },
+  { id: 'sea_legs', name: 'Sea Legs', desc: 'Complete 5 boat voyages.', metric: 'voyages', goal: 5, coins: 600 },
+  { id: 'old_salt', name: 'Old Salt', desc: 'Catch 300 fish at sea.', metric: 'seaCatches', goal: 300, coins: 800 },
+  { id: 'current_rider', name: 'Current Rider', desc: 'Catch 40 fish during special events at sea.', metric: 'eventCatches', goal: 40, coins: 600 },
+  { id: 'leviathan_slayer', name: 'Leviathan Slayer', desc: 'Catch The Leviathan in the Abyssal Trench.', metric: 'index.leviathan', goal: 1, coins: 2500 },
 ];
 
 export const ACHIEVEMENT_BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
@@ -58,6 +67,7 @@ export function newCounters() {
   return {
     catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0,
     bigFish: 0, heaviest: 0, snaps: 0, family: {}, zone: {}, area: {},
+    duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0,
   };
 }
 

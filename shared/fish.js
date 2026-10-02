@@ -59,11 +59,36 @@ export const SPECIES = Object.freeze({
   frostfin: { name: 'Frostfin', rarity: 'legendary', minKg: 8, maxKg: 15, family: 'trout', points: 240, fight: 0.9 },
   marshqueen: { name: 'The Marsh Queen', rarity: 'legendary', minKg: 12, maxKg: 25, family: 'ancient', points: 250, fight: 0.95 },
   riverking: { name: 'The River King', rarity: 'legendary', minKg: 25, maxKg: 45, family: 'trout', points: 280, fight: 0.97 },
+
+  // ---- Sea fish: only caught on boat voyages (see shared/voyage.js) ----
+  herring: { name: 'Silver Herring', rarity: 'common', minKg: 0.1, maxKg: 0.7, family: 'sea', points: 8, fight: 0.3 },
+  mackerel: { name: 'Atlantic Mackerel', rarity: 'common', minKg: 0.3, maxKg: 1.5, family: 'sea', points: 11, fight: 0.45 },
+  cod: { name: 'Atlantic Cod', rarity: 'uncommon', minKg: 1, maxKg: 14, family: 'sea', points: 28, fight: 0.6 },
+  seabass: { name: 'Striped Sea Bass', rarity: 'uncommon', minKg: 1, maxKg: 10, family: 'sea', points: 30, fight: 0.65 },
+  sheephead: { name: 'Kelp Sheephead', rarity: 'uncommon', minKg: 1, maxKg: 8, family: 'sea', points: 34, fight: 0.6 },
+  flounder: { name: 'Glass Flounder', rarity: 'uncommon', minKg: 0.5, maxKg: 5, family: 'sea', points: 32, fight: 0.5 },
+  parrotfish: { name: 'Rainbow Parrotfish', rarity: 'rare', minKg: 1, maxKg: 9, family: 'sea', points: 60, fight: 0.6 },
+  bluefin: { name: 'Bluefin Tuna', rarity: 'rare', minKg: 8, maxKg: 34, family: 'sea', points: 85, fight: 0.95 },
+  grouper: { name: 'Goliath Grouper', rarity: 'rare', minKg: 10, maxKg: 34, family: 'sea', points: 80, fight: 0.8 },
+  swordfish: { name: 'Swordfish', rarity: 'rare', minKg: 10, maxKg: 34, family: 'sea', points: 90, fight: 0.95 },
+  oarfish: { name: 'Oarfish', rarity: 'rare', minKg: 5, maxKg: 30, family: 'sea', points: 85, fight: 0.75 },
+  opah: { name: 'Moon Opah', rarity: 'rare', minKg: 5, maxKg: 30, family: 'sea', points: 80, fight: 0.75 },
+  treasure: { name: 'Sunken Treasure Chest', rarity: 'rare', minKg: 5, maxKg: 20, family: 'junk', points: 150, fight: 0.25 },
+  // Sea legendaries: each one mostly bites during its location's special event.
+  kelpbeard: { name: 'Old Kelpbeard', rarity: 'legendary', minKg: 15, maxKg: 30, family: 'sea', points: 300, fight: 0.95 },
+  prismwrasse: { name: 'The Prism Wrasse', rarity: 'legendary', minKg: 8, maxKg: 20, family: 'sea', points: 320, fight: 0.9 },
+  thunderfin: { name: 'Thunderfin', rarity: 'legendary', minKg: 40, maxKg: 90, family: 'sea', points: 380, fight: 0.98 },
+  drownedcaptain: { name: 'The Drowned Captain', rarity: 'legendary', minKg: 30, maxKg: 60, family: 'sea', points: 360, fight: 0.95 },
+  stormcaller: { name: 'The Stormcaller', rarity: 'legendary', minKg: 30, maxKg: 70, family: 'sea', points: 380, fight: 0.98 },
+  glasshalibut: { name: 'The Glass Halibut', rarity: 'legendary', minKg: 20, maxKg: 45, family: 'sea', points: 340, fight: 0.95 },
+  leviathan: { name: 'The Leviathan', rarity: 'legendary', minKg: 80, maxKg: 150, family: 'sea', points: 500, fight: 1.0 },
+  silvermoon: { name: 'Silvermoon', rarity: 'legendary', minKg: 20, maxKg: 45, family: 'sea', points: 360, fight: 0.95 },
 });
 
 export const FAMILIES = Object.freeze({
   junk: 'Junk', panfish: 'Panfish', carp: 'Carp & minnows', perch: 'Perch & walleye', bass: 'Bass',
   trout: 'Trout & salmon', whitefish: 'Whitefish', pike: 'Pike', catfish: 'Catfish', ancient: 'Ancient fish',
+  sea: 'Sea fish',
 });
 
 // How hard each rarity fights, on top of the species' own `fight`.

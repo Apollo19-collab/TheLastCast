@@ -4,6 +4,9 @@
 //   terrain land tiles   ->  surf, reeds, place names
 //   hotspots, lines and bobbers, anglers, name tags, effects, minimap
 //
+// At sea (world.kind === 'sea') there is no terrain: the SeaScene draws the
+// ocean, then the trawler, anglers, the time-of-day light, and the HUD bits.
+//
 // What things look like lives in gfx/ (terrain, sprites, characters, fish art)
 // and theme.js; this file only decides what to draw where.
 
@@ -14,6 +17,9 @@ import { Terrain } from './gfx/terrain.js';
 import { seeded } from './gfx/noise.js';
 import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/characters.js';
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
+import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
+import { SeaScene } from './gfx/sea.js';
+import { BOAT, SEA_BOAT } from '/shared/voyage.js';
 
 // Approximate area of the world visible on screen, in world units.
 const VIEW_W = 950;
@@ -30,9 +36,13 @@ export class Renderer {
     this.camera = { x: world.spawn.x, y: world.spawn.y, zoom: 1 };
     this.effects = [];
     this.anims = new Map(); // player id -> { x, y, phase, moving }
-    this.terrain = new Terrain(world);
-    this.causticPattern = this.ctx.createPattern(Terrain.causticTile(), 'repeat');
-    this.dynamic = this.buildDynamicDecor();
+    if (world.kind === 'sea') {
+      this.sea = new SeaScene(this.ctx);
+    } else {
+      this.terrain = new Terrain(world);
+      this.causticPattern = this.ctx.createPattern(Terrain.causticTile(), 'repeat');
+      this.dynamic = this.buildDynamicDecor();
+    }
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -56,7 +66,7 @@ export class Renderer {
     c.x = focusX;
     c.y = focusY;
     // Terrain tiles are rendered at (roughly) screen resolution, capped for speed.
-    this.terrain.setResolution(clamp(Math.round(c.zoom * 2) / 2, 1, 2));
+    this.terrain?.setResolution(clamp(Math.round(c.zoom * 2) / 2, 1, 2));
   }
 
   viewRect(margin = 0) {
@@ -90,11 +100,17 @@ export class Renderer {
   // ---- frame ----------------------------------------------------------------
 
   /**
-   * frame: { time, players, hotspots, meId, aim }
+   * frame: { time, players, hotspots, meId, aim, boat?, sea? }
    * players: interpolated snapshot entries, plus optional `castStart` (ms).
    * aim: null or { x, y, angle, power, range } for the local player's cast preview.
+   * boat (lake): { x, y, h, ph } while the boat is on the map.
+   * sea (voyage): { loc, time, event, sailing }.
    */
   draw(frame) {
+    if (this.sea) {
+      this.drawSeaFrame(frame);
+      return;
+    }
     const { ctx, canvas, camera: c } = this;
     const time = frame.time;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -112,7 +128,16 @@ export class Renderer {
     this.drawGlints(time);
     this.drawCurrent(time);
     this.drawZoneLabels();
+    // The visiting boat sits between the water and land layers, so it
+    // passes under the river bridge.
+    const boat = frame.boat?.x != null ? frame.boat : null;
+    if (boat) {
+      const moving = boat.ph === 'arriving' || boat.ph === 'departing';
+      if (moving) drawWake(ctx, boat, { length: BOAT.length, beam: BOAT.beam, speed: 0.8, time });
+      drawBoat(ctx, boat, { length: BOAT.length, beam: BOAT.beam, time, bob: moving ? 1.5 : 1 });
+    }
     this.terrain.draw(ctx, view, 'land', null);
+    if (boat?.ph === 'docked') drawGangplank(ctx, BOAT.landing.x + 26, boat.x - BOAT.beam / 2 + 4, boat.y);
     this.drawSurf(time);
     this.drawReeds(time);
     this.drawAreaLabels();
@@ -132,6 +157,45 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawMinimap(frame);
     this.terrain.prefetch(view, budget);
+  }
+
+  drawSeaFrame(frame) {
+    const { ctx, canvas, camera: c } = this;
+    const { time } = frame;
+    const sea = frame.sea ?? { loc: null, time: 'Afternoon', event: null, sailing: true };
+    const toWorld = () => ctx.setTransform(c.zoom, 0, 0, c.zoom, canvas.width / 2 - c.x * c.zoom, canvas.height / 2 - c.y * c.zoom);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#0c2a40';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    toWorld();
+    ctx.imageSmoothingQuality = 'high';
+    const view = this.viewRect(0);
+    this.sea.drawWater(ctx, view, time, sea);
+    for (const h of frame.hotspots) this.drawHotspot(h, time);
+
+    const pose = { x: SEA_BOAT.x, y: SEA_BOAT.y, h: 0 };
+    const size = { length: SEA_BOAT.length, beam: SEA_BOAT.beam };
+    if (sea.sailing) drawWake(ctx, pose, { ...size, speed: 1, time });
+    const evening = sea.time === 'Night' || sea.time === 'Sunset';
+    drawBoat(ctx, pose, { ...size, time, bob: sea.sailing ? 2.5 : 1, lights: evening });
+
+    this.updateAnims(frame.players);
+    for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
+    if (frame.aim) this.drawAim(frame.aim);
+    const sorted = [...frame.players].sort((a, b) => a.y - b.y);
+    for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
+
+    // Daylight, night and weather over the scene; lanterns shine through.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.sea.drawSky(ctx, canvas.width, canvas.height, time, sea);
+    toWorld();
+    if (evening) drawBoatLights(ctx, pose, size);
+
+    for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
+    for (const p of frame.players) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
+    for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
+    this.drawEffects(time);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   updateAnims(players) {
@@ -419,7 +483,8 @@ export class Renderer {
     ctx.moveTo(tx, ty - 3);
     ctx.lineTo(tx, ty + 3);
     ctx.stroke();
-    const label = zone ? zone.name : isWalkable(world, tx, ty) ? 'Dry land' : 'Out of reach';
+    const onBoat = world.kind === 'sea' && tx > 0 && ty > 0 && tx < world.width && ty < world.height;
+    const label = zone ? zone.name : onBoat ? 'The boat' : isWalkable(world, tx, ty) ? 'Dry land' : 'Out of reach';
     ctx.font = '700 11px system-ui, sans-serif';
     const w = ctx.measureText(label).width + 12;
     ctx.fillStyle = THEME.aim.pill;
@@ -527,6 +592,24 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(x0 + h.x * scale, y0 + h.y * scale, 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
+    }
+    const boat = frame.boat;
+    if (boat?.x != null) {
+      // The visiting boat: a small hull shape.
+      ctx.save();
+      ctx.translate(x0 + boat.x * scale, y0 + boat.y * scale);
+      ctx.rotate(boat.h);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#7a2e2e';
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(7 * dpr, 0);
+      ctx.lineTo(-5 * dpr, -3.5 * dpr);
+      ctx.lineTo(-5 * dpr, 3.5 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
     }
     for (const p of frame.players) {
       const self = p.id === frame.meId;

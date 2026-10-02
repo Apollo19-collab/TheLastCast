@@ -4,10 +4,11 @@ import http from 'node:http';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { MSG, TICK_RATE } from '../shared/constants.js';
-import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
+import { DEFAULT_LOCATION } from '../shared/world.js';
 import { SPECIES } from '../shared/fish.js';
 import { VERSION } from '../shared/version.js';
-import { Game } from './game.js';
+import { BOAT } from '../shared/voyage.js';
+import { Hub } from './hub.js';
 import { ProfileStore, newProfile } from './profiles.js';
 import { LoginLimiter } from './auth.js';
 import { serveStatic } from './static.js';
@@ -18,12 +19,14 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 50;
 const MAX_MESSAGES_PER_SECOND = 60;
 // Where player profiles are saved. On Railway, mount a volume here.
 const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data');
+// Minutes between boat visits (default 15). Lower it to try voyages locally;
+// it must leave room for the 3 minutes the boat spends arriving, docked and leaving.
+const BOAT_INTERVAL = Math.max(4, Number(process.env.BOAT_INTERVAL_MINUTES) || BOAT.interval / 60) * 60;
 
 const store = new ProfileStore(path.join(DATA_DIR, 'profiles.json'));
 await store.load();
 
-const world = LOCATIONS[DEFAULT_LOCATION];
-const game = new Game({ world, maxPlayers: MAX_PLAYERS, onProfileChange: () => store.markDirty() });
+const hub = new Hub({ maxPlayers: MAX_PLAYERS, boatInterval: BOAT_INTERVAL, onProfileChange: () => store.markDirty() });
 
 const online = new Map(); // profile id -> { player, ws }
 const loginLimiter = new LoginLimiter({ max: 10, windowMs: 10 * 60 * 1000 }); // failed logins per IP
@@ -73,7 +76,7 @@ async function authenticate(msg, ip) {
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, version: VERSION, players: game.players.size }));
+    res.end(JSON.stringify({ ok: true, version: VERSION, players: hub.playerCount }));
     return;
   }
   serveStatic(req, res);
@@ -122,7 +125,7 @@ wss.on('connection', (ws, req) => {
         sendJson(ws, { t: MSG.ERROR, message: result.error, expired: !!result.expired });
         return;
       }
-      if (game.players.size >= MAX_PLAYERS) {
+      if (hub.playerCount >= MAX_PLAYERS) {
         sendJson(ws, { t: MSG.ERROR, message: 'The lake is full. Try again soon.' });
         return;
       }
@@ -134,7 +137,7 @@ wss.on('connection', (ws, req) => {
       if (existing && profile.username) {
         // An account can only fish in one place at a time: the newest login wins.
         sendJson(existing.ws, { t: MSG.ERROR, message: 'You logged in from another window.', kicked: true });
-        game.removePlayer(existing.player.id);
+        hub.removePlayer(existing.player);
         online.delete(profile.id);
         existing.ws.close();
       } else if (existing) {
@@ -145,13 +148,14 @@ wss.on('connection', (ws, req) => {
       }
 
       // addPlayer sends the private PROFILE message; the client accepts it before WELCOME.
-      player = game.addPlayer(msg.name, (payload) => sendJson(ws, payload), profile);
+      player = hub.addPlayer(msg.name, (payload) => sendJson(ws, payload), profile);
       online.set(profile.id, { player, ws });
       ws.playerId = player.id;
       sendJson(ws, {
         t: MSG.WELCOME,
         id: player.id,
-        locationId: world.id,
+        locationId: DEFAULT_LOCATION,
+        room: hub.roomInfo(player),
         species: SPECIES,
         version: VERSION,
         username: profile.username,
@@ -166,31 +170,31 @@ wss.on('connection', (ws, req) => {
       ws.close();
       return;
     }
-    game.handleMessage(player, msg);
+    hub.handleMessage(player, msg);
   });
 
   ws.on('close', () => {
     if (!player) return;
-    game.removePlayer(player.id);
+    hub.removePlayer(player);
     if (online.get(player.profile.id)?.player === player) online.delete(player.profile.id);
   });
 });
 
-// Fixed-rate simulation loop; state is broadcast every tick.
+// Fixed-rate simulation loop. Each room's state goes to the players in it.
 let last = performance.now();
 setInterval(() => {
   const now = performance.now();
   const dt = Math.min(0.25, (now - last) / 1000);
   last = now;
-  game.tick(dt);
+  hub.tick(dt);
 
-  const events = game.drainEvents();
-  const snapshot = JSON.stringify(game.snapshot());
-  const eventPayloads = events.map((e) => JSON.stringify({ t: MSG.EVENT, ...e }));
-  for (const ws of wss.clients) {
-    if (!ws.playerId) continue;
-    for (const e of eventPayloads) sendJson(ws, e);
-    sendJson(ws, snapshot);
+  for (const room of hub.rooms()) {
+    const events = room.drainEvents().map((e) => JSON.stringify({ t: MSG.EVENT, ...e }));
+    const snapshot = JSON.stringify(room.snapshot());
+    for (const p of room.players.values()) {
+      for (const e of events) p.send(e);
+      p.send(snapshot);
+    }
   }
 }, 1000 / TICK_RATE);
 

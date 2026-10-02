@@ -129,3 +129,12 @@ test('accounts: sign up, wrong password, log in, session, single login, logout',
   assert.equal(again.messages.at(-1).expired, true);
   again.ws.close();
 });
+
+test('welcome says which room you are in, and lake snapshots include the boat', async () => {
+  const a = await join('Sailor');
+  assert.equal(a.room.room, 'lake');
+  const state = await waitFor(a, (m) => m.t === 'state' && m.boat);
+  assert.ok(['arriving', 'docked', 'departing', 'away'].includes(state.boat.ph));
+  assert.ok(state.boat.nd >= 0);
+  a.ws.close();
+});

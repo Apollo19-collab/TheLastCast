@@ -11,6 +11,7 @@ import { normalize } from '../server/profiles.js';
 import { ProfileStore } from '../server/profiles.js';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { SPECIES, fishDifficulty, strengthTier } from '../shared/fish.js';
+import { SEA_EVENTS, SEA_LOCATIONS, seaZone } from '../shared/voyage.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -273,7 +274,7 @@ test('late-game tackle is locked behind achievements', () => {
   assert.ok(locked.length > Object.keys(ITEMS).length / 2, `${locked.length} of ${Object.keys(ITEMS).length} locked`);
   const ids = new Set(ACHIEVEMENTS.map((a) => a.id));
   for (const it of locked) assert.ok(ids.has(it.unlock), `${it.name} -> ${it.unlock}`);
-  assert.equal(Object.keys(ITEMS).length, 36);
+  assert.equal(Object.keys(ITEMS).length, 38);
   for (const slot of SLOTS) assert.ok(Object.values(ITEMS).some((it) => it.slot === slot && it.price === 0), `free ${slot}`);
 });
 
@@ -316,9 +317,11 @@ test('unlocking achievements are not reachable in the first hour', () => {
     heavyweight: 34, // kg; a 35 kg fish is a rare roll
     hotspot_hopper: 150,
     bait_shop: 4500, // can't spend more than you've earned
-    collector: 24, // species
+    collector: 32, // species: ~24 at the lake, plus sea fish from a few voyages
     ghost_hunter: 0,
     living_legend: 1,
+    sea_legs: 4, // a boat every 15 minutes, so at most 4 voyages
+    old_salt: 220, // 4 voyages x 10 minutes of fishing, with fast-biting events
   };
   const gating = new Set(Object.values(ITEMS).map((it) => it.unlock).filter(Boolean));
   for (const id of gating) {
@@ -489,8 +492,11 @@ test('each zone has its own fish; drop-off gets deep-water species', () => {
   }
   assert.ok(fishIn('shallows').includes('koi') && !fishIn('deep').includes('koi'));
   assert.ok(fishIn('reeds').includes('muskie'));
-  // Every species is catchable somewhere and every zone entry is a real species.
+  // Every species is catchable somewhere (the lake, or at sea on a voyage)
+  // and every zone entry is a real species.
   const all = new Set(world.zones.flatMap((z) => Object.keys(z.fish)));
+  for (const id of Object.keys(SEA_LOCATIONS)) for (const f of Object.keys(seaZone(id, true).fish)) all.add(f);
+  for (const ev of Object.values(SEA_EVENTS)) for (const f of Object.keys(ev.mods.extraFish ?? {})) all.add(f);
   assert.deepEqual([...all].sort(), Object.keys(SPECIES).sort());
 });
 

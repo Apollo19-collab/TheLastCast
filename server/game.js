@@ -1,6 +1,7 @@
-// Authoritative game state for one fishing location (a "room").
-// Clients send intentions (inputs, cast, hook, reel); everything that matters
-// for scoring is decided here.
+// Authoritative game state for one fishing location (a "room"): the lake, or
+// one boat voyage out at sea. Clients send intentions (inputs, cast, hook,
+// reel); everything that matters for scoring is decided here. The Hub
+// (hub.js) owns all rooms and moves players between them.
 
 import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
@@ -8,6 +9,7 @@ import { ITEMS, computeStats } from '../shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
+import { Duels } from './duel.js';
 
 const PLAYER_COLORS = [
   '#e4572e', '#f3a712', '#a8c686', '#669bbc', '#c77dff',
@@ -22,21 +24,40 @@ export function sanitizeName(raw) {
   return name || null;
 }
 
+/** Player ids, shared by every room so a player keeps theirs when moving. */
+export function idSource() {
+  let next = 1;
+  return () => String(next++);
+}
+
 export class Game {
   /**
    * onProfileChange(player) is called whenever a player's persistent profile
    * changes (catch, purchase) so the caller can save it.
+   * kind: 'lake' (duels allowed) or 'voyage'.
+   * hooks (all optional):
+   *   onCatch(player, catchInfo)  after a fish is landed and rewarded
+   *   onLeave(player)             a player left this room or the game
+   *   snapshot()                  extra fields for every state snapshot
+   *   playerExtras(player)        extra fields for a player's snapshot entry
    */
-  constructor({ world, maxPlayers = 50, rng = Math.random, onProfileChange = () => {} }) {
+  constructor({ world, kind = 'lake', ids = idSource(), maxPlayers = 50, rng = Math.random, onProfileChange = () => {}, hooks = {} }) {
     this.world = world;
+    this.kind = kind;
+    this.ids = ids;
     this.onProfileChange = onProfileChange;
     this.maxPlayers = maxPlayers;
     this.rng = rng;
+    this.hooks = hooks;
     this.players = new Map();
     this.hotspots = [];
     this.events = [];
-    this.nextPlayerId = 1;
     this.nextHotspotId = 1;
+    // Fishing modifiers from special events at sea (see SEA_EVENTS in voyage.js).
+    this.mods = {};
+    // When set, nobody can cast and this is the reason (e.g. the boat is sailing).
+    this.fishingClosed = null;
+    this.duels = kind === 'lake' ? new Duels(this) : null;
     this.fillHotspots();
   }
 
@@ -44,7 +65,7 @@ export class Game {
 
   addPlayer(rawName, send, profile = newProfile()) {
     if (this.players.size >= this.maxPlayers) return null;
-    const id = String(this.nextPlayerId++);
+    const id = this.ids();
     const { spawn } = this.world;
     // Accounts always play under their username; guests pick a name each time.
     profile.name = profile.username || sanitizeName(rawName) || profile.name || `Angler ${id}`;
@@ -59,6 +80,10 @@ export class Game {
       line: newLine(),
       profile, // persistent: score, coins, tackle, achievements, index, history
       stats: computeStats(profile.equipped),
+      gear: null, // tackle override (duels); profile.equipped is never changed by it
+      duel: null,
+      aboard: false, // waiting on the boat at the lake
+      room: this,
       send,
     };
     this.players.set(id, player);
@@ -71,8 +96,36 @@ export class Game {
   removePlayer(id) {
     const player = this.players.get(id);
     if (!player) return;
-    this.players.delete(id);
+    this.detach(player);
     this.emitAll({ kind: 'leave', playerId: id, name: player.name });
+  }
+
+  /** Take a player out of this room (they may be moving to another one). */
+  detach(player) {
+    if (!this.players.has(player.id)) return;
+    this.duels?.playerLeft(player);
+    this.hooks.onLeave?.(player);
+    this.players.delete(player.id);
+    player.line = newLine();
+    player.input = { up: false, down: false, left: false, right: false };
+  }
+
+  /** Bring a player who was in another room into this one, at (x, y). */
+  attach(player, x, y) {
+    player.room = this;
+    player.x = x;
+    player.y = y;
+    player.line = newLine();
+    player.aboard = false;
+    this.players.set(player.id, player);
+  }
+
+  /** Why this player can't cast right now, or null if they can. */
+  castBlocked(player) {
+    if (this.fishingClosed) return this.fishingClosed;
+    if (player.aboard) return 'You are aboard the boat. Wait for it to sail, or press E to step off.';
+    if (player.duel?.phase === 'countdown') return 'The duel is about to start!';
+    return null;
   }
 
   handleMessage(player, msg) {
@@ -93,12 +146,24 @@ export class Game {
         cancel(this, player);
         break;
       case MSG.BUY:
+        if (this.tackleLocked(player)) return;
         this.buy(player, msg.item);
         break;
       case MSG.EQUIP:
+        if (this.tackleLocked(player)) return;
         this.equip(player, msg.item);
         break;
+      case MSG.DUEL:
+        this.duels?.handle(player, msg);
+        break;
     }
+  }
+
+  /** Duelists fish with matched tackle, so they can't change theirs. */
+  tackleLocked(player) {
+    if (!player.duel) return false;
+    this.emitTo(player, { kind: 'shop', ok: false, message: "You can't change tackle during a duel." });
+    return true;
   }
 
   // ---- progression -------------------------------------------------------------
@@ -180,9 +245,10 @@ export class Game {
 
   tick(dt) {
     this.updateHotspots(dt);
+    this.duels?.tick(dt);
     for (const p of this.players.values()) {
-      // Players stand still while their line is out.
-      if (p.line.state === FishingState.IDLE) {
+      // Players stand still while their line is out, or while aboard the boat.
+      if (p.line.state === FishingState.IDLE && !p.aboard) {
         const next = stepMovement(this.world, p, p.input, PLAYER_SPEED, dt);
         if (next.moved) {
           p.facing = Math.atan2(next.y - p.y, next.x - p.x);
@@ -218,9 +284,10 @@ export class Game {
   }
 
   randomOpenWater(margin) {
+    const area = this.world.hotspots.area ?? { x: 0, y: 0, w: this.world.width, h: this.world.height };
     for (let i = 0; i < 100; i++) {
-      const x = this.rng() * this.world.width;
-      const y = this.rng() * this.world.height;
+      const x = area.x + this.rng() * area.w;
+      const y = area.y + this.rng() * area.h;
       const clear = [[0, 0], [margin, 0], [-margin, 0], [0, margin], [0, -margin]]
         .every(([ox, oy]) => isWater(this.world, x + ox, y + oy));
       if (clear) return { x, y };
@@ -274,8 +341,11 @@ export class Game {
         sc: p.profile.score,
         c: p.profile.catches,
         best: p.profile.best,
-        g: [p.profile.equipped.rod, p.profile.equipped.reel, p.profile.equipped.line, p.profile.equipped.bait], // drawn on their angler
+        g: (({ rod, reel, line, bait }) => [rod, reel, line, bait])(p.gear ?? p.profile.equipped), // drawn on their angler
+        ...this.hooks.playerExtras?.(p),
       };
+      if (p.aboard) s.ab = 1;
+      if (p.duel) Object.assign(s, this.duels.snapshotFor(p));
       if (line.state !== FishingState.IDLE) {
         s.bx = r1(line.x);
         s.by = r1(line.y);
@@ -292,6 +362,7 @@ export class Game {
       t: MSG.STATE,
       players,
       hotspots: this.hotspots.map((h) => ({ id: h.id, x: r1(h.x), y: r1(h.y), r: h.r, life: r1(h.life) })),
+      ...this.hooks.snapshot?.(),
     };
   }
 }

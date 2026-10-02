@@ -13,6 +13,7 @@ export const ROD_LOOK = {
   muskyrod: { color: '#1b4332', tip: '#40916c', length: 31, width: 3.2, wraps: '#ffb703' },
   master: { color: '#f1f1f1', tip: '#ffffff', length: 35, width: 2.2, wraps: '#d4af37', glow: '#ffe8a3' },
   sturgeonpole: { color: '#4a2c17', tip: '#7f5539', length: 33, width: 3.8, wraps: '#d4a373' },
+  deepsea: { color: '#023e8a', tip: '#90e0ef', length: 30, width: 3.4, wraps: '#ffffff' },
   legendrod: { color: '#3c096c', tip: '#c77dff', length: 37, width: 2.4, wraps: '#ffd166', glow: '#c77dff' },
 };
 
@@ -49,6 +50,7 @@ export const BAIT_LOOK = {
   goldlure: { kind: 'lure', top: '#ffd166', bottom: '#d4af37', glow: '#ffe8a3', icon: 'goldlure' },
   minnow: { kind: 'float', top: '#adb5bd', bottom: '#f8f9fa', icon: 'minnow' },
   glowjig: { kind: 'lure', top: '#b9fbc0', bottom: '#38b000', glow: '#b9fbc0', icon: 'glowjig' },
+  squid: { kind: 'float', top: '#ff9f1c', bottom: '#f1faee', icon: 'squid' },
   mythicfly: { kind: 'lure', top: '#e0aaff', bottom: '#7b2cbf', glow: '#e0aaff', icon: 'mythicfly' },
 };
 
@@ -348,6 +350,19 @@ const BAIT_ICONS = {
       g.stroke();
     }
     hook(g, 24, 32);
+  },
+  squid(g) {
+    // A pale strip of squid with a few tentacle ends.
+    blob(g, 30, 26, 10, '#fff1e6', '#f4a7a0', 1.6);
+    g.strokeStyle = '#f4a7a0';
+    g.lineWidth = 3;
+    for (let i = 0; i < 4; i++) {
+      g.beginPath();
+      g.moveTo(22 + i * 5, 32);
+      g.quadraticCurveTo(18 + i * 6, 44, 24 + i * 6, 52);
+      g.stroke();
+    }
+    hook(g, 40, 34);
   },
   mythicfly(g, B) {
     g.fillStyle = B.bottom;

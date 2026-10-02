@@ -100,6 +100,41 @@ export const SOUNDS = {
     k.tone({ freq: 160, dur: 0.14, gain: 0.08, type: 'square' });
   },
 
+  // The boat's horn: two long low blasts.
+  horn(k) {
+    for (const at of [0, 1.1]) {
+      k.tone({ freq: 110, dur: 0.9, gain: 0.16, at, attack: 0.08, type: 'sawtooth', reverb: 0.8 });
+      k.tone({ freq: 165, dur: 0.9, gain: 0.08, at, attack: 0.08, type: 'triangle', reverb: 0.8 });
+    }
+  },
+
+  // A duel starts: a boxing-ring bell.
+  duelStart(k) {
+    for (const at of [0, 0.32]) {
+      k.tone({ freq: 1250, dur: 0.9, gain: 0.14, at, reverb: 0.5 });
+      k.tone({ freq: 2510, dur: 0.6, gain: 0.05, at, reverb: 0.5 });
+    }
+  },
+
+  // Winning a duel: a short brass-like fanfare.
+  duelWin(k) {
+    [[NOTE.C5, 0, 0.18], [NOTE.C5, 0.18, 0.12], [NOTE.G5, 0.32, 0.18], [NOTE.C6, 0.52, 0.7]].forEach(([f, at, dur]) =>
+      k.tone({ freq: f, dur, gain: 0.14, at, type: 'sawtooth', reverb: 0.4 }));
+  },
+
+  // A special event at sea: a rising shimmer.
+  seaEvent(k) {
+    [NOTE.C6, NOTE.E6, NOTE.G6, NOTE.C7, NOTE.E7].forEach((f, i) =>
+      k.tone({ freq: f, dur: 0.6, gain: 0.08, at: i * 0.07, type: 'triangle', reverb: 0.9 }));
+    k.noise({ dur: 1.2, gain: 0.08, filter: 'highpass', freq: 4000, attack: 0.3, reverb: 0.6 });
+  },
+
+  // A crew mission is complete.
+  mission(k) {
+    k.tone({ freq: NOTE.G5, dur: 0.2, gain: 0.14, type: 'triangle' });
+    k.tone({ freq: NOTE.C6, dur: 0.45, gain: 0.14, at: 0.12, type: 'triangle', reverb: 0.5 });
+  },
+
   // ---- ambience one-shots (scheduled at random by the engine) ----
 
   // Small wave slapping the shore.
@@ -113,6 +148,15 @@ export const SOUNDS = {
     const chirps = 2 + Math.floor(Math.random() * 4);
     for (let i = 0; i < chirps; i++) {
       k.tone({ freq: base, to: base * (1.2 + Math.random() * 0.4), dur: 0.07, gain: 0.025, at: i * 0.11, reverb: 0.5 });
+    }
+  },
+
+  // A gull crying overhead, out at sea.
+  gull(k) {
+    const f = 1500 + Math.random() * 400;
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      k.tone({ freq: f, to: f * 0.7, dur: 0.22, gain: 0.03, at: i * 0.26, type: 'sawtooth', reverb: 0.6 });
     }
   },
 

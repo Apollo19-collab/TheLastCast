@@ -34,12 +34,15 @@ export const MSG = Object.freeze({
   BUY: 'buy',
   EQUIP: 'equip',
   LOGOUT: 'logout',
+  DUEL: 'duel', // { op: 'challenge' | 'accept' | 'decline' | 'forfeit', target?, from? }
+  BOARD: 'board', // board or leave the boat while it is docked
   // server -> client
   WELCOME: 'welcome',
   STATE: 'state',
   PROFILE: 'profile', // private: coins, gear, fish index, catch history
   EVENT: 'event',
   ERROR: 'error',
+  ROOM: 'room', // you moved between the lake and a boat voyage
 });
 
 /** Cast distance for a power value in [0, 1] with a rod of the given range. */

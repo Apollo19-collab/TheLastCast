@@ -1,10 +1,14 @@
-// DOM-based HUD: player panel, leaderboard, activity feed, status line and
-// the menu (gear shop, fish index, catch history).
+// DOM-based HUD: player panel, leaderboard, activity feed, status line, the
+// menu (tackle, fish index, achievements, history, options, changelog), and
+// the multiplayer bits: duel invites and scoreboard, the boat timer, the
+// voyage panel, banners and results.
 
 import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
 import { ITEMS, SLOTS, SLOT_LABELS, computeStats, itemsForSlot } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
+import { SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
+import { DUEL } from '/shared/duel.js';
 import { VOLUME_CHANNELS } from './audio.js';
 import { fishImageURL } from './gfx/fishArt.js';
 import { gearIconURL } from './gfx/gearArt.js';
@@ -25,6 +29,11 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+/** Replace an element's children, skipping null/false ones. */
+function fill(el, ...children) {
+  el.replaceChildren(...children.flat().filter((c) => c != null && c !== false));
+}
+
 function timeAgo(ms) {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
   if (s < 60) return `${s}s ago`;
@@ -34,6 +43,12 @@ function timeAgo(ms) {
 }
 
 const num = (n) => Math.round(n).toLocaleString();
+
+/** 125 -> "2:05" */
+export function clock(seconds) {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 /** "Trout & salmon ×1.8, Steelhead ×1.5" */
 function affinityText(affinity) {
@@ -172,7 +187,9 @@ export class UI {
         ['Cast', 'Hold Space or left mouse, release to cast'],
         ['Hook', 'Space / click when the bobber dips'],
         ['Reel', 'Hold; release when the fish pulls'],
-        ['Reel in', 'Esc, E or right-click'],
+        ['Reel in', 'Esc or right-click'],
+        ['Interact', 'E: board the boat, or challenge a nearby angler to a duel'],
+        ['Duels', 'Y accept · N decline a challenge'],
         ['Menus', 'G tackle · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
@@ -293,7 +310,10 @@ export class UI {
     const { index } = this.profile;
     const ids = Object.keys(SPECIES);
     const found = ids.filter((id) => index[id]).length;
-    const zonesFor = (id) => this.world.zones.filter((z) => z.fish[id]).map((z) => z.name);
+    const zonesFor = (id) => [
+      ...this.world.zones.filter((z) => z.fish[id]).map((z) => z.name),
+      ...seaLocationsFor(id).map((where) => `At sea: ${where}`),
+    ];
     return [
       h('p', { class: 'menu-note' }, h('b', {}, `${found} / ${ids.length}`), ' species discovered.'),
       h('div', { class: 'index-grid' }, ids.map((id) => {
@@ -363,15 +383,17 @@ export class UI {
     const rarity = RARITY[ev.rarity] || RARITY.common;
     el.className = `catch-popup rarity-${ev.rarity}`;
     el.style.setProperty('--rarity', rarity.color);
-    el.replaceChildren(
+    fill(el,
       h('div', { class: 'catch-rays' }),
       h('div', { class: 'catch-title' }, ev.isNew ? 'New species!' : 'You caught'),
       h('img', { class: 'catch-fish', src: fishImageURL(ev.species), alt: '' }),
       h('div', { class: 'catch-name' }, ev.speciesName),
       h('div', { class: 'catch-meta' },
         h('span', { class: 'catch-rarity' }, rarity.label),
-        ` · ${ev.kg} kg · +${ev.points} pts`,
-        ev.hotspot ? ' · hotspot bonus' : ''),
+        ` · ${ev.kg} kg · +${ev.points} ${ev.duel ? 'duel pts' : 'pts'}`,
+        ev.hotspot ? ' · hotspot bonus' : '',
+        ev.event ? ' · event bonus' : ''),
+      ev.duel ? h('div', { class: 'catch-note' }, 'Duel catch: counts for the duel only') : null,
     );
     el.hidden = false;
     el.style.animation = 'none';
@@ -401,11 +423,15 @@ export class UI {
     $('aim-zone').textContent = zoneName ? `Aiming at: ${zoneName}` : '';
   }
 
-  updateLeaderboard(players, meId) {
-    const sorted = [...players].sort((a, b) => b.sc - a.sc).slice(0, 10);
-    const key = sorted.map((p) => `${p.id}:${p.sc}:${p.c}:${p.best?.points}`).join('|');
+  /** room: 'lake' ranks by score; 'voyage' ranks by points this voyage. */
+  updateLeaderboard(players, meId, room = 'lake') {
+    const atSea = room === 'voyage';
+    const value = (p) => (atSea ? p.vp ?? 0 : p.sc);
+    const sorted = [...players].sort((a, b) => value(b) - value(a)).slice(0, 10);
+    const key = room + sorted.map((p) => `${p.id}:${value(p)}:${p.c}:${p.best?.points}:${p.du ?? ''}:${p.ab ?? ''}`).join('|');
     if (key === this.lastBoard) return;
     this.lastBoard = key;
+    $('leaderboard-title').textContent = atSea ? 'Crew · this voyage' : 'Anglers';
 
     const list = $('leaderboard-list');
     list.replaceChildren(...sorted.map((p) => {
@@ -419,11 +445,210 @@ export class UI {
       name.textContent = p.name;
       const score = document.createElement('span');
       score.className = 'lb-score';
-      score.textContent = `${p.sc} pts · ${p.c}🐟`;
+      score.textContent = atSea ? `${num(value(p))} pts` : `${p.sc} pts · ${p.c}🐟`;
+      if (p.du) name.textContent += ' ⚔';
+      if (p.ab) name.textContent += ' ⛴';
       li.append(dot, name, score);
       if (p.best) li.title = `Best: ${SPECIES[p.best.species]?.name} ${p.best.kg} kg`;
       return li;
     }));
+  }
+
+  // ---- multiplayer: prompts, duels, the boat and voyages ------------------------------
+
+  /** A hint under your angler, e.g. "E: board the boat". null hides it. */
+  prompt(text) {
+    const el = $('prompt');
+    if (!text) { el.hidden = true; return; }
+    if (el.textContent !== text) el.textContent = text;
+    el.hidden = false;
+  }
+
+  /** The boat line in the player panel (lake only). */
+  setBoatLine(text, highlight = false) {
+    const el = $('boat-line');
+    el.textContent = text || '';
+    el.classList.toggle('highlight', highlight);
+  }
+
+  /** Someone challenged you: Accept (Y) / Decline (N), with a countdown. */
+  showInvite(ev, onAnswer) {
+    const el = $('dialog');
+    const tackle = Object.values(DUEL.loadout).map((id) => ITEMS[id].name).join(', ');
+    const bar = h('div', { class: 'bar' }, h('div', { class: 'invite-time', style: { width: '100%', animationDuration: `${ev.seconds}s` } }));
+    fill(el,
+      h('div', { class: 'dialog-title' }, '⚔ Duel challenge'),
+      h('div', { class: 'dialog-main' }, `${ev.name} challenges you to a fishing duel!`),
+      h('div', { class: 'dialog-text' },
+        `${Math.round(ev.duration / 60)} minutes, most points wins. Both of you fish with the same tackle: ${tackle}. `
+        + `Fish caught in the duel give no rewards; the winner gets ${num(ev.prize)} coins.`),
+      bar,
+      h('div', { class: 'dialog-buttons' },
+        h('button', { class: 'btn buy', onclick: () => onAnswer(true) }, 'Accept ', h('kbd', {}, 'Y')),
+        h('button', { class: 'btn', onclick: () => onAnswer(false) }, 'Decline ', h('kbd', {}, 'N'))),
+    );
+    el.hidden = false;
+    clearTimeout(this.inviteTimer);
+    this.inviteTimer = setTimeout(() => this.hideInvite(), ev.seconds * 1000);
+  }
+
+  hideInvite() {
+    clearTimeout(this.inviteTimer);
+    $('dialog').hidden = true;
+    document.activeElement?.blur?.();
+  }
+
+  get inviteOpen() {
+    return !$('dialog').hidden;
+  }
+
+  /**
+   * The top-centre panel. duel: { opponent, me, them, seconds, live, onForfeit }
+   * or voyage: see voyagePanel. null hides it.
+   */
+  duelPanel(d) {
+    const el = $('event-panel');
+    if (!d) { this.hidePanel('duel'); return; }
+    const armed = performance.now() < (this.forfeitArmedUntil ?? 0); // clicked Forfeit once
+    const key = `duel|${d.opponent}|${d.me}|${d.them}|${d.seconds}|${d.live}|${armed}`;
+    if (this.panelKey === key) return;
+    this.panelKey = key;
+    this.panelKind = 'duel';
+    const leading = d.me > d.them ? 'ahead' : d.me < d.them ? 'behind' : 'level';
+    el.className = `panel event-panel duel ${leading}`;
+    el.style.removeProperty('--accent');
+    fill(el,
+      h('div', { class: 'ep-head' },
+        h('span', { class: 'ep-title' }, '⚔ Duel'),
+        h('span', { class: 'ep-time' }, d.live ? clock(d.seconds) : `Starts in ${d.seconds}`)),
+      h('div', { class: 'duel-score' },
+        h('div', { class: 'duel-side me' }, h('div', { class: 'duel-name' }, 'You'), h('div', { class: 'duel-pts' }, num(d.me))),
+        h('div', { class: 'duel-vs' }, 'vs'),
+        h('div', { class: 'duel-side' }, h('div', { class: 'duel-name' }, d.opponent), h('div', { class: 'duel-pts' }, num(d.them)))),
+      h('div', { class: 'ep-note' }, 'Matched tackle · duel fish give no rewards'),
+      h('button', {
+        class: `btn small${armed ? ' danger' : ''}`,
+        onclick: () => {
+          if (performance.now() < (this.forfeitArmedUntil ?? 0)) {
+            this.forfeitArmedUntil = 0;
+            d.onForfeit();
+          } else {
+            this.forfeitArmedUntil = performance.now() + 3000;
+            this.panelKey = null; // redraw with the confirm text
+          }
+        },
+      }, armed ? 'Click again to forfeit' : 'Forfeit'),
+    );
+    el.hidden = false;
+  }
+
+  /**
+   * v: { phase, stopIndex, stops: [{ loc, time }], timeLeft, next, event, eventLeft,
+   *      crew, missions: [{ text, progress, goal }], myPoints, rank, crewSize }
+   */
+  voyagePanel(v) {
+    const el = $('event-panel');
+    if (!v) { this.hidePanel('voyage'); return; }
+    const key = JSON.stringify(v);
+    if (this.panelKey === key) return;
+    this.panelKey = key;
+    this.panelKind = 'voyage';
+    const stop = v.stops[v.stopIndex];
+    const loc = stop && SEA_LOCATIONS[stop.loc];
+    const ev = v.event ? SEA_EVENTS[v.event] : null;
+    let title;
+    let time;
+    if (v.phase === 'fishing') {
+      title = `Stop ${v.stopIndex + 1}/${v.stops.length} · ${loc.name}`;
+      time = clock(v.timeLeft);
+    } else if (v.phase === 'results') {
+      title = 'Voyage complete';
+      time = 'Heading home';
+    } else {
+      title = `Sailing to ${SEA_LOCATIONS[v.next]?.name ?? 'the fishing grounds'}`;
+      time = clock(v.timeLeft);
+    }
+    el.className = `panel event-panel voyage${ev ? ' event-on' : ''}`;
+    if (ev) el.style.setProperty('--accent', ev.color);
+    else el.style.removeProperty('--accent');
+    fill(el,
+      h('div', { class: 'ep-head' }, h('span', { class: 'ep-title' }, `⛴ ${title}`), h('span', { class: 'ep-time' }, time)),
+      h('div', { class: 'route' }, v.stops.map((s, i) => h('span', {
+        class: `route-stop${i < v.stopIndex || (i === v.stopIndex && v.phase !== 'fishing') ? ' done' : ''}${i === v.stopIndex && v.phase === 'fishing' ? ' here' : ''}`,
+        title: `${SEA_LOCATIONS[s.loc].name} (${s.time})`,
+      }, `${SEA_LOCATIONS[s.loc].name}`, h('small', {}, s.time)))),
+      ev ? h('div', { class: 'ep-event' }, h('b', {}, `${ev.name}! `), `${clock(v.eventLeft)} left · ${ev.desc}`) : null,
+      !ev && v.phase === 'fishing' ? h('div', { class: 'ep-note' }, `${loc.desc} Special event here: ${SEA_EVENTS[loc.event].name}.`) : null,
+      h('div', { class: 'ep-stats' }, `You: ${num(v.myPoints)} pts (#${v.rank} of ${v.crewSize}) · Crew: ${num(v.crew)} pts`),
+      h('div', { class: 'missions' }, v.missions.map((m) => h('div', { class: `mission${m.progress >= m.goal ? ' done' : ''}` },
+        h('span', {}, m.progress >= m.goal ? '✓ ' : '○ ', m.text),
+        h('span', { class: 'mission-count' }, `${Math.min(m.progress, m.goal)}/${m.goal}`)))),
+    );
+    el.hidden = false;
+  }
+
+  hidePanel(kind) {
+    if (this.panelKind !== kind) return;
+    this.panelKind = null;
+    this.panelKey = null;
+    $('event-panel').hidden = true;
+  }
+
+  /** A big message in the middle of the screen for a moment. */
+  banner(title, subtitle = '', color = '#ffd166', ms = 3200) {
+    const el = $('banner');
+    el.style.setProperty('--accent', color);
+    fill(el, h('div', { class: 'banner-title' }, title), subtitle ? h('div', { class: 'banner-sub' }, subtitle) : null);
+    el.hidden = false;
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => { el.hidden = true; }, ms);
+  }
+
+  /** End-of-voyage summary. */
+  showVoyageResults(r) {
+    const rows = r.ranking.map((x) => h('tr', { class: x.me ? 'me' : '' },
+      h('td', {}, `#${x.rank}`), h('td', {}, x.name), h('td', {}, num(x.points)), h('td', {}, String(x.catches))));
+    const b = r.breakdown;
+    this.showResults([
+      h('h2', {}, '⛴ Voyage complete!'),
+      h('p', { class: 'results-big' }, `You placed #${r.rank} and earned `, h('b', {}, `${num(r.bonus)} bonus coins`), '.'),
+      h('p', { class: 'menu-note' },
+        `${num(b.points)} for your points · ${num(b.missions)} for crew missions${b.rank ? ` · ${num(b.rank)} for your placing` : ''}`),
+      h('table', { class: 'history results-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Angler'), h('th', {}, 'Points'), h('th', {}, 'Fish'))),
+        h('tbody', {}, rows)),
+      h('p', {}, `Crew total: `, h('b', {}, `${num(r.crewTotal)} pts`)),
+      h('div', { class: 'missions' }, r.missions.map((m) => h('div', { class: `mission${m.done ? ' done' : ''}` }, m.done ? '✓ ' : '✗ ', m.text))),
+      h('p', { class: 'menu-note' }, 'The boat is heading back to Mirror Lake.'),
+    ]);
+  }
+
+  /** Duel result card. */
+  showDuelResult(ev) {
+    const title = ev.result === 'win' ? '🏆 You won the duel!' : ev.result === 'lose' ? 'You lost the duel' : 'The duel is a draw';
+    const why = ev.forfeit === 'them' ? `${ev.opponent} forfeited.` : ev.forfeit === 'you' ? 'You forfeited.' : '';
+    this.showResults([
+      h('h2', {}, title),
+      h('p', { class: 'results-big' }, `You ${num(ev.myScore)} – ${num(ev.theirScore)} ${ev.opponent}`),
+      why ? h('p', {}, why) : null,
+      ev.prize ? h('p', { class: 'results-prize' }, `+${num(ev.prize)} coins`) : null,
+      ev.noPrize ? h('p', { class: 'menu-note' }, ev.noPrize) : null,
+      h('p', { class: 'menu-note' }, 'Your own tackle is back on.'),
+    ]);
+  }
+
+  showResults(children) {
+    const box = $('results-body');
+    box.replaceChildren(...children.filter(Boolean), h('button', { class: 'btn buy', onclick: () => this.hideResults() }, 'Close'));
+    $('results').hidden = false;
+  }
+
+  hideResults() {
+    $('results').hidden = true;
+    document.activeElement?.blur?.();
   }
 
   feed(text, color) {

@@ -1,8 +1,8 @@
 # The Last Cast
 
-**Version 0.7.2** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.8.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
-A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time.
+A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
 ## How to play
 
@@ -13,7 +13,9 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Cast | Hold `Space` or left mouse to charge power, release to cast |
 | Hook a fish | Press `Space` / click when the bobber dips and shows **!** |
 | Reel | Hold `Space` / mouse. **Release when the fish pulls** or the line snaps |
-| Reel in / give up | `Esc`, `E` or right-click |
+| Reel in / give up | `Esc` or right-click |
+| Board the boat / challenge an angler to a duel | `E` when you're next to the boat or another angler |
+| Accept / decline a duel | `Y` / `N` |
 | Tackle / Fish Index / Achievements / Catch History | `G` / `I` / `T` / `H` (or the buttons under your score) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
@@ -29,7 +31,7 @@ Mirror Lake is a big lake with a shore you can walk all the way around. The came
 | **River Mouth** (east) | River Mouth, including the river channel under the bridge | Mooneye, Steelhead, Chinook Salmon; legendary *The River King* |
 | **Lily Marsh** (west) | Lily Marsh (fish it from the boardwalk) | Brown Bullhead, Bowfin, Chain Pickerel; legendary *The Marsh Queen* |
 
-The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. There are 36 species in total. The Fish Index shows where each one lives.
+The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. There are 36 lake species, plus 21 more out at sea. The Fish Index shows where each one lives.
 
 **Where you stand and cast matters:**
 
@@ -39,17 +41,48 @@ The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnos
 
 The aim line previews where your cast will land and which zone it hits.
 
+### Duels
+
+Walk up to another angler at the lake and press `E` to challenge them. They have 20 seconds to accept (`Y`) or decline (`N`).
+
+- After a 5-second countdown you both fish for **3 minutes**. The most points wins. Points come from each fish's species, rarity and size, so where you cast still matters.
+- **Matched tackle:** both duelists use the same loadout (Carbon Rod, Baitcaster, Fluorocarbon, Spinner Lure). Your own tackle isn't touched and comes back when the duel ends. You can't change tackle during a duel.
+- **No rewards for duel fish:** they don't give coins or score, and don't go in your Fish Index, history or achievements.
+- **The winner gets 1,000 coins.** The winner must have landed at least one fish, and the same two anglers can only win the prize once every 10 minutes, so it can't be farmed by trading wins. A draw pays nothing. Leaving or forfeiting gives the win to your opponent.
+- A scoreboard with the timer appears at the top of the screen. Everyone at the lake sees the result in their feed.
+
+### Boat voyages (based on Ocean Fishing in Final Fantasy XIV)
+
+Every 15 minutes (on the quarter hour) a boat sails in through the **River Mouth**, under the bridge and across the lake, and docks beside the **South Beach dock**. Walk up to it and press `E` to board. You have **2 minutes**, and you can step off again (`E`) before it leaves. Then it sails back out with everyone aboard.
+
+- **The voyage:** a trawler visits **4 of 8 sea locations**, picked at random, from Morning through Afternoon and Sunset to Night. You fish for 2½ minutes at each stop and sail between them. Walk around the deck and cast over the rail.
+- **Special events:** once per stop, that location's event kicks in for 50 seconds:
+
+  | Location | Event | Effect |
+  | --- | --- | --- |
+  | Kelp Forest | Feeding Frenzy | Bites 3× faster |
+  | Coral Gardens | Spectral Current | Rare fish 4× as likely, catches score 1.5× |
+  | Whale Road | Whale Song | Reel 60% faster, line tension builds half as fast |
+  | Sunken Galleon | Treasure Tide | Sunken treasure chests can be hooked (big coins) |
+  | Storm Banks | Squall | Fish fight 30% harder, catches score 2× |
+  | Glass Shallows | Golden Hour | Catches score 2×, faster bites |
+  | Abyssal Trench | Leviathan Rising | **The Leviathan** can bite (only now), better rare odds |
+  | Moonlit Reef | Glowtide | Bites 2× faster, rare fish 2× as likely |
+
+- **Sea fish:** herring, mackerel, cod, sea bass and signature fish for each location (sheephead, parrotfish, bluefin tuna, grouper, swordfish, flounder, oarfish, opah). Each location also has a **legendary** that mostly bites during its event.
+- **Rewards:** sea fish pay coins and score as normal. The voyage also keeps a **points table**, and the crew shares **3 missions** (e.g. "Catch 20 fish", "Land 2 rare or legendary fish"). At the end everyone gets bonus coins: 25% of their voyage points, plus 100 per completed mission, plus 300/150/75 for the top three. Then the boat brings you back to the dock.
+
 ### Progression
 
 - **Coins.** Every catch earns coins equal to its points. Score is never spent and drives the leaderboard; coins are what you spend.
-- **Tackle** (`G`). 36 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
+- **Tackle** (`G`). 38 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
   - **Rods:** cast range and power. Power multiplies line strength.
   - **Reels:** reel speed, and drag (how fast tension eases).
   - **Lines:** strength, but strong lines can make fish shy. Fluorocarbon and stealth leaders get more bites.
   - **Bait & lures:** bite speed and rare-fish odds.
-  - **Specialties:** some items favour certain fish. Fly rods and salmon roe for trout, corn for carp, nightcrawlers for catfish, steel leaders and frog poppers for pike, glow jigs for deep-water fish, centerpin reels for river fish.
-  - **Unlocks:** 16 items can be bought from the start. The other 20, most of the late-game tackle, unlock through achievements.
-- **Achievements** (`T`). 22 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
+  - **Specialties:** some items favour certain fish. Fly rods and salmon roe for trout, corn for carp, nightcrawlers for catfish, steel leaders and frog poppers for pike, glow jigs for deep-water fish, centerpin reels for river fish, the Deep Sea Rod and Squid Strips for sea fish.
+  - **Unlocks:** 16 items can be bought from the start. The other 22, most of the late-game tackle, unlock through achievements.
+- **Achievements** (`T`). 27 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, duels, voyages, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
@@ -137,6 +170,7 @@ See `.env.example`. None are required locally.
 | `HOST` | `0.0.0.0` | Interface to bind |
 | `MAX_PLAYERS` | `50` | Max simultaneous players |
 | `DATA_DIR` | `./data` | Where player profiles are saved (`profiles.json`) |
+| `BOAT_INTERVAL_MINUTES` | `15` | Minutes between boat visits (minimum 4). Lower it to try voyages locally. |
 
 ## Deploying to Railway
 
@@ -175,8 +209,12 @@ railway domain
 ```
 server/
   index.js      HTTP server, WebSocket server, fixed 20 Hz game loop, rate limiting
-  game.js       Game (one lake): players, movement, hotspots, snapshots, events
+  hub.js        Owns every room (the lake + voyages at sea) and moves players between them
+  game.js       Game (one room): players, movement, hotspots, snapshots, events
   fishing.js    Per-player fishing state machine: cast → wait → bite → reel → catch
+  duel.js       Duels: challenges, matched tackle, scoring, the prize
+  boat.js       The boat's visits to the lake and boarding
+  voyage.js     One voyage at sea: stops, special events, missions, payouts
   profiles.js   Profiles + accounts, login sessions and guest tokens, saved to a JSON file
   auth.js       Password hashing (scrypt), token hashing, validation, login rate limiting
   static.js     Static file serving for client/ and shared/
@@ -187,6 +225,8 @@ shared/         Imported by BOTH server and browser (plain ES modules)
   gear.js       Tackle catalog (36 items), loadout -> stats, specialties
   achievements.js  Achievements, their goals/rewards, and progress from lifetime counters
   version.js    Game version + in-game changelog (keep package.json and CHANGELOG.md in sync)
+  duel.js       Duel rules: length, prize, matched tackle
+  voyage.js     The boat's schedule and route, sea locations, events, missions, the sea world
 client/
   index.html, css/style.css
   js/main.js           Wires everything together; sends intentions, never outcomes
@@ -203,6 +243,8 @@ client/
   js/gfx/characters.js Anglers, rods (by tier), lines, bobbers/lures, name tags
   js/gfx/fishArt.js    Fish sprite generator + per-species look (FISH_ART)
   js/gfx/gearArt.js    How each gear tier looks, plus the shop icons
+  js/gfx/boat.js       The boat (lake and sea), its wake and the gangplank
+  js/gfx/sea.js        The open sea: per-location water and scenery, events, time of day
   js/gfx/noise.js      Deterministic noise for textures
   js/ui.js             DOM HUD + menu (gear shop, fish index, catch history)
 test/                  node:test suites
@@ -213,6 +255,7 @@ test/                  node:test suites
 - The **server is authoritative**. Clients only send intentions: held movement keys, cast angle and power, hook, and reel on/off. The server moves players, checks where casts land, rolls bite timing and the species (hidden from clients until caught), runs the reel fight and awards points. A client cannot teleport, pick its fish or edit its score.
 - Every tick (20/s) the server broadcasts a state snapshot. One-off events (catches, snapped lines, joins) go to everyone, and private feedback (bites, cast results) goes only to the player concerned.
 - Other players are rendered ~100 ms in the past and interpolated so movement looks smooth. Your own player follows the newest snapshot.
+- **Rooms.** The lake is one room and every voyage at sea is another, each a `Game` with its own world. The `Hub` moves players between them, and each room's snapshots and events only go to the players in it. The boat's timetable follows the wall clock, so it keeps to schedule across restarts.
 
 ## Extending the game
 
@@ -224,7 +267,8 @@ The first version is deliberately small. Here is where planned features plug in:
 | Painted art / sprite sheets | Each art module has one entry point to swap: `fishSprite(id)` in `gfx/fishArt.js`, `spritePools()` in `gfx/sprites.js`, `drawAngler()` in `gfx/characters.js`, `gearIconURL()` in `gfx/gearArt.js`. Put image files in `client/assets/`; they're served automatically. |
 | More animations | Animation state lives in `Renderer.updateAnims()` (walk cycle) and `drawEffects()` (splashes, fish leaps); add new effect types there. |
 | More places on this lake | Add `land`/`structures`/`zones` rectangles and an `areas` entry in `shared/world.js`. The renderer, minimap and HUD pick them up automatically, and a test checks that everything is reachable on foot. |
-| More lakes | Add an entry to `LOCATIONS` in `shared/world.js`. Then run one `Game` per location in `server/index.js` (rooms) and let the client pick one. `welcome` already sends `locationId`. |
+| More lakes | Add an entry to `LOCATIONS` in `shared/world.js` and create another `Game` room for it in `server/hub.js`. Players already move between rooms (see `Hub.startVoyage()` / `endVoyage()`), and the client switches world and renderer on `MSG.ROOM`. |
+| More sea locations / events | Add to `SEA_LOCATIONS` and `SEA_EVENTS` in `shared/voyage.js` (fish, water colours, event modifiers), plus scenery in `client/js/gfx/sea.js`. Event modifiers (`biteSpeed`, `rareBoost`, `reelSpeed`, `tension`, `fight`, `points`, `extraFish`) are applied in `server/fishing.js`. |
 | More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables in `shared/world.js`. A test checks that every species lives somewhere. |
 | Password reset / email | Add an `email` field when registering in `ProfileStore.register()` and a reset-token flow. You'd need an email provider. |
 | More tackle | Add an entry to `ITEMS` in `shared/gear.js` (optionally with `unlock: '<achievement id>'`) and a look in `client/js/gfx/gearArt.js`. New stats go in `computeStats()` and are applied in `server/fishing.js`. |

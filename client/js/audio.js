@@ -10,7 +10,7 @@ import { SOUNDS } from './sounds.js';
 const MUTE_KEY = 'lastcast.muted';
 const VOLUME_KEY = 'lastcast.volume';
 // Player-facing volume channels, 0-100.
-export const VOLUME_CHANNELS = { master: 'Master', effects: 'Effects', ambience: 'Lake ambience' };
+export const VOLUME_CHANNELS = { master: 'Master', effects: 'Effects', ambience: 'Ambience' };
 const DEFAULT_VOLUME = { master: 80, effects: 100, ambience: 70 };
 const HEARING_RANGE = 900; // world units: sounds further away than this are silent
 const PAN_RANGE = 500; // world units to the side for a fully panned sound
@@ -41,6 +41,18 @@ export class AudioEngine {
     this.listener = { x: 0, y: 0 }; // usually the local player
     this.nextClick = 0;
     this.strain = null;
+    this.scene = 'lake'; // 'lake' or 'sea': picks the ambience
+  }
+
+  /** Switch the ambience between the lake and the open sea. */
+  setScene(scene) {
+    this.scene = scene;
+    if (!this.amb) return;
+    const now = this.ctx.currentTime;
+    const sea = scene === 'sea';
+    this.amb.wash.gain.gain.setTargetAtTime(sea ? 0.38 : 0.22, now, 1);
+    this.amb.wash.filter.frequency.setTargetAtTime(sea ? 520 : 380, now, 1);
+    this.amb.wind.gain.gain.setTargetAtTime(sea ? 0.03 : 0.012, now, 1);
   }
 
   unlock() {
@@ -281,15 +293,19 @@ export class AudioEngine {
     const wind = loop(this.whiteNoise, 'bandpass', 1400, 0.4, 0.012);
     lfo(0.04, 600, wind.filter.frequency);
 
-    // Occasional sounds, scattered left and right.
+    this.amb = { wash, lapping, wind };
+    this.setScene(this.scene);
+
+    // Occasional sounds, scattered left and right. Some only at the lake or at sea.
     this.scatter('lap', 1.5, 4.5, 2);
-    this.scatter('bird', 6, 16, 4);
-    this.scatter('loon', 25, 60, 12);
+    this.scatter('bird', 6, 16, 4, 'lake');
+    this.scatter('loon', 25, 60, 12, 'lake');
+    this.scatter('gull', 5, 14, 3, 'sea');
   }
 
-  scatter(name, minGap, maxGap, firstDelay) {
+  scatter(name, minGap, maxGap, firstDelay, scene = null) {
     const tick = () => {
-      if (!this.muted) this.playOn(this.ambience, SOUNDS[name], rand(0.7, 1.2), rand(-0.8, 0.8), {});
+      if (!this.muted && (!scene || scene === this.scene)) this.playOn(this.ambience, SOUNDS[name], rand(0.7, 1.2), rand(-0.8, 0.8), {});
       setTimeout(tick, rand(minGap, maxGap) * 1000);
     };
     setTimeout(tick, firstDelay * 1000);

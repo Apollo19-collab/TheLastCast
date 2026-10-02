@@ -33,6 +33,7 @@ export const ITEMS = Object.freeze({
   muskyrod: item('rod', 'Heavy Musky Rod', 700, 'Built for toothy fish that fight dirty.', { range: 320, power: 1.7, affinity: { pike: 1.5 }, unlock: 'toothy' }),
   master: item('rod', "Master's Rod", 1200, 'Reaches the far side of any hotspot.', { range: 400, power: 1.5, unlock: 'seasoned' }),
   sturgeonpole: item('rod', 'Sturgeon Pole', 1500, 'A tree trunk with guides. For the true giants.', { range: 330, power: 2.0, affinity: { ancient: 1.6, catfish: 1.4 }, unlock: 'deep_diver' }),
+  deepsea: item('rod', 'Deep Sea Rod', 900, 'A stout boat rod for big ocean fish.', { range: 360, power: 1.8, affinity: { sea: 1.4 }, unlock: 'sea_legs' }),
   legendrod: item('rod', "Legend's Rod", 3000, 'Said to have landed the Pale Ghost itself.', { range: 440, power: 1.8, rare: 1.25, unlock: 'living_legend' }),
 
   // ---- reels ----
@@ -65,6 +66,7 @@ export const ITEMS = Object.freeze({
   goldlure: item('bait', 'Golden Lure', 450, 'Legends have been seen chasing it.', { bite: 1.6, rare: 2.0, unlock: 'dedicated' }),
   minnow: item('bait', 'Live Minnow', 600, 'Nothing beats the real thing.', { bite: 1.8, rare: 1.6, unlock: 'bait_shop' }),
   glowjig: item('bait', 'Glow Jig', 800, 'Shines in the dark deep water.', { bite: 1.4, rare: 2.2, affinity: { ancient: 1.5, whitefish: 1.5 }, unlock: 'deep_diver' }),
+  squid: item('bait', 'Squid Strips', 500, "Tough, smelly bait that sea fish can't ignore.", { bite: 1.4, rare: 1.5, affinity: { sea: 1.8 }, unlock: 'old_salt' }),
   mythicfly: item('bait', 'Mythic Fly', 3500, 'Tied from a legend\'s feather.', { bite: 1.5, rare: 3.0, unlock: 'living_legend' }),
 });
 
