@@ -4,10 +4,11 @@
 //
 // Every function takes a `ctx` (the Game) that provides: world, rng(),
 // hotspotAt(x, y), countBobbersNear(player, x, y, r), emitTo(player, ev),
-// emitAll(ev), profileChanged(player).
+// emitAll(ev), profileChanged(player), checkAchievements(player).
 //
-// Gear modifies the line through `player.stats` (see shared/gear.js):
-// castRange, lineStrength, reelSpeed, biteSpeed, rareBoost.
+// Tackle modifies the line through `player.stats` (see computeStats in
+// shared/gear.js): castRange, lineStrength, reelSpeed, drag, biteSpeed,
+// rareBoost and affinity (specialist bonuses for some fish).
 
 import {
   BITE_WINDOW,
@@ -17,6 +18,8 @@ import {
   castDistance,
 } from '../shared/constants.js';
 import { SPECIES, scoreCatch } from '../shared/fish.js';
+import { affinityFor } from '../shared/gear.js';
+import { areaAt } from '../shared/world.js';
 import { HISTORY_LIMIT } from './profiles.js';
 import { zoneAt } from '../shared/world.js';
 
@@ -72,6 +75,7 @@ export function hook(ctx, player) {
     fight: Math.min(1, s.fight * (0.85 + 0.3 * sizeFrac)),
     reelSpeed: player.stats.reelSpeed,
     lineStrength: player.stats.lineStrength,
+    drag: player.stats.drag,
   });
   ctx.emitTo(player, { kind: 'hooked' });
 }
@@ -128,7 +132,7 @@ function land(ctx, player) {
 function bite(ctx, player) {
   const line = player.line;
   const zone = zoneById(ctx.world, line.zoneId);
-  const species = pickSpecies(ctx.rng, zone, line.hotspot, player.stats.rareBoost);
+  const species = pickSpecies(ctx.rng, zone, line.hotspot, player.stats);
   const s = SPECIES[species];
   // Squared roll skews towards smaller fish; trophies are uncommon.
   const kg = s.minKg + (s.maxKg - s.minKg) * ctx.rng() ** 2;
@@ -146,10 +150,12 @@ function baitBoost(rarity, rareBoost) {
   return 1;
 }
 
-export function pickSpecies(rng, zone, hotspot, rareBoost = 1) {
+/** mods: tackle stats ({ rareBoost, affinity }); only those two are used here. */
+export function pickSpecies(rng, zone, hotspot, mods = {}) {
+  const rareBoost = mods.rareBoost ?? 1;
   const entries = Object.entries(zone.fish).map(([id, w]) => {
     const { rarity } = SPECIES[id];
-    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost);
+    const boost = (hotspot ? HOTSPOT_RARITY_BOOST[rarity] : 1) * baitBoost(rarity, rareBoost) * affinityFor(mods, id);
     return [id, w * boost];
   });
   const total = entries.reduce((sum, [, w]) => sum + w, 0);
@@ -169,6 +175,7 @@ function fight(ctx, player, dt) {
   const f = line.fight;
   const reelSpeed = line.reelSpeed ?? 1;
   const lineStrength = line.lineStrength ?? 1;
+  const drag = line.drag ?? 1;
 
   line.pullTimer -= dt;
   if (line.pullTimer <= 0) {
@@ -181,11 +188,14 @@ function fight(ctx, player, dt) {
     line.tension += (dt * (line.pulling ? 0.35 + 0.9 * f : 0.08)) / lineStrength;
   } else {
     line.progress -= dt * (line.pulling ? 0.04 + 0.12 * f : 0.015);
-    line.tension = Math.max(0, line.tension - dt * 0.7);
+    line.tension = Math.max(0, line.tension - dt * 0.7 * drag);
   }
 
   if (line.tension >= 1) {
     resetLine(player);
+    player.profile.counters.snaps += 1;
+    ctx.checkAchievements(player);
+    ctx.profileChanged(player);
     ctx.emitAll({ kind: 'snap', playerId: player.id, name: player.name });
   } else if (line.progress >= 1) {
     landCatch(ctx, player);
@@ -217,8 +227,10 @@ function landCatch(ctx, player) {
   };
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
+  countCatch(ctx, player, fish, s, zone, hotspot, points);
 
   resetLine(player);
+  ctx.checkAchievements(player);
   ctx.profileChanged(player);
   ctx.emitAll({
     kind: 'catch',
@@ -233,4 +245,20 @@ function landCatch(ctx, player) {
     hotspot: !!hotspot,
     isNew,
   });
+}
+
+/** Lifetime counters that achievements measure. */
+function countCatch(ctx, player, fish, species, zone, hotspot, points) {
+  const c = player.profile.counters;
+  const bump = (group, key) => { c[group][key] = (c[group][key] || 0) + 1; };
+  c.catches += 1;
+  c.coinsEarned += points;
+  if (hotspot) c.hotspotCatches += 1;
+  if (species.rarity === 'legendary') c.legendaryCatches += 1;
+  if (fish.kg >= 10) c.bigFish += 1;
+  c.heaviest = Math.max(c.heaviest, fish.kg);
+  bump('family', species.family);
+  bump('zone', zone.id);
+  const area = areaAt(ctx.world, player.x, player.y);
+  if (area) bump('area', area.id);
 }

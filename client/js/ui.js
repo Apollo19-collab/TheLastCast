@@ -1,8 +1,10 @@
 // DOM-based HUD: player panel, leaderboard, activity feed, status line and
 // the menu (gear shop, fish index, catch history).
 
-import { RARITY, SPECIES } from '/shared/fish.js';
-import { GEAR, GEAR_SLOTS, nextTier } from '/shared/gear.js';
+import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
+import { ITEMS, SLOTS, SLOT_LABELS, computeStats, itemsForSlot } from '/shared/gear.js';
+import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
+import { CHANGELOG, VERSION } from '/shared/version.js';
 import { VOLUME_CHANNELS } from './audio.js';
 import { fishImageURL } from './gfx/fishArt.js';
 import { gearIconURL } from './gfx/gearArt.js';
@@ -31,20 +33,46 @@ function timeAgo(ms) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-function statLine(slot, tier) {
-  if (slot === 'rod') return `Cast range ${tier.castRange} · Line strength ×${tier.lineStrength}`;
-  if (slot === 'reel') return `Reel speed ×${tier.reelSpeed}`;
-  return `Bite speed ×${tier.biteSpeed} · Rare odds ×${tier.rareBoost}`;
+const num = (n) => Math.round(n).toLocaleString();
+
+/** "Trout & salmon ×1.8, Steelhead ×1.5" */
+function affinityText(affinity) {
+  return Object.entries(affinity || {})
+    .map(([k, m]) => `${FAMILIES[k] || SPECIES[k]?.name || k} ×${Math.round(m * 100) / 100}`)
+    .join(', ');
+}
+
+/** One line describing what an item does. */
+function itemStats(it) {
+  const parts = [];
+  if (it.slot === 'rod') parts.push(`Cast ${it.range}`, `Power ×${it.power}`);
+  if (it.slot === 'reel') parts.push(`Reel speed ×${it.speed}`);
+  if (it.slot === 'line') parts.push(`Strength ×${it.strength}`);
+  if (it.drag) parts.push(`Drag ×${it.drag}`);
+  if (it.slot === 'bait') parts.push(`Bites ×${it.bite}`, `Rare odds ×${it.rare}`);
+  else {
+    if (it.bite) parts.push(`Bites ×${it.bite}`);
+    if (it.rare) parts.push(`Rare odds ×${it.rare}`);
+  }
+  const aff = affinityText(it.affinity);
+  if (aff) parts.push(`Favours ${aff}`);
+  return parts.join(' · ');
 }
 
 export class UI {
   /**
-   * world: location data (for fish-index hints). onBuy(slot): purchase callback.
-   * audio: the AudioEngine, for the Options tab.
+   * world: location data (for fish-index hints). onBuy(itemId) / onEquip(itemId):
+   * tackle callbacks. audio: the AudioEngine, for the Options tab.
    */
-  constructor({ world, onBuy, audio }) {
+  constructor({ world, onBuy, onEquip = () => {}, audio }) {
     this.world = world;
     this.onBuy = onBuy;
+    this.onEquip = onEquip;
+    this.tackleSlot = 'rod';
+    for (const el of document.querySelectorAll('.version-label')) {
+      el.textContent = `v${VERSION} · What's new`;
+      el.addEventListener('click', () => this.openMenu('news'));
+    }
     this.audio = audio;
     this.flashUntil = 0;
     this.lastBoard = '';
@@ -95,10 +123,18 @@ export class UI {
 
   renderMenu() {
     const body = $('menu-body');
-    if (!this.profile && this.menuTab !== 'options') { body.replaceChildren(h('p', {}, 'Loading...')); return; }
     if (this.menuTab === 'options') { body.replaceChildren(...this.renderOptions()); return; }
-    const render = { gear: () => this.renderGear(), index: () => this.renderIndex(), history: () => this.renderHistory() };
+    if (this.menuTab === 'news') { body.replaceChildren(...this.renderChangelog()); return; }
+    if (!this.profile) { body.replaceChildren(h('p', {}, 'Join the lake to see this.')); return; }
+    const scroll = body.scrollTop;
+    const render = {
+      gear: () => this.renderTackle(),
+      index: () => this.renderIndex(),
+      history: () => this.renderHistory(),
+      achievements: () => this.renderAchievements(),
+    };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
+    body.scrollTop = scroll; // keep your place when the profile updates
   }
 
   setStats(profile) {
@@ -137,39 +173,120 @@ export class UI {
         ['Hook', 'Space / click when the bobber dips'],
         ['Reel', 'Hold; release when the fish pulls'],
         ['Reel in', 'Esc, E or right-click'],
-        ['Menus', 'G gear · I fish index · H history · O options'],
+        ['Menus', 'G tackle · I fish index · H history · T achievements · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];
   }
 
-  renderGear() {
-    const { coins, gear } = this.profile;
+  // ---- tackle: loadout + every item, equip / buy / locked -----------------------
+
+  renderTackle() {
+    const p = this.profile;
+    const stats = computeStats(p.equipped);
+    const owned = new Set(p.inventory);
+    const loadout = h('div', { class: 'loadout' }, SLOTS.map((slot) => {
+      const id = p.equipped[slot];
+      return h('button', {
+        class: `loadout-slot${slot === this.tackleSlot ? ' active' : ''}`,
+        onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
+      },
+      h('img', { src: gearIconURL(id), alt: '' }),
+      h('span', { class: 'loadout-label' }, SLOT_LABELS[slot].split(' ')[0]),
+      h('span', { class: 'loadout-name' }, ITEMS[id].name));
+    }));
+    const aff = affinityText(stats.affinity);
+    const summary = h('div', { class: 'loadout-stats' },
+      `Cast ${stats.castRange} · Line strength ×${stats.lineStrength} · Reel ×${stats.reelSpeed} · Drag ×${stats.drag}`
+      + ` · Bites ×${stats.biteSpeed} · Rare odds ×${stats.rareBoost}`,
+      aff ? h('div', {}, `Specialties: ${aff}`) : null);
+
+    const list = itemsForSlot(this.tackleSlot).sort((a, b) => a.price - b.price).map((it) => {
+      let action;
+      if (p.equipped[it.slot] === it.id) action = h('span', { class: 'tag equipped' }, 'Equipped');
+      else if (owned.has(it.id)) action = h('button', { class: 'btn', onclick: () => this.onEquip(it.id) }, 'Equip');
+      else if (it.unlock && !p.achievements[it.unlock]) {
+        const a = ACHIEVEMENT_BY_ID[it.unlock];
+        const pr = progressOf(p, a);
+        action = h('div', { class: 'locked' },
+          h('div', {}, '🔒 ', h('b', {}, a.name)),
+          h('div', { class: 'bar small' }, h('div', { style: { width: `${pr.fraction * 100}%` } })),
+          h('div', { class: 'locked-progress' }, `${num(pr.value)} / ${num(pr.goal)}${a.unit ? ` ${a.unit}` : ''}`));
+      } else {
+        action = h('button', { class: 'btn buy', disabled: p.coins < it.price, onclick: () => this.onBuy(it.id) }, `Buy · ${num(it.price)}`);
+      }
+      return h('div', { class: `item-row${owned.has(it.id) ? ' owned' : ''}` },
+        h('img', { class: 'gear-icon', src: gearIconURL(it.id), alt: '' }),
+        h('div', { class: 'item-text' },
+          h('div', { class: 'item-name' }, it.name),
+          h('div', { class: 'item-desc' }, it.desc),
+          h('div', { class: 'gear-stats' }, itemStats(it))),
+        action);
+    });
+
     return [
-      h('p', { class: 'menu-note' }, h('b', {}, `${coins} coins`), '. Every catch earns coins equal to its points.'),
-      ...GEAR_SLOTS.map((slot) => {
-        const tiers = GEAR[slot].tiers;
-        const current = tiers[gear[slot]];
-        const next = nextTier(gear, slot);
-        return h('div', { class: 'gear-card' },
-          h('div', { class: 'gear-head' },
-            h('span', { class: 'gear-slot' }, GEAR[slot].label),
-            h('span', { class: 'gear-tier' }, `Tier ${gear[slot] + 1}/${tiers.length}`)),
-          h('div', { class: 'gear-current' },
-            h('img', { class: 'gear-icon', src: gearIconURL(slot, gear[slot]), alt: '' }),
-            h('div', {},
-              h('div', { class: 'gear-name' }, current.name),
-              h('div', { class: 'gear-stats' }, statLine(slot, current)))),
-          next
-            ? h('div', { class: 'gear-next' },
-              h('img', { class: 'gear-icon small', src: gearIconURL(slot, gear[slot] + 1), alt: '' }),
-              h('div', { class: 'gear-next-text' },
-                h('div', {}, 'Next: ', h('b', {}, next.name)),
-                h('div', { class: 'gear-stats' }, `${statLine(slot, next)}. ${next.desc}`)),
-              h('button', { disabled: coins < next.price, onclick: () => this.onBuy(slot) }, `Buy · ${next.price}`))
-            : h('div', { class: 'gear-next maxed' }, 'Fully upgraded'));
+      h('p', { class: 'menu-note' }, h('b', {}, `${num(p.coins)} coins`), '. Mix and match: equip any rod, reel, line and bait you own.'),
+      loadout,
+      summary,
+      h('div', { class: 'slot-tabs' }, SLOTS.map((slot) => h('button', {
+        class: slot === this.tackleSlot ? 'active' : '',
+        onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
+      }, SLOT_LABELS[slot]))),
+      ...list,
+    ];
+  }
+
+  // ---- achievements --------------------------------------------------------------------
+
+  renderAchievements() {
+    const p = this.profile;
+    const earned = ACHIEVEMENTS.filter((a) => p.achievements[a.id]).length;
+    return [
+      h('p', { class: 'menu-note' }, h('b', {}, `${earned} / ${ACHIEVEMENTS.length}`), ' achievements earned. Many unlock new tackle in the shop.'),
+      ...ACHIEVEMENTS.map((a) => {
+        const pr = progressOf(p, a);
+        const when = p.achievements[a.id];
+        const unlocks = unlocksFor(a.id).map((id) => ITEMS[id].name);
+        return h('div', { class: `ach${pr.done ? ' done' : ''}` },
+          h('div', { class: 'ach-icon' }, pr.done ? '🏆' : '🎣'),
+          h('div', { class: 'ach-body' },
+            h('div', { class: 'ach-head' },
+              h('span', { class: 'ach-name' }, a.name),
+              h('span', { class: 'ach-count' }, pr.done && when ? `Earned ${new Date(when).toLocaleDateString()}` : `${num(pr.value)} / ${num(pr.goal)}${a.unit ? ` ${a.unit}` : ''}`)),
+            h('div', { class: 'ach-desc' }, a.desc),
+            h('div', { class: 'bar' }, h('div', { style: { width: `${pr.fraction * 100}%` } })),
+            h('div', { class: 'ach-reward' },
+              `Reward: ${num(a.coins)} coins`,
+              unlocks.length ? h('span', { class: 'ach-unlocks' }, ` · Unlocks ${unlocks.join(', ')}`) : null)));
       }),
     ];
+  }
+
+  // ---- changelog -------------------------------------------------------------------------
+
+  renderChangelog() {
+    return [
+      h('p', { class: 'menu-note' }, `You're playing The Last Cast `, h('b', {}, `v${VERSION}`), '.'),
+      ...CHANGELOG.map((e) => h('div', { class: 'release' },
+        h('div', { class: 'release-head' },
+          h('span', { class: 'release-version' }, `v${e.version}`),
+          h('span', { class: 'release-title' }, e.title),
+          h('span', { class: 'release-date' }, e.date)),
+        h('ul', {}, e.changes.map((c) => h('li', {}, c))))),
+    ];
+  }
+
+  /** A small notice in the corner, e.g. "Achievement unlocked". */
+  toast({ title, name, detail }) {
+    const el = h('div', { class: 'toast' },
+      h('div', { class: 'toast-icon' }, '🏆'),
+      h('div', {},
+        h('div', { class: 'toast-title' }, title),
+        h('div', { class: 'toast-name' }, name),
+        detail ? h('div', { class: 'toast-detail' }, detail) : null));
+    $('toasts').append(el);
+    setTimeout(() => el.classList.add('leaving'), 6500);
+    setTimeout(() => el.remove(), 7000);
   }
 
   renderIndex() {

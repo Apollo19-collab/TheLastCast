@@ -13,7 +13,9 @@
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { defaultGear } from '../shared/gear.js';
+import { ITEMS, STARTER, starterInventory } from '../shared/gear.js';
+import { newCounters } from '../shared/achievements.js';
+import { SPECIES } from '../shared/fish.js';
 import {
   TOKEN_RE, checkPassword, checkUsername, hashPassword, hashToken, newToken, verifyPassword,
 } from './auth.js';
@@ -32,17 +34,67 @@ export function newProfile(name = 'Angler') {
     coins: 0,
     catches: 0,
     best: null, // { species, kg, points }
-    gear: defaultGear(), // slot -> owned tier index
+    inventory: starterInventory(), // owned item ids (see shared/gear.js)
+    equipped: { ...STARTER }, // slot -> item id
+    achievements: {}, // achievement id -> time earned
+    counters: newCounters(), // lifetime stats that achievements measure
     index: {}, // species id -> { count, bestKg, firstAt }
     history: [], // newest first: { species, kg, points, zone, hotspot, at }
     createdAt: Date.now(),
   };
 }
 
-// Fill in fields added in later versions so old save files keep working.
-function normalize(saved) {
+// Tiered gear from versions before 0.7, by slot and tier.
+const OLD_TIERS = {
+  rod: ['willow', 'fiberglass', 'carbon', 'master'],
+  reel: ['rusty', 'spinning', 'baitcaster', 'tournament'],
+  bait: ['bread', 'worms', 'spinner', 'goldlure'],
+};
+
+/** Fill in fields added in later versions so old save files keep working. */
+export function normalize(saved) {
   const base = newProfile(saved.name);
-  return { ...base, ...saved, gear: { ...base.gear, ...saved.gear } };
+  const p = { ...base, ...saved, counters: { ...base.counters, ...saved.counters } };
+  if (saved.gear && !saved.inventory) {
+    // 0.2-0.6: { rod: tier, reel: tier, bait: tier }. Keep everything bought
+    // (even items that now need an achievement) and equip the best of each.
+    const owned = new Set(starterInventory());
+    let spent = 0;
+    for (const [slot, tiers] of Object.entries(OLD_TIERS)) {
+      const tier = Math.min(saved.gear[slot] | 0, tiers.length - 1);
+      for (let i = 0; i <= tier; i++) {
+        owned.add(tiers[i]);
+        spent += ITEMS[tiers[i]].price;
+      }
+      p.equipped[slot] = tiers[tier];
+    }
+    p.inventory = [...owned];
+    p.counters.coinsSpent = spent;
+  }
+  delete p.gear;
+  if (!saved.counters) backfillCounters(p);
+  p.inventory = p.inventory.filter((id) => ITEMS[id]);
+  for (const [slot, id] of Object.entries(STARTER)) {
+    if (!p.inventory.includes(id)) p.inventory.push(id);
+    if (ITEMS[p.equipped[slot]]?.slot !== slot || !p.inventory.includes(p.equipped[slot])) p.equipped[slot] = id;
+  }
+  return p;
+}
+
+/** Rebuild what we can of the lifetime counters from the Fish Index. */
+function backfillCounters(p) {
+  const c = p.counters;
+  c.catches = p.catches || 0;
+  c.coinsEarned = p.score || 0;
+  for (const [id, e] of Object.entries(p.index || {})) {
+    const s = SPECIES[id];
+    if (!s) continue;
+    c.family[s.family] = (c.family[s.family] || 0) + e.count;
+    if (s.rarity === 'legendary') c.legendaryCatches += e.count;
+    c.heaviest = Math.max(c.heaviest, e.bestKg || 0);
+    if ((e.bestKg || 0) >= 10) c.bigFish += 1; // at least the best one
+  }
+  for (const h of p.history || []) if (h.hotspot) c.hotspotCatches += 1;
 }
 
 export class ProfileStore {

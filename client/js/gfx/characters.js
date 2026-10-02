@@ -1,9 +1,9 @@
 // Anglers, rods, lines and bobbers, drawn top-down in world space.
 // Each player's look (skin, hat) is derived from their id so it's stable and
-// the same for everyone; rod, reel and bobber come from their gear tiers.
+// the same for everyone; rod, reel, line and bait come from their equipped tackle.
 
 import { FishingState } from '/shared/constants.js';
-import { BAIT_LOOK, REEL_LOOK, ROD_LOOK, look } from './gearArt.js';
+import { lookOf } from './gearArt.js';
 import { seeded, seedFrom } from './noise.js';
 
 const CAST_ANIM_MS = 600;
@@ -27,8 +27,9 @@ function styleFor(id) {
   return styleCache.get(id);
 }
 
+/** Equipped item ids from a snapshot entry (g = [rod, reel, line, bait]). */
 export function gearOf(p) {
-  return { rod: p.g?.[0] ?? 0, reel: p.g?.[1] ?? 0, bait: p.g?.[2] ?? 0 };
+  return { rod: p.g?.[0], reel: p.g?.[1], line: p.g?.[2], bait: p.g?.[3] };
 }
 
 function shade(hex, amt) {
@@ -41,7 +42,7 @@ function shade(hex, amt) {
 
 /** Rod butt, bend control point and tip in world space. */
 export function rodGeometry(p, time) {
-  const L = look(ROD_LOOK, gearOf(p).rod);
+  const L = lookOf('rod', gearOf(p).rod);
   const dx = Math.cos(p.f);
   const dy = Math.sin(p.f);
   const px = -dy;
@@ -244,7 +245,7 @@ function drawHat(ctx, st) {
 
 function drawRod(ctx, p, time) {
   const { base, ctrl, tip, look: L, dir, perp } = rodGeometry(p, time);
-  const R = look(REEL_LOOK, gearOf(p).reel);
+  const R = lookOf('reel', gearOf(p).reel);
   // Cork handle behind the hands.
   ctx.lineCap = 'round';
   ctx.strokeStyle = '#a47148';
@@ -286,13 +287,18 @@ function drawRod(ctx, p, time) {
   // Reel hanging off the side of the handle; its handle spins while reeling.
   const rx = base.x + perp.x * 4;
   const ry = base.y + perp.y * 4;
+  if (R.glow) {
+    ctx.shadowColor = R.glow;
+    ctx.shadowBlur = 5;
+  }
   ctx.fillStyle = R.body;
   ctx.strokeStyle = R.rim;
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.arc(rx, ry, 3.3, 0, Math.PI * 2);
+  ctx.arc(rx, ry, R.big ? 4.2 : 3.3, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.shadowBlur = 0;
   const spin = p.s === FishingState.REELING ? time / 60 : 0.8;
   ctx.strokeStyle = R.rim;
   ctx.beginPath();
@@ -307,14 +313,21 @@ export function drawLineAndBobber(ctx, p, time) {
   const { tip } = rodGeometry(p, time);
   const b = bobberPos(p, time);
   const tight = p.s === FishingState.REELING;
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 0.8;
+  const gear = gearOf(p);
+  const Ln = lookOf('line', gear.line);
+  if (Ln.glow) {
+    ctx.shadowColor = Ln.glow;
+    ctx.shadowBlur = 4;
+  }
+  ctx.strokeStyle = Ln.color;
+  ctx.lineWidth = Ln.width;
   ctx.beginPath();
   ctx.moveTo(tip.x, tip.y);
   ctx.quadraticCurveTo((tip.x + b.x) / 2, (tip.y + b.y) / 2 + (tight ? 0 : 16), b.x, b.y);
   ctx.stroke();
+  ctx.shadowBlur = 0;
 
-  const B = look(BAIT_LOOK, gearOf(p).bait);
+  const B = lookOf('bait', gear.bait);
   const inWater = !b.inAir;
   if (inWater && p.s === FishingState.WAITING) {
     // Gentle rings spreading from the float.
@@ -339,7 +352,7 @@ export function drawLineAndBobber(ctx, p, time) {
     }
   }
 
-  if (B.lure && (p.s === FishingState.REELING || b.inAir)) drawLure(ctx, b, B, time);
+  if (B.kind === 'lure' && (p.s === FishingState.REELING || b.inAir)) drawLure(ctx, b, B, time);
   else drawFloat(ctx, b, B, p.s === FishingState.BITE);
 
   if (p.s === FishingState.BITE) {

@@ -3,7 +3,8 @@
 
 import { FishingState, MSG, castDistance } from '/shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
-import { gearStats } from '/shared/gear.js';
+import { computeStats } from '/shared/gear.js';
+import { VERSION } from '/shared/version.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
@@ -19,7 +20,12 @@ let world = LOCATIONS[DEFAULT_LOCATION];
 let renderer = new Renderer(canvas, world);
 const net = new Connection();
 const audio = new AudioEngine();
-const ui = new UI({ world, audio, onBuy: (slot) => net.send({ t: MSG.BUY, slot }) });
+const ui = new UI({
+  world,
+  audio,
+  onBuy: (item) => net.send({ t: MSG.BUY, item }),
+  onEquip: (item) => net.send({ t: MSG.EQUIP, item }),
+});
 const buffer = new SnapshotBuffer(100);
 ui.setSoundButton(audio.muted, () => ui.setSoundButton(audio.toggleMute()));
 
@@ -37,7 +43,7 @@ let meId = null;
 let input = null;
 let charge = null; // { start } while the cast button is held
 let reelSent = false;
-let stats = gearStats(null); // my gear stats, from my latest profile
+let stats = computeStats(null); // my tackle stats, from my latest profile
 const castStarts = new Map(); // player id -> time their current cast began
 const lastStates = new Map(); // player id -> last seen fishing state
 const selfPos = { x: world.spawn.x, y: world.spawn.y, ready: false };
@@ -100,6 +106,16 @@ net.on(MSG.WELCOME, (msg) => {
   ui.feed('Welcome to Mirror Lake! Different waters hold different fish.');
   if (msg.guest) ui.feed('You are already playing in another tab, so this tab is a guest and its progress is not saved.', '#f9c74f');
   if (!msg.username && !msg.guest) ui.feed('Playing as a guest. Sign up to keep your progress on any device.', '#a9d6e5');
+  if (msg.version && msg.version !== VERSION) {
+    ui.feed(`A new version (v${msg.version}) is available. Reload the page to update.`, '#f9c74f');
+  }
+  // Show what's new once after each update.
+  try {
+    if (localStorage.getItem('lastcast.seenVersion') !== VERSION) {
+      localStorage.setItem('lastcast.seenVersion', VERSION);
+      ui.openMenu('news');
+    }
+  } catch { /* storage blocked */ }
   input = new Input(canvas, {
     onMoveChange: (move) => net.send({ t: MSG.INPUT, ...move }),
     onActionDown,
@@ -115,7 +131,7 @@ net.on(MSG.WELCOME, (msg) => {
 });
 
 net.on(MSG.PROFILE, (profile) => {
-  stats = gearStats(profile.gear);
+  stats = computeStats(profile.equipped);
   ui.updateProfile(profile);
 });
 
@@ -220,6 +236,15 @@ net.on(MSG.EVENT, (ev) => {
       ui.flash(ev.message, 2500);
       ui.feed(ev.message, ev.ok ? '#7bd389' : '#ff8f8f');
       audio.play(ev.ok ? 'coin' : 'error');
+      break;
+    case 'achievement': {
+      const detail = [`+${ev.coins} coins`, ev.unlocks.length ? `Unlocked: ${ev.unlocks.join(', ')}` : ''].filter(Boolean).join(' · ');
+      ui.toast({ title: 'Achievement unlocked', name: ev.name, detail });
+      audio.play('achievement');
+      break;
+    }
+    case 'achievementAll':
+      ui.feed(`${mine ? 'You' : ev.name} earned the "${ev.achievement}" achievement!`, '#ffd166');
       break;
     case 'snap':
       ui.feed(`${mine ? 'Your' : `${ev.name}'s`} line snapped!`, '#ff6b6b');

@@ -21,13 +21,16 @@
       <div id="me-location"></div>
       <div id="aim-zone"></div>
       <div class="menu-buttons">
-        <button data-tab="gear" title="Gear shop (G)">Gear <kbd>G</kbd></button>
+        <button data-tab="gear" title="Tackle shop and loadout (G)">Tackle <kbd>G</kbd></button>
         <button data-tab="index" title="Fish index (I)">Fish Index <kbd>I</kbd></button>
+        <button data-tab="achievements" title="Achievements (T)">Achievements <kbd>T</kbd></button>
         <button data-tab="history" title="Catch history (H)">History <kbd>H</kbd></button>
         <button data-tab="options" title="Options (O)">Options <kbd>O</kbd></button>
         <button id="sound-toggle" type="button" title="Sound on/off (M)">Sound on <kbd>M</kbd></button>
       </div>
+      <button type="button" class="version-label"></button>
     </div>
+    <div id="toasts"></div>
 
     <div id="leaderboard" class="panel">
       <h3>Anglers</h3>
@@ -40,17 +43,19 @@
 
     <div id="help" class="panel">
       <b>WASD</b> move · <b>Mouse</b> aim · <b>Hold Space/click</b> charge, release to cast ·
-      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>G</b> gear · <b>I</b> fish index · <b>H</b> history · <b>O</b> options · <b>M</b> sound
+      <b>Space/click</b> on a bite to hook · <b>Hold</b> to reel, release when it pulls · <b>Esc</b> reel in · <b>G</b> tackle · <b>I</b> fish index · <b>T</b> achievements · <b>H</b> history · <b>O</b> options · <b>M</b> sound
     </div>
   </div>
 
   <div id="menu" class="overlay" hidden>
     <div class="menu-window" role="dialog" aria-label="Menu">
       <div class="menu-tabs">
-        <button data-tab="gear">Gear</button>
+        <button data-tab="gear">Tackle</button>
         <button data-tab="index">Fish Index</button>
+        <button data-tab="achievements">Achievements</button>
         <button data-tab="history">History</button>
         <button data-tab="options">Options</button>
+        <button data-tab="news">What's new</button>
         <button id="menu-close" aria-label="Close">✕</button>
       </div>
       <div id="menu-body"></div>
@@ -76,6 +81,7 @@
       <p id="auth-hint"></p>
       <button type="submit" id="join-submit">Log in</button>
       <p id="join-error" role="alert"></p>
+      <button type="button" class="version-label"></button>
     </form>
   </div>
 

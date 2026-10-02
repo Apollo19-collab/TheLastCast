@@ -82,6 +82,13 @@ export const SOUNDS = {
     k.tone({ freq: 330, to: 247, dur: 0.3, gain: 0.14, at: 0.17, type: 'triangle' });
   },
 
+  // Earned an achievement: a bright little fanfare.
+  achievement(k) {
+    [[NOTE.G5, 0], [NOTE.C6, 0.1], [NOTE.E6, 0.2], [NOTE.G6, 0.3], [NOTE.C7, 0.42]].forEach(([f, at]) =>
+      k.tone({ freq: f, dur: 0.4, gain: 0.16, at, type: 'triangle', reverb: 0.5 }));
+    k.tone({ freq: NOTE.C6, dur: 0.9, gain: 0.08, at: 0.42, reverb: 0.6 });
+  },
+
   // Bought gear.
   coin(k) {
     k.tone({ freq: NOTE.E6, dur: 0.09, gain: 0.14 });

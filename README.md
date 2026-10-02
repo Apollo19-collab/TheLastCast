@@ -1,5 +1,7 @@
 # The Last Cast
 
+**Version 0.7.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time.
 
 ## How to play
@@ -12,7 +14,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Hook a fish | Press `Space` / click when the bobber dips and shows **!** |
 | Reel | Hold `Space` / mouse. **Release when the fish pulls** or the line snaps |
 | Reel in / give up | `Esc`, `E` or right-click |
-| Gear shop / Fish Index / Catch History | `G` / `I` / `H` (or the buttons under your score) |
+| Tackle / Fish Index / Achievements / Catch History | `G` / `I` / `T` / `H` (or the buttons under your score) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
 
@@ -40,10 +42,14 @@ The aim line previews where your cast will land and which zone it hits.
 ### Progression
 
 - **Coins.** Every catch earns coins equal to its points. Score is never spent and drives the leaderboard; coins are what you spend.
-- **Gear** (`G`). Three upgrade paths with four tiers each. Buy them in order:
-  - **Rod:** longer cast range (reach further from the shore or the dock) and stronger line (tension builds more slowly).
-  - **Reel:** reel fish in faster.
-  - **Bait:** faster bites and better odds of uncommon, rare and legendary fish (and less junk).
+- **Tackle** (`G`). 36 items across four slots: **Rod**, **Reel**, **Line** and **Bait & lures**. Own as many as you like and **equip any mix**: your loadout's combined stats are shown at the top.
+  - **Rods:** cast range and power. Power multiplies line strength.
+  - **Reels:** reel speed, and drag (how fast tension eases).
+  - **Lines:** strength, but strong lines can make fish shy. Fluorocarbon and stealth leaders get more bites.
+  - **Bait & lures:** bite speed and rare-fish odds.
+  - **Specialties:** some items favour certain fish. Fly rods and salmon roe for trout, corn for carp, nightcrawlers for catfish, steel leaders and frog poppers for pike, glow jigs for deep-water fish, centerpin reels for river fish.
+  - **Unlocks:** 16 items can be bought from the start. The other 20, most of the late-game tackle, unlock through achievements.
+- **Achievements** (`T`). 22 long-term goals: catch counts, fish families, zones, exploring all four areas, trophy weights, hotspots, legendaries, collecting species, and more. Each pays coins, and many unlock tackle. The window shows your progress on each. Goals that unlock tackle are tuned so none can be reached in your first hour, and a test checks this.
 - **Fish Index** (`I`). Every species, with how many you've caught and your heaviest. Undiscovered fish show as `???` with a hint about where they live.
 - **Catch History** (`H`). Your last 50 catches: weight, points, where, and whether it was in a hotspot.
 
@@ -178,7 +184,9 @@ shared/         Imported by BOTH server and browser (plain ES modules)
   constants.js  Tuning values and message types
   world.js      Location data (land, docks, water zones, fish tables) + geometry helpers
   fish.js       Species, rarity and scoring
-  gear.js       Equipment tiers, prices and stats
+  gear.js       Tackle catalog (36 items), loadout -> stats, specialties
+  achievements.js  Achievements, their goals/rewards, and progress from lifetime counters
+  version.js    Game version + in-game changelog (keep package.json and CHANGELOG.md in sync)
 client/
   index.html, css/style.css
   js/main.js           Wires everything together; sends intentions, never outcomes
@@ -219,9 +227,10 @@ The first version is deliberately small. Here is where planned features plug in:
 | More lakes | Add an entry to `LOCATIONS` in `shared/world.js`. Then run one `Game` per location in `server/index.js` (rooms) and let the client pick one. `welcome` already sends `locationId`. |
 | More species / rare fish | Add to `SPECIES` in `shared/fish.js`, then reference them in zone `fish` tables in `shared/world.js`. A test checks that every species lives somewhere. |
 | Password reset / email | Add an `email` field when registering in `ProfileStore.register()` and a reset-token flow. You'd need an email provider. |
-| More gear / new gear slots | Add tiers or slots in `shared/gear.js` and expose any new stat in `gearStats()`. Apply it in `fishing.js`, which reads `player.stats`. |
-| Inventory / selling fish | `profile.history` and `profile.index` already record catches. Add an `inventory` array to `newProfile()` in `server/profiles.js` (old saves are filled in by `normalize()`). |
-| Levels / XP | Derive a level from `profile.score`, or add an `xp` field, and gate gear tiers on it in `Game.buy()`. |
+| More tackle | Add an entry to `ITEMS` in `shared/gear.js` (optionally with `unlock: '<achievement id>'`) and a look in `client/js/gfx/gearArt.js`. New stats go in `computeStats()` and are applied in `server/fishing.js`. |
+| More achievements | Add to `ACHIEVEMENTS` in `shared/achievements.js`. If it needs a new statistic, count it in `countCatch()` (`server/fishing.js`) and in `newCounters()`. If it unlocks tackle, add a first-hour estimate to the "first hour" test. |
+| Releasing a version | Bump `VERSION` in `shared/version.js` and `version` in `package.json`, add a `CHANGELOG` entry, and regenerate `CHANGELOG.md`. A test checks all three agree. Players see "What's new" once after updating. |
+| Selling fish / levels | `profile.history`, `profile.index` and `profile.counters` already record catches; add fields in `newProfile()` (old saves are filled in by `normalize()`). |
 | Weather & time | A world-level state on `Game` that is ticked and included in the snapshot. Apply it as a multiplier in `land()` / `pickSpecies()`. |
 | Leaderboards / persistence | Profiles are in one JSON file. For many players or an all-time leaderboard, swap `ProfileStore` for a database (e.g. Railway Postgres) behind the same `getOrCreate()` / `markDirty()` interface. |
 | Larger areas / more players | The camera follows the player, and off-screen decoration is skipped when drawing. For many players, send each client only nearby players in `snapshot()` (interest management). |

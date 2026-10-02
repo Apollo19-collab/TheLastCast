@@ -4,7 +4,10 @@ import { Game, sanitizeName } from '../server/game.js';
 import { pickSpecies } from '../server/fishing.js';
 import { FishingState, MSG } from '../shared/constants.js';
 import { LOCATIONS, areaAt, isWalkable, isWater, zoneAt } from '../shared/world.js';
-import { GEAR, gearStats } from '../shared/gear.js';
+import { ITEMS, SLOTS, computeStats } from '../shared/gear.js';
+import { ACHIEVEMENTS, progressOf, unlocksFor } from '../shared/achievements.js';
+import { CHANGELOG, VERSION } from '../shared/version.js';
+import { normalize } from '../server/profiles.js';
 import { ProfileStore } from '../server/profiles.js';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { SPECIES } from '../shared/fish.js';
@@ -117,7 +120,12 @@ test('full loop: bite, hook, reel carefully, catch and score', () => {
   const { profile } = player;
   assert.equal(profile.catches, 1);
   assert.equal(profile.score, caught.points);
-  assert.equal(profile.coins, caught.points);
+  // Catch points, plus the "First Catch" achievement's reward.
+  assert.ok(profile.achievements.first_catch);
+  assert.equal(profile.coins, caught.points + ACHIEVEMENTS.find((x) => x.id === 'first_catch').coins);
+  assert.equal(profile.counters.catches, 1);
+  assert.equal(profile.counters.zone.shallows, 1);
+  assert.equal(profile.counters.area.southBeach, 1);
   assert.ok(profile.score > 0);
 
   // Fish index and catch history are updated, and the client is told.
@@ -211,25 +219,165 @@ test('repeat catches update index counts and keep history capped', () => {
   assert.equal(inbox.filter((m) => m.t === MSG.PROFILE).at(-1).catches, 55);
 });
 
-test('buying gear: costs coins, upgrades stats, one tier at a time', () => {
+test('tackle: buy with coins, auto-equip, mix and match, no double buys', () => {
   const { game, player, inbox } = makeGame();
-  game.handleMessage(player, { t: MSG.BUY, slot: 'rod' });
-  assert.equal(player.profile.gear.rod, 0, 'cannot buy without coins');
+  const p = player.profile;
+  assert.deepEqual(p.equipped, { rod: 'willow', reel: 'rusty', line: 'mono', bait: 'bread' });
+
+  game.handleMessage(player, { t: MSG.BUY, item: 'carbon' });
+  assert.ok(!p.inventory.includes('carbon'), 'cannot buy without coins');
   assert.equal(inbox.at(-1).ok, false);
 
-  player.profile.coins = 1000;
-  game.handleMessage(player, { t: MSG.BUY, slot: 'rod' });
-  assert.equal(player.profile.gear.rod, 1);
-  assert.equal(player.profile.coins, 1000 - GEAR.rod.tiers[1].price);
-  assert.equal(player.stats.castRange, GEAR.rod.tiers[1].castRange);
+  p.coins = 1000;
+  game.handleMessage(player, { t: MSG.BUY, item: 'carbon' });
+  assert.ok(p.inventory.includes('carbon'));
+  assert.equal(p.equipped.rod, 'carbon');
+  assert.equal(p.coins, 1000 - ITEMS.carbon.price);
+  assert.equal(p.counters.coinsSpent, ITEMS.carbon.price);
+  assert.equal(player.stats.castRange, ITEMS.carbon.range);
 
-  game.handleMessage(player, { t: MSG.BUY, slot: '__proto__' });
-  game.handleMessage(player, { t: MSG.BUY, slot: 'boat' });
-  assert.deepEqual(Object.keys(player.profile.gear).sort(), ['bait', 'reel', 'rod']);
+  game.handleMessage(player, { t: MSG.BUY, item: 'carbon' });
+  assert.equal(p.coins, 1000 - ITEMS.carbon.price, 'no double buy');
 
-  for (let i = 0; i < 10; i++) game.handleMessage(player, { t: MSG.BUY, slot: 'reel' });
-  assert.equal(player.profile.gear.reel, GEAR.reel.tiers.length - 1, 'stops at max tier');
-  assert.ok(player.profile.coins >= 0);
+  // Mix and match: switch back to the starter rod, keep a new line.
+  game.handleMessage(player, { t: MSG.BUY, item: 'braid' });
+  game.handleMessage(player, { t: MSG.EQUIP, item: 'willow' });
+  assert.equal(p.equipped.rod, 'willow');
+  assert.equal(p.equipped.line, 'braid');
+  assert.equal(player.stats.lineStrength, ITEMS.willow.power * ITEMS.braid.strength);
+
+  // Can't equip what you don't own; junk input is ignored.
+  game.handleMessage(player, { t: MSG.EQUIP, item: 'master' });
+  game.handleMessage(player, { t: MSG.EQUIP, item: '__proto__' });
+  game.handleMessage(player, { t: MSG.BUY, item: 'boat' });
+  game.handleMessage(player, { t: MSG.BUY, item: { x: 1 } });
+  assert.equal(p.equipped.rod, 'willow');
+});
+
+test('late-game tackle is locked behind achievements', () => {
+  const { game, player, inbox } = makeGame();
+  const p = player.profile;
+  p.coins = 100000;
+  game.handleMessage(player, { t: MSG.BUY, item: 'master' });
+  assert.ok(!p.inventory.includes('master'));
+  assert.match(inbox.at(-1).message, /Seasoned Angler/);
+
+  p.counters.catches = 1200;
+  game.checkAchievements(player);
+  assert.ok(p.achievements.seasoned);
+  game.handleMessage(player, { t: MSG.BUY, item: 'master' });
+  assert.ok(p.inventory.includes('master'));
+
+  // Most later items need an unlock, and every unlock points at a real achievement.
+  const locked = Object.values(ITEMS).filter((it) => it.unlock);
+  assert.ok(locked.length > Object.keys(ITEMS).length / 2, `${locked.length} of ${Object.keys(ITEMS).length} locked`);
+  const ids = new Set(ACHIEVEMENTS.map((a) => a.id));
+  for (const it of locked) assert.ok(ids.has(it.unlock), `${it.name} -> ${it.unlock}`);
+  assert.equal(Object.keys(ITEMS).length, 36);
+  for (const slot of SLOTS) assert.ok(Object.values(ITEMS).some((it) => it.slot === slot && it.price === 0), `free ${slot}`);
+});
+
+test('achievements: progress, one-time rewards, announcements', () => {
+  const { game, player, inbox } = makeGame();
+  const p = player.profile;
+  const coins = p.coins;
+  const ach = ACHIEVEMENTS.find((a) => a.id === 'trout_bum');
+  p.counters.family.trout = ach.goal / 2;
+  assert.deepEqual(progressOf(p, ach), { value: ach.goal / 2, goal: ach.goal, done: false, fraction: 0.5 });
+  p.counters.family.trout = ach.goal;
+  game.checkAchievements(player);
+  assert.ok(p.achievements.trout_bum);
+  assert.equal(p.coins, coins + ach.coins);
+  const ev = inbox.find((m) => m.kind === 'achievement' && m.id === 'trout_bum');
+  assert.deepEqual(ev.unlocks.sort(), unlocksFor('trout_bum').map((id) => ITEMS[id].name).sort());
+  assert.ok(game.drainEvents().some((e) => e.kind === 'achievementAll'));
+  game.checkAchievements(player);
+  assert.equal(p.coins, coins + ach.coins, 'rewarded once');
+
+  // Combined metrics.
+  const explorer = ACHIEVEMENTS.find((a) => a.id === 'explorer');
+  p.counters.area = { southBeach: 50, pinePoint: 40, riverMouth: 31, lilyMarsh: 12 };
+  assert.equal(progressOf(p, explorer).value, 12);
+});
+
+test('unlocking achievements are not reachable in the first hour', () => {
+  // Generous estimates of the most a skilled player could do in their first
+  // hour (~12 s per fish in the fastest water, starting with basic tackle).
+  const BEST_FIRST_HOUR = {
+    dedicated: 300, // catches
+    seasoned: 300,
+    trout_bum: 180, // ~60% trout at Cold Spring
+    toothy: 110, // ~36% pike family in Weedy Cove
+    weed_warrior: 330,
+    deep_diver: 180, // slow bites in deep water
+    river_rat: 260,
+    explorer: 50, // per area, after walking around the lake
+    trophy_hunter: 15,
+    heavyweight: 34, // kg; a 35 kg fish is a rare roll
+    hotspot_hopper: 150,
+    bait_shop: 4500, // can't spend more than you've earned
+    collector: 24, // species
+    ghost_hunter: 0,
+    living_legend: 1,
+  };
+  const gating = new Set(Object.values(ITEMS).map((it) => it.unlock).filter(Boolean));
+  for (const id of gating) {
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    assert.ok(id in BEST_FIRST_HOUR, `no first-hour estimate for ${id}`);
+    assert.ok(BEST_FIRST_HOUR[id] < a.goal, `${id}: best first hour ${BEST_FIRST_HOUR[id]} >= goal ${a.goal}`);
+  }
+});
+
+test('specialist tackle attracts its fish', () => {
+  const zone = world.zones.find((z) => z.id === 'shallows');
+  const share = (equipped) => {
+    const rng = seeded(11);
+    const stats = computeStats(equipped);
+    let carp = 0;
+    for (let i = 0; i < 4000; i++) if (['carp', 'koi', 'shiner'].includes(pickSpecies(rng, zone, false, stats))) carp++;
+    return carp;
+  };
+  assert.ok(share({ bait: 'corn' }) > share({ bait: 'bread' }) * 1.5);
+});
+
+test('reel drag eases tension faster', () => {
+  const run2 = (drag) => {
+    const { game, player } = makeGame();
+    player.line = {
+      state: FishingState.REELING, x: 1500, y: 1450, zoneId: 'deep', fish: { species: 'carp', kg: 2 },
+      progress: 0.5, tension: 0.9, reeling: false, pulling: false, pullTimer: 9, fight: 0.5, drag,
+    };
+    game.tick(0.5);
+    return player.line.tension;
+  };
+  assert.ok(run2(1.6) < run2(1));
+});
+
+test('version: package.json, changelog and CHANGELOG.md agree', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.version, VERSION);
+  assert.equal(CHANGELOG[0].version, VERSION);
+  const md = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  assert.ok(md.includes(`## ${VERSION}`), 'CHANGELOG.md has the current version');
+});
+
+test('old tiered gear migrates into the new inventory', () => {
+  const p = normalize({
+    name: 'Vet', coins: 5, gear: { rod: 3, reel: 1, bait: 2 },
+    index: { trout: { count: 9, bestKg: 3 }, sturgeon: { count: 1, bestKg: 31 }, ghost: { count: 1, bestKg: 40 } },
+    catches: 11, score: 900,
+  });
+  assert.ok(['willow', 'fiberglass', 'carbon', 'master'].every((id) => p.inventory.includes(id)), 'keeps every rod bought');
+  assert.equal(p.equipped.rod, 'master');
+  assert.equal(p.equipped.reel, 'spinning');
+  assert.equal(p.equipped.bait, 'spinner');
+  assert.equal(p.equipped.line, 'mono');
+  assert.equal(p.gear, undefined);
+  assert.equal(p.counters.catches, 11);
+  assert.equal(p.counters.family.trout, 9);
+  assert.equal(p.counters.legendaryCatches, 1);
+  assert.equal(p.counters.heaviest, 40);
+  assert.ok(p.counters.coinsSpent > 0);
 });
 
 test('better rod casts further', () => {
@@ -238,7 +386,7 @@ test('better rod casts further', () => {
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
   const basic = 1615 - player.line.y;
   game.handleMessage(player, { t: MSG.CANCEL });
-  player.stats = gearStats({ rod: 3 });
+  player.stats = computeStats({ rod: 'master' });
   game.handleMessage(player, { t: MSG.CAST, angle: -Math.PI / 2, power: 0.6 });
   assert.ok(1615 - player.line.y > basic);
 });
@@ -248,7 +396,7 @@ test('better bait means more rare fish', () => {
   const count = (boost) => {
     const rng = seeded(3);
     let rare = 0;
-    for (let i = 0; i < 5000; i++) if (['sturgeon', 'ghost', 'pike'].includes(pickSpecies(rng, zone, false, boost))) rare++;
+    for (let i = 0; i < 5000; i++) if (['sturgeon', 'ghost', 'pike'].includes(pickSpecies(rng, zone, false, { rareBoost: boost }))) rare++;
     return rare;
   };
   assert.ok(count(2) > count(1) * 1.3);
@@ -259,7 +407,8 @@ test('guest profiles save to disk and restore by token', async () => {
   const a = new ProfileStore(file);
   const { token, profile } = a.createGuest('Saver');
   profile.coins = 42;
-  profile.gear.rod = 2;
+  profile.inventory.push('carbon');
+  profile.equipped.rod = 'carbon';
   a.markDirty();
   await a.flush();
   assert.ok(!(await readFile(file, 'utf8')).includes(token), 'tokens are stored hashed');
@@ -267,7 +416,7 @@ test('guest profiles save to disk and restore by token', async () => {
   const b = new ProfileStore(file);
   await b.load();
   assert.equal(b.getGuest(token).coins, 42);
-  assert.equal(b.getGuest(token).gear.rod, 2);
+  assert.equal(b.getGuest(token).equipped.rod, 'carbon');
   assert.equal(b.getGuest('not-a-token'), null);
 });
 
@@ -326,7 +475,8 @@ test('version 1 save files are migrated', async () => {
   await store.load();
   const p = store.getGuest(token);
   assert.equal(p.coins, 7);
-  assert.deepEqual(p.gear, { rod: 1, reel: 0, bait: 0 });
+  assert.equal(p.equipped.rod, 'fiberglass');
+  assert.ok(p.inventory.includes('fiberglass'));
 });
 
 test('each zone has its own fish; drop-off gets deep-water species', () => {

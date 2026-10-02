@@ -4,7 +4,8 @@
 
 import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
-import { GEAR, gearStats, nextTier } from '../shared/gear.js';
+import { ITEMS, computeStats } from '../shared/gear.js';
+import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
 import { cancel, hook, newLine, setReel, tryCast, updateLine } from './fishing.js';
 import { newProfile } from './profiles.js';
 
@@ -56,12 +57,13 @@ export class Game {
       facing: -Math.PI / 2,
       input: { up: false, down: false, left: false, right: false },
       line: newLine(),
-      profile, // persistent: score, coins, gear, index, history
-      stats: gearStats(profile.gear),
+      profile, // persistent: score, coins, tackle, achievements, index, history
+      stats: computeStats(profile.equipped),
       send,
     };
     this.players.set(id, player);
     this.emitAll({ kind: 'join', playerId: id, name: player.name });
+    this.checkAchievements(player); // e.g. progress counted from an older save
     this.profileChanged(player);
     return player;
   }
@@ -91,31 +93,69 @@ export class Game {
         cancel(this, player);
         break;
       case MSG.BUY:
-        this.buy(player, msg.slot);
+        this.buy(player, msg.item);
+        break;
+      case MSG.EQUIP:
+        this.equip(player, msg.item);
         break;
     }
   }
 
   // ---- progression -------------------------------------------------------------
 
-  /** Buy the next tier of a gear slot ('rod', 'reel', 'bait'). */
-  buy(player, slot) {
-    if (!Object.hasOwn(GEAR, slot)) return;
+  /** Whether a player may buy an item (owned items and locked items can't be bought). */
+  canBuy(profile, itemId) {
+    const it = ITEMS[itemId];
+    if (!it) return { ok: false };
+    if (profile.inventory.includes(itemId)) return { ok: false, message: `You already own the ${it.name}.` };
+    if (it.unlock && !profile.achievements[it.unlock]) {
+      return { ok: false, message: `The ${it.name} unlocks with the "${ACHIEVEMENT_BY_ID[it.unlock].name}" achievement.` };
+    }
+    if (profile.coins < it.price) return { ok: false, message: `You need ${it.price - profile.coins} more coins for the ${it.name}.` };
+    return { ok: true };
+  }
+
+  /** Buy an item by id; it is equipped straight away. */
+  buy(player, itemId) {
+    if (typeof itemId !== 'string' || !Object.hasOwn(ITEMS, itemId)) return;
     const { profile } = player;
-    const tier = nextTier(profile.gear, slot);
-    if (!tier) {
-      this.emitTo(player, { kind: 'shop', ok: false, message: `Your ${GEAR[slot].label.toLowerCase()} is already the best there is.` });
+    const check = this.canBuy(profile, itemId);
+    if (!check.ok) {
+      if (check.message) this.emitTo(player, { kind: 'shop', ok: false, message: check.message });
       return;
     }
-    if (profile.coins < tier.price) {
-      this.emitTo(player, { kind: 'shop', ok: false, message: `You need ${tier.price - profile.coins} more coins for the ${tier.name}.` });
-      return;
-    }
-    profile.coins -= tier.price;
-    profile.gear[slot] += 1;
-    player.stats = gearStats(profile.gear);
-    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought the ${tier.name}!` });
+    const it = ITEMS[itemId];
+    profile.coins -= it.price;
+    profile.counters.coinsSpent += it.price;
+    profile.inventory.push(itemId);
+    profile.equipped[it.slot] = itemId;
+    player.stats = computeStats(profile.equipped);
+    this.emitTo(player, { kind: 'shop', ok: true, message: `You bought the ${it.name}!` });
+    this.checkAchievements(player);
     this.profileChanged(player);
+  }
+
+  /** Equip an owned item in its slot. */
+  equip(player, itemId) {
+    if (typeof itemId !== 'string' || !Object.hasOwn(ITEMS, itemId)) return;
+    const { profile } = player;
+    if (!profile.inventory.includes(itemId)) return;
+    profile.equipped[ITEMS[itemId].slot] = itemId;
+    player.stats = computeStats(profile.equipped);
+    this.profileChanged(player);
+  }
+
+  /** Award any achievements whose goals are now met: coins, unlocks, announcement. */
+  checkAchievements(player) {
+    const { profile } = player;
+    for (const a of ACHIEVEMENTS) {
+      if (profile.achievements[a.id] || !progressOf(profile, a).done) continue;
+      profile.achievements[a.id] = Date.now();
+      profile.coins += a.coins;
+      const unlocks = unlocksFor(a.id).map((id) => ITEMS[id].name);
+      this.emitTo(player, { kind: 'achievement', id: a.id, name: a.name, coins: a.coins, unlocks });
+      this.emitAll({ kind: 'achievementAll', playerId: player.id, name: player.name, achievement: a.name });
+    }
   }
 
   profileChanged(player) {
@@ -127,7 +167,10 @@ export class Game {
       score: p.score,
       coins: p.coins,
       catches: p.catches,
-      gear: p.gear,
+      inventory: p.inventory,
+      equipped: p.equipped,
+      achievements: p.achievements,
+      counters: p.counters,
       index: p.index,
       history: p.history,
     });
@@ -231,7 +274,7 @@ export class Game {
         sc: p.profile.score,
         c: p.profile.catches,
         best: p.profile.best,
-        g: [p.profile.gear.rod, p.profile.gear.reel, p.profile.gear.bait], // for drawing their rod, reel and bait
+        g: [p.profile.equipped.rod, p.profile.equipped.reel, p.profile.equipped.line, p.profile.equipped.bait], // drawn on their angler
       };
       if (line.state !== FishingState.IDLE) {
         s.bx = r1(line.x);

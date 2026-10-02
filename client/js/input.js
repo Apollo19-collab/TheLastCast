@@ -2,7 +2,7 @@
 // an "action" button (Space or left mouse) used for cast / hook / reel.
 // While `isBlocked()` is true (a menu is open) gameplay input is ignored.
 
-const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options' };
+const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements' };
 
 const MOVE_KEYS = {
   KeyW: 'up', ArrowUp: 'up',

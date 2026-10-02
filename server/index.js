@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { MSG, TICK_RATE } from '../shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
 import { SPECIES } from '../shared/fish.js';
+import { VERSION } from '../shared/version.js';
 import { Game } from './game.js';
 import { ProfileStore, newProfile } from './profiles.js';
 import { LoginLimiter } from './auth.js';
@@ -72,7 +73,7 @@ async function authenticate(msg, ip) {
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, players: game.players.size }));
+    res.end(JSON.stringify({ ok: true, version: VERSION, players: game.players.size }));
     return;
   }
   serveStatic(req, res);
@@ -152,6 +153,7 @@ wss.on('connection', (ws, req) => {
         id: player.id,
         locationId: world.id,
         species: SPECIES,
+        version: VERSION,
         username: profile.username,
         session: result.session ?? null,
         token,
@@ -202,7 +204,7 @@ setInterval(() => {
 }, 30000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`The Last Cast running at http://localhost:${PORT} (max ${MAX_PLAYERS} players, data in ${DATA_DIR})`);
+  console.log(`The Last Cast v${VERSION} running at http://localhost:${PORT} (max ${MAX_PLAYERS} players, data in ${DATA_DIR})`);
 });
 
 // Save periodically as a safety net, and on shutdown.
