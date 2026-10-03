@@ -88,6 +88,8 @@ export const ZOO = Object.freeze({
     { x: 1150, y: 140, area: 'Pine Point' },
     { x: 130, y: 1150, area: 'Lily Marsh' },
     { x: 3070, y: 1500, area: 'the River Mouth' },
+    { x: 2150, y: 2760, area: 'Crystal Springs' },
+    { x: 4500, y: 2470, area: 'Millside' },
   ],
 });
 

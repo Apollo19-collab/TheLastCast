@@ -39,6 +39,11 @@ export const ACHIEVEMENTS = [
     id: 'explorer', name: 'Lake Explorer', desc: 'Catch 75 fish in each of the four areas around the lake.',
     metric: { min: ['area.southBeach', 'area.pinePoint', 'area.riverMouth', 'area.lilyMarsh'] }, goal: 75, coins: 400,
   },
+  {
+    id: 'pond_hopper', name: 'Pond Hopper', desc: 'Catch 30 fish in each of the five ponds around Mirror Lake.',
+    metric: { min: ['zone.willowPond', 'zone.frogPond', 'zone.crystalPond', 'zone.blackBog', 'zone.millPond'] }, goal: 30, coins: 1500,
+  },
+  { id: 'river_runner', name: 'River Runner', desc: 'Catch 200 fish in the East River.', metric: 'zone.eastRiver', goal: 200, coins: 600 },
   { id: 'trophy_hunter', name: 'Trophy Hunter', desc: 'Land 30 fish weighing 10 kg or more.', metric: 'bigFish', goal: 30, coins: 400 },
   { id: 'heavyweight', name: 'Heavyweight', desc: 'Land a fish of 35 kg or more.', metric: 'heaviest', goal: 35, coins: 500, unit: 'kg' },
   { id: 'hotspot_hopper', name: 'Hotspot Hopper', desc: 'Catch 200 fish inside hotspots.', metric: 'hotspotCatches', goal: 200, coins: 400 },

@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.15.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.16.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -23,7 +23,9 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 
 ### The lake
 
-Mirror Lake is a big lake with a shore you can walk all the way around. The camera stays centred on you, a **minimap** (bottom-right) shows the whole lake with every player and hotspot, and your current location is shown under your score.
+Mirror Lake is a big lake with a shore you can walk all the way around, in a wide valley of woods, meadows and smaller ponds. The camera stays centred on you, a **minimap** (bottom-right) shows the whole map with every player and hotspot, and your current location is shown under your score.
+
+The ground is natural: shorelines curve and wander, and beaches, rocky ground, meadows, forest and dirt trails blend into each other. Water and land come from one organic shape (soft ellipses and a river, domain-warped with noise) in `shared/world.js`. The server's collision and the client's rendering sample the same field, so the shore you see is the shore you walk on.
 
 | Location | Waters | Signature fish |
 | --- | --- | --- |
@@ -31,8 +33,13 @@ Mirror Lake is a big lake with a shore you can walk all the way around. The came
 | **Pine Point** (north) | Weedy Cove (west of the point), Cold Spring (east of the point), Deep Basin (from the end of the jetty) | Chain Pickerel, Brook Trout, Lake Trout, Sturgeon; legendaries *Frostfin*, *The Pale Ghost*, *Emerald Jaw*; mythics *Aurora Trout*, *The Lake Wyrm* |
 | **River Mouth** (east) | River Mouth, including the river channel under the bridge | Mooneye, Sauger, Steelhead, Chinook Salmon, Paddlefish; legendary *The River King* |
 | **Lily Marsh** (west) | Lily Marsh (fish it from the boardwalk) | Brown Bullhead, Bowfin, Alligator Gar; legendary *The Marsh Queen* |
+| **Willowmere** (north-east) | Willow Pond (jetty) | Feral Goldfish, Warmouth, Redfin Pickerel, Tiger Trout; legendary *The Willow Wisp* |
+| **Millside** (east) | East River (two bridges), Mill Pond (dock) | Fallfish, Brown Trout, Atlantic Salmon, Shovelnose Sturgeon; Bigmouth Buffalo, Hybrid Striped Bass, Bighead Carp; legendaries *The Rapids Runner*, *Old Millstone* |
+| **Frog Hollow** (south-west) | Frog Pond (jetty) | Mudminnow, Green Sunfish, Yellow Bullhead, Flathead Catfish; legendary *Old Whiskers* |
+| **Crystal Springs** (south) | Crystal Pond (boardwalk to the island) | Cutthroat Trout, Splake, Arctic Char; legendary *The Crystal Char*; mythic *Glimmerfin* |
+| **The Black Bog** (south-east) | Black Bog (boardwalk) | Black Bullhead, American Eel, Spotted Gar, Northern Snakehead; legendary *The Midnight Bowfin*; mythic *Mirefang* |
 
-The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. There are 50 lake species, plus 26 more out at sea. The Fish Index shows where each one lives.
+The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnose Gar. Dirt trails lead from South Beach to every pond. There are 84 species around the lake and ponds, plus 26 more out at sea. The Fish Index shows where each one lives.
 
 **Rarities:** Junk, Common, Uncommon, Rare, Legendary and **Mythic**. The five mythic fish are the rarest of all (about 1 in 1,000+ catches even with good bait, a few hundred with the best gear), fight harder than any legendary and need endgame tackle to land. When anyone lands one, the whole lake hears about it.
 

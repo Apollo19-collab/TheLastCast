@@ -183,8 +183,8 @@ test('boat schedule: docks on the quarter hour; its route stays on the water', (
   assert.deepEqual([docked.x, docked.y], [BOAT.dock.x, BOAT.dock.y]);
 
   // Every point of the trip is open water, or under the river bridge.
-  const bridge = world.structures.find((s) => s.type === 'bridge');
-  const underBridge = (x, y) => x >= bridge.x && x < bridge.x + bridge.w && y >= bridge.y && y < bridge.y + bridge.h;
+  const bridges = world.structures.filter((s) => s.type === 'bridge');
+  const underBridge = (x, y) => bridges.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
   for (let t = 0; t < BOAT.arrive; t += 0.5) {
     const s = boatState(quarter - BOAT.arrive + t);
     if (s.x >= world.width) continue; // still upriver, off the map

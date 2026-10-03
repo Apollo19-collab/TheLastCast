@@ -78,6 +78,48 @@ export const SPECIES = Object.freeze({
   lakewyrm: { name: 'The Lake Wyrm', rarity: 'mythic', minKg: 60, maxKg: 120, family: 'ancient', points: 850, fight: 1.0 },
   emberkoi: { name: 'The Ember Koi', rarity: 'mythic', minKg: 8, maxKg: 18, family: 'carp', points: 750, fight: 1.0 },
 
+  // ---- the ponds and the East River (v0.16) ----
+  // Willow Pond
+  goldfish: { name: 'Feral Goldfish', rarity: 'common', minKg: 0.1, maxKg: 1.5, family: 'carp', points: 7, fight: 0.25 },
+  warmouth: { name: 'Warmouth', rarity: 'common', minKg: 0.1, maxKg: 0.6, family: 'panfish', points: 8, fight: 0.3 },
+  redfin: { name: 'Redfin Pickerel', rarity: 'uncommon', minKg: 0.2, maxKg: 1, family: 'pike', points: 26, fight: 0.6 },
+  tigertrout: { name: 'Tiger Trout', rarity: 'rare', minKg: 1, maxKg: 8, family: 'trout', points: 75, fight: 0.8 },
+  willowwisp: { name: 'The Willow Wisp', rarity: 'legendary', minKg: 8, maxKg: 18, family: 'whitefish', points: 270, fight: 0.95 },
+  // Frog Pond
+  mudminnow: { name: 'Central Mudminnow', rarity: 'common', minKg: 0.02, maxKg: 0.1, family: 'carp', points: 4, fight: 0.15 },
+  greensunfish: { name: 'Green Sunfish', rarity: 'common', minKg: 0.1, maxKg: 0.5, family: 'panfish', points: 6, fight: 0.3 },
+  yellowbullhead: { name: 'Yellow Bullhead', rarity: 'common', minKg: 0.2, maxKg: 1.5, family: 'catfish', points: 9, fight: 0.35 },
+  flathead: { name: 'Flathead Catfish', rarity: 'rare', minKg: 5, maxKg: 34, family: 'catfish', points: 70, fight: 0.85 },
+  oldwhiskers: { name: 'Old Whiskers', rarity: 'legendary', minKg: 30, maxKg: 60, family: 'catfish', points: 270, fight: 0.95 },
+  // Crystal Pond
+  cutthroat: { name: 'Cutthroat Trout', rarity: 'uncommon', minKg: 0.5, maxKg: 4, family: 'trout', points: 28, fight: 0.6 },
+  splake: { name: 'Splake', rarity: 'uncommon', minKg: 0.5, maxKg: 5, family: 'trout', points: 30, fight: 0.6 },
+  arcticchar: { name: 'Arctic Char', rarity: 'rare', minKg: 1, maxKg: 9, family: 'trout', points: 75, fight: 0.75 },
+  crystalchar: { name: 'The Crystal Char', rarity: 'legendary', minKg: 8, maxKg: 16, family: 'trout', points: 280, fight: 0.95 },
+  glimmerfin: { name: 'Glimmerfin', rarity: 'mythic', minKg: 10, maxKg: 22, family: 'trout', points: 780, fight: 1.0 },
+  // Black Bog
+  blackbullhead: { name: 'Black Bullhead', rarity: 'common', minKg: 0.2, maxKg: 1.5, family: 'catfish', points: 9, fight: 0.35 },
+  dollarsunfish: { name: 'Dollar Sunfish', rarity: 'common', minKg: 0.05, maxKg: 0.3, family: 'panfish', points: 5, fight: 0.25 },
+  americaneel: { name: 'American Eel', rarity: 'uncommon', minKg: 1, maxKg: 6, family: 'ancient', points: 32, fight: 0.7 },
+  spottedgar: { name: 'Spotted Gar', rarity: 'uncommon', minKg: 1, maxKg: 4, family: 'ancient', points: 28, fight: 0.6 },
+  snakehead: { name: 'Northern Snakehead', rarity: 'rare', minKg: 2, maxKg: 8, family: 'ancient', points: 78, fight: 0.9 },
+  nightbowfin: { name: 'The Midnight Bowfin', rarity: 'legendary', minKg: 8, maxKg: 14, family: 'ancient', points: 270, fight: 0.97 },
+  mirefang: { name: 'Mirefang', rarity: 'mythic', minKg: 40, maxKg: 90, family: 'ancient', points: 820, fight: 1.0 },
+  // Mill Pond
+  whitecrappie: { name: 'White Crappie', rarity: 'common', minKg: 0.2, maxKg: 1.5, family: 'panfish', points: 9, fight: 0.3 },
+  buffalo: { name: 'Bigmouth Buffalo', rarity: 'uncommon', minKg: 3, maxKg: 25, family: 'carp', points: 30, fight: 0.6 },
+  hybridbass: { name: 'Hybrid Striped Bass', rarity: 'uncommon', minKg: 1, maxKg: 8, family: 'bass', points: 32, fight: 0.7 },
+  spottedbass: { name: 'Spotted Bass', rarity: 'uncommon', minKg: 0.5, maxKg: 3, family: 'bass', points: 26, fight: 0.65 },
+  bigheadcarp: { name: 'Bighead Carp', rarity: 'rare', minKg: 10, maxKg: 34, family: 'carp', points: 72, fight: 0.75 },
+  millstone: { name: 'Old Millstone', rarity: 'legendary', minKg: 30, maxKg: 60, family: 'carp', points: 270, fight: 0.95 },
+  // East River
+  fallfish: { name: 'Fallfish', rarity: 'common', minKg: 0.2, maxKg: 1.5, family: 'carp', points: 8, fight: 0.35 },
+  logperch: { name: 'Logperch', rarity: 'common', minKg: 0.05, maxKg: 0.3, family: 'perch', points: 6, fight: 0.3 },
+  browntrout: { name: 'Brown Trout', rarity: 'uncommon', minKg: 0.5, maxKg: 8, family: 'trout', points: 30, fight: 0.65 },
+  atlanticsalmon: { name: 'Atlantic Salmon', rarity: 'rare', minKg: 3, maxKg: 18, family: 'trout', points: 80, fight: 0.9 },
+  shovelnose: { name: 'Shovelnose Sturgeon', rarity: 'rare', minKg: 1, maxKg: 5, family: 'ancient', points: 70, fight: 0.7 },
+  rapidsrunner: { name: 'The Rapids Runner', rarity: 'legendary', minKg: 15, maxKg: 30, family: 'trout', points: 280, fight: 0.97 },
+
   // ---- Sea fish: only caught on boat voyages (see shared/voyage.js) ----
   herring: { name: 'Silver Herring', rarity: 'common', minKg: 0.1, maxKg: 0.7, family: 'sea', points: 8, fight: 0.3 },
   mackerel: { name: 'Atlantic Mackerel', rarity: 'common', minKg: 0.3, maxKg: 1.5, family: 'sea', points: 11, fight: 0.45 },

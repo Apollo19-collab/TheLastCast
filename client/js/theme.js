@@ -22,13 +22,19 @@ export const THEME = {
     coldSpring: [150, 215, 232, 0.4],
     shallows: [96, 196, 192, 0.25],
     rocks: [44, 76, 98, 0.3],
+    eastRiver: [70, 150, 140, 0.45],
+    willowPond: [70, 140, 120, 0.35],
+    frogPond: [86, 112, 52, 0.55],
+    crystalPond: [120, 220, 235, 0.45],
+    blackBog: [46, 40, 24, 0.65],
+    millPond: [70, 96, 70, 0.5],
   },
   caustics: { alpha: 0.085, alpha2: 0.05 },
   current: 'rgba(230,250,250,0.28)',
   zoneLabel: 'rgba(255,255,255,0.16)',
 
   // Flat colours for placeholders while tiles render.
-  land: { sand: '#d9c48f', grass: '#4f7d3a', rock: '#7c7f86' },
+  land: { sand: '#d9c48f', grass: '#4f7d3a', rock: '#7c7f86', dirt: '#8b6e4a' },
 
   structure: {
     deck: '#8a5a33',

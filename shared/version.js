@@ -2,9 +2,22 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.15.0';
+export const VERSION = '0.16.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.16.0',
+    date: '2026-10-03',
+    title: 'Beyond the lake',
+    changes: [
+      'The map is 2.5 times bigger. Beyond Mirror Lake there are woods, meadows and five new ponds to find: Willow Pond, Frog Pond, Crystal Pond (with an island), the Black Bog and Mill Pond. The river now flows in from the far east, with a second bridge.',
+      'Natural ground: shorelines curve and wander instead of running in straight lines, and beaches, rocky ground, meadows, forest and dirt trails blend into each other. Collision follows the same shorelines you see.',
+      '34 new fish (110 in all): every pond and the East River has its own species and legendary, including Old Whiskers, The Crystal Char, The Midnight Bowfin, Old Millstone, The Willow Wisp and The Rapids Runner, plus two new mythics: Glimmerfin (Crystal Pond) and Mirefang (Black Bog).',
+      'Dirt trails lead from South Beach to every pond, and each pond has a jetty, dock or boardwalk to fish from.',
+      'More hotspots across the bigger map, and the Travelling Zoo also visits Crystal Springs and Millside.',
+      'New achievements: Pond Hopper (30 fish in each pond) and River Runner (200 fish in the East River).',
+    ],
+  },
   {
     version: '0.15.0',
     date: '2026-10-03',

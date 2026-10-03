@@ -22,8 +22,9 @@ export const BOAT = Object.freeze({
   beam: 76,
   boardRange: 190, // how close to the boat you must stand to board
   landing: { x: 1600, y: 1800 }, // where passengers step off, on the dock
-  // Route from beyond the east edge of the map, up the river, across the lake to the dock.
-  path: [[3360, 1000], [3000, 1000], [2640, 1010], [2260, 1200], [1960, 1440], [1795, 1600], [1765, 1800]],
+  // Route from beyond the east edge of the map, down the East River (RIVER in
+  // world.js), across the lake to the dock.
+  path: [[5400, 1000], [4900, 990], [4500, 1000], [4100, 1030], [3700, 985], [3300, 995], [2900, 1000], [2640, 1010], [2260, 1200], [1960, 1440], [1795, 1600], [1765, 1800]],
 });
 
 /** A smooth curve through points (Catmull-Rom), sampled by distance along it. */

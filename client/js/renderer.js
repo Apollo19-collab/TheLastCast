@@ -275,7 +275,8 @@ export class Renderer {
     const w = this.world;
     const t = this.terrain;
     const glints = [];
-    for (let i = 0; i < 1400; i++) {
+    const count = Math.round((1400 * w.width * w.height) / (3200 * 2400));
+    for (let i = 0; i < count; i++) {
       const x = -400 + rnd() * (w.width + 800);
       const y = -400 + rnd() * (w.height + 800);
       if (t.sdf(x, y) < -12) glints.push({ x, y, phase: rnd() * 100, speed: 0.6 + rnd() * 0.8 });

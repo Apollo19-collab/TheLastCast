@@ -8,21 +8,26 @@
 //    scenery stamped on). The renderer draws animated water between the two.
 // 3. Chunks are made lazily, a few per frame, and kept in a small cache.
 //
-// Collision is unchanged: it still uses the rectangles in shared/world.js.
+// Water comes from the same organic field the server uses for collision
+// (waterField in shared/world.js), so the shoreline you see is the one you
+// walk on. Ground types are worked out here from distance to the water and
+// noise: beaches, rocky outcrops, meadows, forest floor and dirt trails all
+// blend into each other instead of meeting in straight lines.
 // The terrain extends past the world edge (forest, and the river continues),
 // so the centred camera never shows a void.
 
 import { fbm, noise, ridged, seeded, seedFrom, tileNoise } from './noise.js';
 import { spritePools, stamp } from './sprites.js';
 import { THEME } from '../theme.js';
-import { zoneAt } from '/shared/world.js';
+import { fieldAt, segmentDistance, shapesDistance, warpPoint, zoneAt } from '/shared/world.js';
 
 const CELL = 8; // distance-field resolution, world units
 const MARGIN = 1200; // how far terrain extends beyond the world edge
 const CHUNK = 256; // chunk size, world units
 const TINT_CELL = 16;
 const MAX_CACHED = 140;
-const TYPE_INDEX = { grass: 0, sand: 1, rock: 2 };
+const TYPE_INDEX = { grass: 0, sand: 1, rock: 2, dirt: 3 };
+const TYPE_NAMES = ['grass', 'sand', 'rock', 'dirt'];
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const smoothstep = (a, b, v) => {
@@ -48,6 +53,8 @@ export class Terrain {
     const w = this.world;
     const cx = clamp(x, 0, w.width - 1);
     const cy = clamp(y, 0, w.height - 1);
+    // Organic worlds: just land or water here; buildFields picks the ground type.
+    if (w.shape) return fieldAt(w, cx, cy) < 0 ? -1 : 0;
     let t = -1;
     for (const r of w.land) {
       if (cx >= r.x && cx < r.x + r.w && cy >= r.y && cy < r.y + r.h) t = TYPE_INDEX[r.type] ?? 0;
@@ -103,7 +110,62 @@ export class Terrain {
     }
     const sdf = new Float32Array(n);
     for (let k = 0; k < n; k++) sdf[k] = type[k] >= 0 ? (dIn[k] - 0.5) * CELL : -(dOut[k] - 0.5) * CELL;
+    if (this.world.shape) {
+      this.trails = (this.world.shape.trails ?? []).map((pts) => {
+        const xs = pts.map((p) => p[0]);
+        const ys = pts.map((p) => p[1]);
+        return { pts, x0: Math.min(...xs) - 40, x1: Math.max(...xs) + 40, y0: Math.min(...ys) - 40, y1: Math.max(...ys) + 40 };
+      });
+      for (let j = 0; j < gh; j++) {
+        for (let i = 0; i < gw; i++) {
+          const k = j * gw + i;
+          if (type[k] >= 0) type[k] = this.groundType(-MARGIN + i * CELL, -MARGIN + j * CELL, sdf[k]);
+        }
+      }
+    }
     Object.assign(this, { gw, gh, type, sdfGrid: sdf });
+  }
+
+  /** The shared water field (≈ signed distance to the shore), extended past the world's edges. */
+  coastAt(x, y) {
+    const w = this.world;
+    return fieldAt(w, clamp(x, 0, w.width - 1), clamp(y, 0, w.height - 1));
+  }
+
+  /** Distance to the nearest dirt trail. */
+  trailDistance(x, y) {
+    let d = Infinity;
+    for (const t of this.trails) {
+      if (x < t.x0 || x > t.x1 || y < t.y0 || y > t.y1) continue;
+      for (let i = 1; i < t.pts.length; i++) d = Math.min(d, segmentDistance(x, y, t.pts[i - 1], t.pts[i]));
+    }
+    return d;
+  }
+
+  /**
+   * What the ground is at a land point `s` units from the water: rocky
+   * outcrops, beaches (wide where the world marks them, patchy elsewhere),
+   * dirt trails, or grass. Edges are roughened with noise so nothing meets
+   * in a straight line.
+   */
+  groundType(x, y, s) {
+    const sh = this.world.shape;
+    const [wx, wy] = warpPoint(sh, x, y);
+    const rough = (fbm(x / 45 + 3, y / 45 + 7, 2) - 0.5) * 50;
+    // Rocky ground: solid stone along the water, broken up by grass further in.
+    if (shapesDistance(sh.rock, wx, wy) + rough < 0 && (s < 140 || fbm(x / 110 + 5, y / 110 + 9, 2) > 0.5)) return TYPE_INDEX.rock;
+    if (s > 90 && fbm(x / 300 + 17, y / 300 + 3, 3) > 0.76) return TYPE_INDEX.rock; // small outcrops in the hills
+    if (s < 420 && shapesDistance(sh.beaches, wx, wy) + rough < 0) return TYPE_INDEX.sand;
+    // Elsewhere the banks are mostly grass and mud, with the odd sandy cove.
+    const beach = 2 + 50 * smoothstep(0.55, 0.8, fbm(x / 420 + 9, y / 420 + 2, 2));
+    if (s < beach + rough * 0.3) return TYPE_INDEX.sand;
+    if (this.trailDistance(x, y) < 14 + (noise(x / 20, y / 20) - 0.5) * 10) return TYPE_INDEX.dirt;
+    return TYPE_INDEX.grass;
+  }
+
+  /** 0 (open meadow) .. 1 (deep forest), for ground colour and trees. */
+  forestAt(x, y) {
+    return smoothstep(0.47, 0.66, fbm(x / 650 + 40, y / 650 + 20, 3));
   }
 
   /** Signed distance to the shoreline (world units): + on land, - in water. */
@@ -278,9 +340,12 @@ export class Terrain {
     if (type === 0) {
       const n = fbm(x / 95, y / 95, 3);
       const f = noise(x / 3.5, y / 3.5) - 0.5;
-      r = 64 + n * 44 + f * 16;
-      g = 104 + n * 50 + f * 18;
-      b = 44 + n * 26 + f * 10;
+      // Bright, slightly yellow meadows out in the open; dark, mossy floor under the trees.
+      const forest = this.world.shape ? this.forestAt(x, y) : 0.3;
+      const dry = smoothstep(0.55, 0.8, fbm(x / 260 + 70, y / 260 + 11, 2)) * (1 - forest);
+      r = 64 + n * 44 + f * 16 - forest * 20 + dry * 34;
+      g = 104 + n * 50 + f * 18 - forest * 22 + dry * 16;
+      b = 44 + n * 26 + f * 10 - forest * 10 - dry * 4;
       if (wet > 0) { // muddy bank
         r += (104 - r) * wet * 0.75;
         g += (96 - g) * wet * 0.75;
@@ -297,6 +362,19 @@ export class Terrain {
         r += (164 - r) * wet * 0.75;
         g += (140 - g) * wet * 0.75;
         b += (98 - b) * wet * 0.75;
+      }
+    } else if (type === 3) {
+      // A packed dirt trail with ruts and small stones.
+      const n = fbm(x / 60, y / 60, 2);
+      const grain = noise(x / 2.2, y / 2.2) - 0.5;
+      const stone = noise(x / 5 + 11, y / 5 + 4) > 0.86 ? 26 : 0;
+      r = 128 + n * 30 + grain * 22 + stone;
+      g = 102 + n * 24 + grain * 18 + stone;
+      b = 70 + n * 18 + grain * 14 + stone;
+      if (wet > 0) {
+        r -= wet * 26;
+        g -= wet * 22;
+        b -= wet * 16;
       }
     } else {
       const n = fbm(x / 48, y / 48, 3);
@@ -356,8 +434,12 @@ export class Terrain {
         const x = x0 + (i + 0.5) / res;
         const k = (j * px + i) * 4;
         const s = this.sdf(x, y);
-        // Wobble the coastline a little so it isn't a straight rectangle edge.
-        const e = Math.abs(s) < 24 ? s + (fbm(x / 40, y / 40, 2) - 0.5) * 14 : s;
+        // Near the shore, organic worlds use the smooth shared field itself, so
+        // the coast you see is exactly the one you collide with. Rectangle
+        // worlds get a little wobble so edges aren't ruler-straight.
+        const e = Math.abs(s) < 24
+          ? (this.world.shape ? this.coastAt(x, y) : s + (fbm(x / 40, y / 40, 2) - 0.5) * 14)
+          : s;
         if (e < 2) {
           this.waterColor(x, y, e, col, tint);
           wd[k] = col[0];
@@ -429,12 +511,15 @@ export class Terrain {
       const type = this.typeAt(x, y);
       const roll = rnd();
       if (type === 0) {
-        const pineCountry = (y < 1150 && x > 700 && x < 2300) || (outside && y < 600);
-        if (s > 55 && !nearStructure(x, y, 60) && roll < (outside ? 0.85 : 0.4)) {
+        const forest = w.shape ? this.forestAt(x, y) : 0.4;
+        const pineCountry = (y < 1150 && x > 700 && x < 2300) || (outside && y < 600) || noise(x / 900 + 2, y / 900 + 5) > 0.62;
+        if (s > 55 && !nearStructure(x, y, 60) && roll < (outside ? 0.85 : 0.08 + 0.72 * forest)) {
           add(pineCountry || rnd() < 0.15 ? 'pine' : 'tree', x, y, 2);
-        } else if (s > 18 && roll < 0.55) add('bush', x, y, 1);
-        else if (roll < 0.8) add('tuft', x, y, 0);
+        } else if (s > 18 && roll < 0.25 + 0.35 * forest) add('bush', x, y, 1);
+        else if (roll < 0.62 + 0.25 * forest) add('tuft', x, y, 0);
         else add('flowers', x, y, 0);
+      } else if (type === 3) {
+        if (roll < 0.12) add('pebbles', x, y, 0, 0.6 + rnd() * 0.3);
       } else if (type === 1) {
         if (s < 30 && roll < 0.06) add('driftwood', x, y, 0);
         else if (roll < 0.18) add('pebbles', x, y, 0);
@@ -519,6 +604,16 @@ export class Terrain {
     ctx.rect(x0, y0, CHUNK, CHUNK);
     ctx.clip();
     const w = this.world;
+    if (w.shape) {
+      // A quick flat-coloured picture of the ground until the real tile is ready.
+      const o = this.overview();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(o.canvas, (x0 + MARGIN) / o.step, (y0 + MARGIN) / o.step, CHUNK / o.step, CHUNK / o.step, x0, y0, CHUNK, CHUNK);
+      ctx.fillStyle = THEME.structure.deck;
+      for (const s of w.structures) ctx.fillRect(s.x, s.y, s.w, s.h);
+      ctx.restore();
+      return;
+    }
     for (const r of w.land) {
       ctx.fillStyle = THEME.land[r.type] || THEME.land.grass;
       ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -531,6 +626,38 @@ export class Terrain {
     ctx.fillStyle = THEME.structure.deck;
     for (const s of w.structures) ctx.fillRect(s.x, s.y, s.w, s.h);
     ctx.restore();
+  }
+
+  /** Flat colours for the whole map at low resolution (cached), for placeholders. */
+  overview() {
+    if (this.overviewCache) return this.overviewCache;
+    const step = 16;
+    const cw = Math.ceil((this.world.width + 2 * MARGIN) / step);
+    const chh = Math.ceil((this.world.height + 2 * MARGIN) / step);
+    const canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = chh;
+    const g = canvas.getContext('2d');
+    const img = g.createImageData(cw, chh);
+    const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const colours = TYPE_NAMES.map((t) => rgb(THEME.land[t]));
+    const water = rgb(THEME.water.placeholder);
+    for (let j = 0; j < chh; j++) {
+      for (let i = 0; i < cw; i++) {
+        const x = -MARGIN + (i + 0.5) * step;
+        const y = -MARGIN + (j + 0.5) * step;
+        const t = this.sdf(x, y) < 0 ? -1 : this.typeAt(x, y);
+        const c = t < 0 ? water : colours[t] ?? colours[0];
+        const k = (j * cw + i) * 4;
+        img.data[k] = c[0];
+        img.data[k + 1] = c[1];
+        img.data[k + 2] = c[2];
+        img.data[k + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    this.overviewCache = { canvas, step };
+    return this.overviewCache;
   }
 
   // ---- extras -------------------------------------------------------------------------

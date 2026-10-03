@@ -55,11 +55,12 @@ test('names are sanitized', () => {
 test('players cannot walk into the water', () => {
   const { game, player } = makeGame();
   player.x = 1000;
-  player.y = 2005;
+  player.y = 2150;
   game.handleMessage(player, { t: MSG.INPUT, up: true });
   run(game, 3);
   assert.ok(isWalkable(world, player.x, player.y));
-  assert.ok(player.y >= 2000);
+  assert.ok(player.y < 2150, 'walked up the beach');
+  assert.ok(isWater(world, player.x, player.y - 20), 'and stopped at the shore');
 });
 
 test('cast onto land is rejected; cast into water starts fishing', () => {
@@ -537,6 +538,16 @@ test('the big lake: three new locations, all reachable on foot', () => {
   assert.ok(reachable(3060, 1000), 'bridge over the river');
   assert.ok(reachable(3100, 400), 'east shore north of the river');
   assert.ok(reachable(1600, 1620), 'end of the South Beach dock');
+  // The ponds and the land around them, all on foot from the spawn.
+  assert.ok(reachable(4250, 580), 'end of the Willow Pond jetty');
+  assert.ok(reachable(650, 3100), 'end of the Frog Pond jetty');
+  assert.ok(reachable(2150, 3150), 'the island in Crystal Pond');
+  assert.ok(reachable(3420, 2950), 'end of the Black Bog boardwalk');
+  assert.ok(reachable(4500, 1700), 'end of the Mill Pond dock');
+  assert.ok(reachable(4410, 1000), 'the bridge over the East River');
+  assert.ok(reachable(5000, 3700), 'the far south-east corner');
+  const walkable = seen.size * step * step;
+  assert.ok(walkable > 3200 * 2400 * 1.3, `lots more ground to explore (${Math.round(walkable / 1e6)}M units²)`);
 });
 
 // Simulated angler with ~0.3 s reaction time who reels while the fish rests
@@ -698,7 +709,7 @@ test('bait economy: cheap bait pays for itself many times over', () => {
 
 test('mythic fish: the rarest, hardest fish; endgame tackle lands them', () => {
   const mythics = Object.keys(SPECIES).filter((id) => SPECIES[id].rarity === 'mythic');
-  assert.equal(mythics.length, 5);
+  assert.equal(mythics.length, 7);
   assert.ok(fishDifficulty('aurora', 18) > fishDifficulty('ghost', 55), 'mythic > legendary');
   const mid = { rod: 'carbon', reel: 'baitcaster', line: 'braid', bait: 'spinner' };
   const star = { rod: 'starrod', reel: 'starreel', line: 'starline', bait: 'stardust' };
@@ -732,4 +743,36 @@ test('achievements: mythic metrics count catches, species and pets', () => {
   p.counters.mythicCatches = 1;
   assert.ok(progressOf(p, a('mythic_hunter')).done);
   assert.equal(a('grandmaster').goal, 75);
+});
+
+test('the bigger map: 2.5x the area, five ponds and the East River, natural shorelines', () => {
+  assert.ok(world.width * world.height >= 3200 * 2400 * 2.5);
+  const ponds = ['willowPond', 'frogPond', 'crystalPond', 'blackBog', 'millPond', 'eastRiver'];
+  // Sample the whole map: every pond has water, and stray water never falls
+  // through to "Open Lake" outside Mirror Lake itself.
+  const water = Object.fromEntries(ponds.map((id) => [id, 0]));
+  let straight = 0;
+  for (let y = 10; y < world.height; y += 20) {
+    for (let x = 10; x < world.width; x += 20) {
+      const z = zoneAt(world, x, y);
+      if (!z) continue;
+      if (z.id in water) water[z.id] += 1;
+      if (z.id === 'open') assert.ok(x < 3000 && y < 2200, `open lake water out at ${x},${y}`);
+    }
+  }
+  for (const id of ponds) assert.ok(water[id] > 150, `${id} has water (${water[id]} samples)`);
+  // Shorelines wander: walking along y = 2000 crosses land and water many times.
+  let last = isWater(world, 700, 1990);
+  for (let x = 700; x < 2300; x += 4) {
+    const w = isWater(world, x, 1990);
+    if (w !== last) straight += 1;
+    last = w;
+  }
+  assert.ok(straight >= 2, 'the south shore is not a ruler-straight line');
+  // Every pond has its own legendary.
+  for (const id of ponds) {
+    const z = world.zones.find((q) => q.id === id);
+    assert.ok(Object.keys(z.fish).some((sp) => SPECIES[sp].rarity === 'legendary'), `${id} legendary`);
+  }
+  assert.ok(Object.keys(SPECIES).length >= 110, `${Object.keys(SPECIES).length} species`);
 });
