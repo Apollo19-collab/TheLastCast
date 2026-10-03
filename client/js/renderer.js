@@ -14,6 +14,7 @@ import { THEME } from './theme.js';
 import { castDistance, FishingState } from '/shared/constants.js';
 import { isWalkable, zoneAt, zoneRects } from '/shared/world.js';
 import { Terrain } from './gfx/terrain.js';
+import { graphics } from './graphics.js';
 import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/characters.js';
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
@@ -48,10 +49,15 @@ export class Renderer {
     }
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    graphics.onChange(() => {
+      this.resize();
+      this.terrain?.qualityChanged();
+    });
   }
 
   resize() {
-    const dpr = window.devicePixelRatio || 1;
+    // Graphics quality caps the canvas resolution (Low draws below it).
+    const dpr = Math.min(window.devicePixelRatio || 1, graphics.settings.pixelRatio);
     this.dpr = dpr;
     this.canvas.width = Math.floor(window.innerWidth * dpr);
     this.canvas.height = Math.floor(window.innerHeight * dpr);
@@ -69,7 +75,7 @@ export class Renderer {
     c.x = focusX;
     c.y = focusY;
     // Terrain tiles are rendered at (roughly) screen resolution, capped for speed.
-    this.terrain?.setResolution(clamp(Math.round(c.zoom * 2) / 2, 1, 2));
+    this.terrain?.setResolution(clamp(Math.round(c.zoom * 2) / 2, 0.5, graphics.settings.tileRes));
   }
 
   viewRect(margin = 0) {
@@ -125,11 +131,12 @@ export class Renderer {
     const view = this.viewRect(0);
     // Time allowed for rendering new terrain tiles this frame; more while on
     // the join screen. At least one visible tile is always rendered.
-    const budget = { until: performance.now() + (frame.meId ? 8 : 40), first: true };
+    const q = graphics.settings;
+    const budget = { until: performance.now() + (frame.meId ? q.tileBudget : 40), first: true };
     this.terrain.draw(ctx, view, 'water', budget);
-    this.drawCaustics(view, time);
-    this.drawGlints(time);
-    this.drawCurrent(time);
+    if (q.caustics) this.drawCaustics(view, time, q.caustics);
+    if (q.glints) this.drawGlints(time);
+    if (q.current) this.drawCurrent(time);
     this.drawZoneLabels();
     // The visiting boat sits between the water and land layers, so it
     // passes under the river bridge.
@@ -141,8 +148,8 @@ export class Renderer {
     }
     this.terrain.draw(ctx, view, 'land', null);
     if (boat?.ph === 'docked') drawGangplank(ctx, BOAT.landing.x + 26, boat.x - BOAT.beam / 2 + 4, boat.y);
-    this.drawSurf(time);
-    this.drawReeds(time);
+    if (q.surf) this.drawSurf(time);
+    if (q.reeds) this.drawReeds(time);
     for (const shop of this.world.shops ?? []) if (this.onScreen(shop.x, shop.y, 80)) drawBaitShop(ctx, shop.x, shop.y);
     if (frame.zoo && this.onScreen(frame.zoo.x, frame.zoo.y, 120)) drawZoo(ctx, frame.zoo.x, frame.zoo.y, time);
     this.drawAreaLabels();
@@ -168,7 +175,7 @@ export class Renderer {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawMinimap(frame);
-    this.terrain.prefetch(view, budget);
+    if (q.prefetch) this.terrain.prefetch(view, budget);
   }
 
   drawSeaFrame(frame) {
@@ -274,13 +281,13 @@ export class Renderer {
 
   // ---- water ------------------------------------------------------------------
 
-  drawCaustics(view, time) {
+  drawCaustics(view, time, layers = 2) {
     const { ctx } = this;
     const p = this.causticPattern;
     if (!p) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    for (const [alpha, sx, sy, scale] of [[THEME.caustics.alpha, 0.011, 0.007, 1.4], [THEME.caustics.alpha2, -0.008, 0.01, 2.3]]) {
+    for (const [alpha, sx, sy, scale] of [[THEME.caustics.alpha, 0.011, 0.007, 1.4], [THEME.caustics.alpha2, -0.008, 0.01, 2.3]].slice(0, layers)) {
       p.setTransform(new DOMMatrix().translateSelf(time * sx, time * sy).scaleSelf(scale, scale));
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p;

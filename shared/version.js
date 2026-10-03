@@ -2,9 +2,19 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.17.0';
+export const VERSION = '0.17.1';
 
 export const CHANGELOG = [
+  {
+    version: '0.17.1',
+    date: '2026-10-03',
+    title: 'Graphics settings',
+    changes: [
+      'Graphics settings in Options: Low, Medium and High. Your choice is remembered in this browser.',
+      'Low draws below screen resolution with fewer trees and no water shimmer, sparkles, surf, reeds or current, for older or slower devices. Medium keeps every effect at standard resolution. High (the default) is sharp on high-DPI screens with everything on.',
+      'Terrain tiles overlap a touch more, so no seams show at lower resolutions.',
+    ],
+  },
   {
     version: '0.17.0',
     date: '2026-10-03',

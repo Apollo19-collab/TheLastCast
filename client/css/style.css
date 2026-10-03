@@ -688,3 +688,7 @@ html, body, button, input { font-family: var(--ui-font); }
 .boss-breach { background: rgba(255,209,102,0.18); color: #ffd166; border-left: 3px solid #ffd166; }
 .boss-grab { background: rgba(199,125,255,0.18); color: #e0aaff; border-left: 3px solid #c77dff; }
 @keyframes boss-pulse { 50% { opacity: 0.55; } }
+
+/* graphics quality picker (Options) */
+.graphics-levels button { flex: 1; padding: 7px 10px; font-weight: 700; }
+.graphics-note { margin: 2px 0 4px; }

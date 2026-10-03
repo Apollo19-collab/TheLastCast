@@ -6,6 +6,7 @@
 // them (time-of-day light, rain) but under name tags and the HUD.
 
 import { Terrain } from './terrain.js';
+import { graphics } from '../graphics.js';
 import { seeded } from './noise.js';
 import { BOSSES, DECK_AREAS, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS } from '/shared/voyage.js';
 
@@ -66,7 +67,7 @@ export class SeaScene {
     if (this.caustics) {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      for (const [alpha, sx, sy, scale] of [[0.07, 0.011, 0.007, 1.6], [0.045, -0.008, 0.01, 2.6]]) {
+      for (const [alpha, sx, sy, scale] of [[0.07, 0.011, 0.007, 1.6], [0.045, -0.008, 0.01, 2.6]].slice(0, graphics.settings.caustics)) {
         this.caustics.setTransform(new DOMMatrix().translateSelf(-this.flow + time * sx, time * sy).scaleSelf(scale, scale));
         ctx.globalAlpha = alpha;
         ctx.fillStyle = this.caustics;
@@ -596,7 +597,7 @@ export class SeaScene {
       ctx.strokeStyle = 'rgba(200,215,230,0.35)';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      for (const d of this.rain) {
+      for (const d of this.rain.slice(0, Math.round(this.rain.length * graphics.settings.rain))) {
         const x = ((d.x * width + time * 0.25 * d.speed) % width);
         const y = ((d.y * height + time * 0.9 * d.speed) % height);
         ctx.moveTo(x, y);

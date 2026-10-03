@@ -4,6 +4,7 @@
 // voyage panel, banners and results.
 
 import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
+import { QUALITY, graphics } from './graphics.js';
 import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
@@ -215,7 +216,17 @@ export class UI {
       onchange: () => { this.setSoundButton(audio.toggleMute()); mute.checked = audio.muted; },
     });
     this.optionsMute = mute;
+    const quality = h('div', { class: 'slot-tabs graphics-levels', role: 'radiogroup', 'aria-label': 'Graphics quality' },
+      Object.entries(QUALITY).map(([level, q]) => h('button', {
+        class: graphics.level === level ? 'active' : '',
+        role: 'radio',
+        'aria-checked': String(graphics.level === level),
+        onclick: () => { graphics.set(level); this.renderMenu(); },
+      }, q.label)));
     return [
+      h('h4', { class: 'option-heading' }, 'Graphics'),
+      quality,
+      h('p', { class: 'menu-note graphics-note' }, graphics.settings.desc),
       h('h4', { class: 'option-heading' }, 'Sound'),
       ...sliders,
       h('label', { class: 'option-row option-check' }, mute, h('span', {}, 'Mute all sound '), h('kbd', {}, 'M')),

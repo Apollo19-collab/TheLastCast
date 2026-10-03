@@ -24,6 +24,7 @@
 import { fbm, noise, ridged, seeded, seedFrom, tileNoise } from './noise.js';
 import { spritePools, stamp } from './sprites.js';
 import { THEME } from '../theme.js';
+import { graphics } from '../graphics.js';
 import { fieldAt, segmentDistance, shapesDistance, warpPoint, zoneAt } from '/shared/world.js';
 
 const CHUNK = 256; // chunk size, world units
@@ -395,6 +396,12 @@ export class Terrain {
 
   // ---- chunks -----------------------------------------------------------------------
 
+  /** Graphics quality changed: redraw tiles (scenery density may differ). */
+  qualityChanged() {
+    this.cache.clear();
+    this.decorCache.clear();
+  }
+
   /** Pixel density for chunk canvases; changing it discards the cache. */
   setResolution(res) {
     if (res === this.res) return;
@@ -487,7 +494,8 @@ export class Terrain {
     const structures = w.structures.filter((s) => s.x < x0 + CHUNK + 80 && s.x + s.w > x0 - 80 && s.y < y0 + CHUNK + 80 && s.y + s.h > y0 - 80);
     const nearStructure = (x, y, m) => structures.some((s) => x > s.x - m && x < s.x + s.w + m && y > s.y - m && y < s.y + s.h + m);
     const add = (kind, x, y, layer, scale = 0.85 + rnd() * 0.3) => out.push({ kind, variant: Math.floor(rnd() * 100), x, y, layer, scale });
-    for (let n = 0; n < 90; n++) {
+    // Lower graphics settings scatter less scenery.
+    for (let n = 0, count = Math.round(90 * graphics.settings.decor); n < count; n++) {
       const x = x0 + rnd() * CHUNK;
       const y = y0 + rnd() * CHUNK;
       const s = this.sdf(x, y);
@@ -541,8 +549,8 @@ export class Terrain {
       const key = `${cx},${cy}`;
       let entry = this.cache.get(key);
       if (!entry && this.mayRender(budget)) entry = this.ensure(cx, cy);
-      // Crop the 1px border and overlap by a hair so seams never show a gap.
-      if (entry) ctx.drawImage(entry[layer], 1, 1, entry.inner, entry.inner, cx * CHUNK, cy * CHUNK, CHUNK + 0.4, CHUNK + 0.4);
+      // Crop the 1px border and overlap a little so seams never show a gap (even at Low resolution).
+      if (entry) ctx.drawImage(entry[layer], 1, 1, entry.inner, entry.inner, cx * CHUNK, cy * CHUNK, CHUNK + 1, CHUNK + 1);
       else this.drawPlaceholder(ctx, cx, cy, layer);
     }
   }

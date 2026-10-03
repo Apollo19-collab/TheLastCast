@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.17.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.17.1** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -172,6 +172,18 @@ Everything is synthesized in the browser with the Web Audio API, so there are no
 - **Lake ambience:** a slow wash of distant waves, water lapping, a light breeze, songbirds on the bank, and the occasional loon calling across the water.
 
 Browsers only allow sound after you click or press a key, so sound starts with your first interaction. **Options** (`O`) has separate **Master**, **Effects** and **Lake ambience** volume sliders and a mute switch. They're remembered per browser.
+
+**Graphics** (also in Options): **Low**, **Medium** or **High** (the default), remembered per browser. The presets live in `client/js/graphics.js`:
+
+| Setting | Low | Medium | High |
+| --- | --- | --- | --- |
+| Canvas resolution | 75% of the screen | 1x | up to 2x on high-DPI screens |
+| Terrain tile detail | 1x | up to 1.5x | up to 2x |
+| Trees and scenery | 45% | 80% | all |
+| Water shimmer layers | none | 1 | 2 |
+| Sparkles, surf, reeds, river current | off | on | on |
+| Rain at sea | 30% | 70% | all |
+| Pre-render tiles just off screen | off | on | on |
 
 ### Accounts
 

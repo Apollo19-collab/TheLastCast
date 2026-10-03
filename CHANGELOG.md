@@ -2,6 +2,12 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.17.1 - Graphics settings (2026-10-03)
+
+- Graphics settings in Options: Low, Medium and High. Your choice is remembered in this browser.
+- Low draws below screen resolution with fewer trees and no water shimmer, sparkles, surf, reeds or current, for older or slower devices. Medium keeps every effect at standard resolution. High (the default) is sharp on high-DPI screens with everything on.
+- Terrain tiles overlap a touch more, so no seams show at lower resolutions.
+
 ## 0.17.0 - Into the wilds (2026-10-03)
 
 - The map is now huge: 12,800 x 9,600, more than six times bigger than before. Beyond the valley lie the wilds: Northern Wilds, Frostpine Reach, Heartwood, the Eastern Marches, the Southern Fens, the Lost Valley, Mistmoor and the Far Reaches.
