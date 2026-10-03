@@ -2,7 +2,7 @@
 //
 // Every 15 minutes a boat sails in through the River Mouth and docks beside
 // the South Beach dock. Anglers have 2 minutes to board, then it sails out to
-// sea and visits 4 of the 8 locations below, picked at random. Each location
+// sea and visits 3 of the 8 locations below, picked at random. Each location
 // has its own fish, a legendary and a special event that happens once per
 // stop (faster bites, rarer fish, double points...). The crew shares a set of
 // missions, and everyone gets bonus coins at the end based on how they did.
@@ -12,6 +12,8 @@
 
 // ---- the boat on Mirror Lake -------------------------------------------------------
 
+
+import { RIVER } from './world.js';
 export const BOAT = Object.freeze({
   interval: 900, // seconds between visits: it docks on the quarter hour
   arrive: 30, // seconds sailing in
@@ -24,7 +26,7 @@ export const BOAT = Object.freeze({
   landing: { x: 1600, y: 1800 }, // where passengers step off, on the dock
   // Route from beyond the east edge of the map, down the East River (RIVER in
   // world.js), across the lake to the dock.
-  path: [[5400, 1000], [4900, 990], [4500, 1000], [4100, 1030], [3700, 985], [3300, 995], [2900, 1000], [2640, 1010], [2260, 1200], [1960, 1440], [1795, 1600], [1765, 1800]],
+  path: [...[...RIVER].reverse().filter(([x]) => x > 2900), [2900, 1000], [2640, 1010], [2260, 1200], [1960, 1440], [1795, 1600], [1765, 1800]],
 });
 
 /** A smooth curve through points (Catmull-Rom), sampled by distance along it. */

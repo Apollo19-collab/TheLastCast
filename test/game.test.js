@@ -776,3 +776,39 @@ test('the bigger map: 2.5x the area, five ponds and the East River, natural shor
   }
   assert.ok(Object.keys(SPECIES).length >= 110, `${Object.keys(SPECIES).length} species`);
 });
+
+test('the wilds: a really big generated map, every pond reachable on foot', () => {
+  assert.ok(world.width >= 12800 && world.height >= 9600, 'really big');
+  const wild = world.zones.filter((z) => z.id.startsWith('wild'));
+  assert.ok(wild.length >= 20, `${wild.length} generated ponds and lakes`);
+  assert.equal(new Set(wild.map((z) => z.name)).size, wild.length, 'every pond has its own name');
+  for (const z of wild) {
+    assert.ok(z.kind && z.fish, `${z.name} copies a pond type`);
+    const r = z.rect;
+    let water = 0;
+    for (let y = r.y; y < r.y + r.h; y += 40) for (let x = r.x; x < r.x + r.w; x += 40) if (zoneAt(world, x, y) === z) water++;
+    assert.ok(water > 20, `${z.name} has water`);
+  }
+  // Flood-fill the walkable ground from the spawn on a coarse grid; every
+  // jetty, dock and bridge must be reachable.
+  const step = 24;
+  const key = (x, y) => `${x},${y}`;
+  const start = [Math.round(world.spawn.x / step) * step, Math.round(world.spawn.y / step) * step];
+  const seen = new Set([key(...start)]);
+  const queue = [start];
+  while (queue.length) {
+    const [x, y] = queue.pop();
+    for (const [dx, dy] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+      const n = [x + dx, y + dy];
+      if (!seen.has(key(...n)) && isWalkable(world, ...n)) { seen.add(key(...n)); queue.push(n); }
+    }
+  }
+  const near = (x, y) => [[0, 0], [step, 0], [0, step], [step, step]]
+    .some(([dx, dy]) => seen.has(key(Math.floor(x / step) * step + dx, Math.floor(y / step) * step + dy)));
+  for (const s of world.structures) {
+    assert.ok(near(s.x + s.w / 2, s.y + s.h / 2), `${s.type} at ${s.x},${s.y} reachable`);
+  }
+  // Generated trails, pond names and regions show up where you are.
+  assert.ok(world.shape.trails.length > 20);
+  assert.equal(areaAt(world, 8300, 4000).name, 'Heartwood');
+});

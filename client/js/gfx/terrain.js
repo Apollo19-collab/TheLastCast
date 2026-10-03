@@ -1,18 +1,23 @@
 // Terrain: textured ground and water, baked into cached tiles ("chunks").
 //
-// 1. A signed distance field says how far every point is from the shoreline
-//    (positive on land, negative in water). It drives water depth colour,
-//    wet sand, foam and the slightly wavy, natural-looking coastline.
-// 2. Each 256x256-unit chunk is rendered once, per pixel, into two canvases:
-//    `water` (opaque) and `land` (transparent over water, with docks and
-//    scenery stamped on). The renderer draws animated water between the two.
-// 3. Chunks are made lazily, a few per frame, and kept in a small cache.
+// Nothing is worked out for the whole map up front: the map is huge, so
+// everything is made per 256x256-unit chunk, only when that chunk comes near
+// the screen, and old chunks are forgotten again.
 //
-// Water comes from the same organic field the server uses for collision
-// (waterField in shared/world.js), so the shoreline you see is the one you
-// walk on. Ground types are worked out here from distance to the water and
-// noise: beaches, rocky outcrops, meadows, forest floor and dirt trails all
-// blend into each other instead of meeting in straight lines.
+// 1. Water comes from the same organic field the server uses for collision
+//    (fieldAt in shared/world.js: < 0 is water, roughly the distance to the
+//    shore), so the shoreline you see is the one you walk on. It drives water
+//    depth colour, wet sand and foam.
+// 2. Per chunk, `data` holds the ground type of each 8-unit cell (beaches,
+//    rocky ground, meadow/forest grass, dirt trails), the blurred per-zone
+//    water tint, the surf points along the shore, and the animated extras
+//    (sparkles, reeds, current streaks).
+// 3. Each chunk is rendered once, per pixel, into two canvases: `water`
+//    (opaque) and `land` (transparent over water, with docks and scenery
+//    stamped on). The renderer draws animated water between the two. Chunks
+//    are made a few per frame and kept in a small cache.
+// 4. A low-resolution overview of the whole world (for the minimap) fills in
+//    a few rows at a time in spare frame time.
 // The terrain extends past the world edge (forest, and the river continues),
 // so the centred camera never shows a void.
 
@@ -21,11 +26,17 @@ import { spritePools, stamp } from './sprites.js';
 import { THEME } from '../theme.js';
 import { fieldAt, segmentDistance, shapesDistance, warpPoint, zoneAt } from '/shared/world.js';
 
-const CELL = 8; // distance-field resolution, world units
-const MARGIN = 1200; // how far terrain extends beyond the world edge
 const CHUNK = 256; // chunk size, world units
-const TINT_CELL = 16;
-const MAX_CACHED = 140;
+const CELL = 8; // ground-type resolution
+const CELLS = CHUNK / CELL;
+const TINT_CELL = 16; // water-tint resolution
+const TINTS = CHUNK / TINT_CELL;
+const TINT_BLUR = 3; // box-blur radius (cells), 3 passes
+const TINT_PAD = TINT_BLUR * 3;
+const MAX_CACHED = 140; // rendered chunk canvases
+const MAX_DATA = 700; // chunk data (types, tints, extras)
+const OVERVIEW_STEP = 32; // world units per overview pixel
+const OV_BLOCK = 16; // overview pixels per block side
 const TYPE_INDEX = { grass: 0, sand: 1, rock: 2, dirt: 3 };
 const TYPE_NAMES = ['grass', 'sand', 'rock', 'dirt'];
 
@@ -34,100 +45,33 @@ const smoothstep = (a, b, v) => {
   const t = clamp((v - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+/** A Map that forgets its oldest entries past `max`. */
+function remember(map, key, value, max) {
+  map.set(key, value);
+  if (map.size > max) map.delete(map.keys().next().value);
+  return value;
+}
 
 export class Terrain {
   constructor(world) {
     this.world = world;
-    this.cache = new Map();
+    this.cache = new Map(); // rendered chunks
+    this.data = new Map(); // chunk data
     this.decorCache = new Map();
     this.res = 1;
-    this.buildFields();
-    this.buildTints();
-    this.buildCoast();
+    this.trails = (world.shape.trails ?? []).map((pts) => {
+      const xs = pts.map((p) => p[0]);
+      const ys = pts.map((p) => p[1]);
+      return { pts, x0: Math.min(...xs) - 40, x1: Math.max(...xs) + 40, y0: Math.min(...ys) - 40, y1: Math.max(...ys) + 40 };
+    });
   }
 
-  // ---- fields -------------------------------------------------------------------
+  // ---- fields ---------------------------------------------------------------------
 
-  /** Land type index at a point (-1 = water), with the world's edges extended outward. */
-  typeRaw(x, y) {
-    const w = this.world;
-    const cx = clamp(x, 0, w.width - 1);
-    const cy = clamp(y, 0, w.height - 1);
-    // Organic worlds: just land or water here; buildFields picks the ground type.
-    if (w.shape) return fieldAt(w, cx, cy) < 0 ? -1 : 0;
-    let t = -1;
-    for (const r of w.land) {
-      if (cx >= r.x && cx < r.x + r.w && cy >= r.y && cy < r.y + r.h) t = TYPE_INDEX[r.type] ?? 0;
-    }
-    return t;
-  }
-
-  buildFields() {
-    const gw = Math.ceil((this.world.width + 2 * MARGIN) / CELL) + 1;
-    const gh = Math.ceil((this.world.height + 2 * MARGIN) / CELL) + 1;
-    const n = gw * gh;
-    const type = new Int8Array(n);
-    const dIn = new Float32Array(n);
-    const dOut = new Float32Array(n);
-    for (let j = 0; j < gh; j++) {
-      for (let i = 0; i < gw; i++) {
-        const k = j * gw + i;
-        const t = this.typeRaw(-MARGIN + i * CELL, -MARGIN + j * CELL);
-        type[k] = t;
-        dIn[k] = t >= 0 ? 1e9 : 0;
-        dOut[k] = t >= 0 ? 0 : 1e9;
-      }
-    }
-    // Two-pass chamfer distance transform, for both land and water.
-    const D = Math.SQRT2;
-    for (const d of [dIn, dOut]) {
-      for (let j = 0; j < gh; j++) {
-        for (let i = 0; i < gw; i++) {
-          const k = j * gw + i;
-          let v = d[k];
-          if (i > 0) v = Math.min(v, d[k - 1] + 1);
-          if (j > 0) {
-            v = Math.min(v, d[k - gw] + 1);
-            if (i > 0) v = Math.min(v, d[k - gw - 1] + D);
-            if (i < gw - 1) v = Math.min(v, d[k - gw + 1] + D);
-          }
-          d[k] = v;
-        }
-      }
-      for (let j = gh - 1; j >= 0; j--) {
-        for (let i = gw - 1; i >= 0; i--) {
-          const k = j * gw + i;
-          let v = d[k];
-          if (i < gw - 1) v = Math.min(v, d[k + 1] + 1);
-          if (j < gh - 1) {
-            v = Math.min(v, d[k + gw] + 1);
-            if (i < gw - 1) v = Math.min(v, d[k + gw + 1] + D);
-            if (i > 0) v = Math.min(v, d[k + gw - 1] + D);
-          }
-          d[k] = v;
-        }
-      }
-    }
-    const sdf = new Float32Array(n);
-    for (let k = 0; k < n; k++) sdf[k] = type[k] >= 0 ? (dIn[k] - 0.5) * CELL : -(dOut[k] - 0.5) * CELL;
-    if (this.world.shape) {
-      this.trails = (this.world.shape.trails ?? []).map((pts) => {
-        const xs = pts.map((p) => p[0]);
-        const ys = pts.map((p) => p[1]);
-        return { pts, x0: Math.min(...xs) - 40, x1: Math.max(...xs) + 40, y0: Math.min(...ys) - 40, y1: Math.max(...ys) + 40 };
-      });
-      for (let j = 0; j < gh; j++) {
-        for (let i = 0; i < gw; i++) {
-          const k = j * gw + i;
-          if (type[k] >= 0) type[k] = this.groundType(-MARGIN + i * CELL, -MARGIN + j * CELL, sdf[k]);
-        }
-      }
-    }
-    Object.assign(this, { gw, gh, type, sdfGrid: sdf });
-  }
-
-  /** The shared water field (≈ signed distance to the shore), extended past the world's edges. */
-  coastAt(x, y) {
+  /** Signed distance-ish to the shoreline (world units): + on land, - in water. Extended past the world's edges. */
+  sdf(x, y) {
     const w = this.world;
     return fieldAt(w, clamp(x, 0, w.width - 1), clamp(y, 0, w.height - 1));
   }
@@ -144,9 +88,9 @@ export class Terrain {
 
   /**
    * What the ground is at a land point `s` units from the water: rocky
-   * outcrops, beaches (wide where the world marks them, patchy elsewhere),
-   * dirt trails, or grass. Edges are roughened with noise so nothing meets
-   * in a straight line.
+   * ground, beaches (wide where the world marks them, patchy elsewhere), dirt
+   * trails, or grass. Edges are roughened with noise so nothing meets in a
+   * straight line.
    */
   groundType(x, y, s) {
     const sh = this.world.shape;
@@ -168,123 +112,174 @@ export class Terrain {
     return smoothstep(0.47, 0.66, fbm(x / 650 + 40, y / 650 + 20, 3));
   }
 
-  /** Signed distance to the shoreline (world units): + on land, - in water. */
-  sdf(x, y) {
-    const fx = clamp((x + MARGIN) / CELL, 0, this.gw - 1.001);
-    const fy = clamp((y + MARGIN) / CELL, 0, this.gh - 1.001);
-    const i = fx | 0;
-    const j = fy | 0;
-    const tx = fx - i;
-    const ty = fy - j;
-    const g = this.sdfGrid;
-    const k = j * this.gw + i;
-    const a = g[k] + (g[k + 1] - g[k]) * tx;
-    const b = g[k + this.gw] + (g[k + this.gw + 1] - g[k + this.gw]) * tx;
-    return a + (b - a) * ty;
+  // ---- per-chunk data ---------------------------------------------------------------
+
+  /** Everything a chunk needs before it can be drawn (made once, then cached). */
+  chunkData(cx, cy) {
+    const key = `${cx},${cy}`;
+    return this.data.get(key) ?? remember(this.data, key, this.buildData(cx, cy), MAX_DATA);
   }
 
-  typeAt(x, y) {
-    const i = clamp(Math.round((x + MARGIN) / CELL), 0, this.gw - 1);
-    const j = clamp(Math.round((y + MARGIN) / CELL), 0, this.gh - 1);
-    return this.type[j * this.gw + i];
-  }
-
-  /** Blurred per-zone water tint (premultiplied rgba grid), so zones blend softly. */
-  buildTints() {
-    const tw = Math.ceil((this.world.width + 2 * MARGIN) / TINT_CELL) + 1;
-    const th = Math.ceil((this.world.height + 2 * MARGIN) / TINT_CELL) + 1;
-    const ch = [new Float32Array(tw * th), new Float32Array(tw * th), new Float32Array(tw * th), new Float32Array(tw * th)];
+  buildData(cx, cy) {
+    const x0 = cx * CHUNK;
+    const y0 = cy * CHUNK;
     const w = this.world;
-    for (let j = 0; j < th; j++) {
-      for (let i = 0; i < tw; i++) {
-        const x = clamp(-MARGIN + i * TINT_CELL, 0, w.width - 1);
-        const y = clamp(-MARGIN + j * TINT_CELL, 0, w.height - 1);
+
+    // Ground type per cell (-1 = water).
+    const types = new Int8Array(CELLS * CELLS);
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = 0; i < CELLS; i++) {
+        const x = x0 + (i + 0.5) * CELL;
+        const y = y0 + (j + 0.5) * CELL;
+        const s = this.sdf(x, y);
+        types[j * CELLS + i] = s < 0 ? -1 : this.groundType(x, y, s);
+      }
+    }
+
+    // Per-zone water tint, blurred so zones blend softly. Worked out over a
+    // padded window so the blur is seamless across chunk edges.
+    const n = TINTS + 2 * TINT_PAD;
+    const ch = [new Float32Array(n * n), new Float32Array(n * n), new Float32Array(n * n), new Float32Array(n * n)];
+    let any = false;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const x = clamp(x0 + (i - TINT_PAD) * TINT_CELL, 0, w.width - 1);
+        const y = clamp(y0 + (j - TINT_PAD) * TINT_CELL, 0, w.height - 1);
         const z = zoneAt(w, x, y);
-        const tint = z && THEME.waterTint[z.id];
+        const tint = z && (THEME.waterTint[z.kind ?? z.id]);
         if (!tint) continue;
-        const k = j * tw + i;
+        any = true;
+        const k = j * n + i;
         ch[0][k] = tint[0] * tint[3];
         ch[1][k] = tint[1] * tint[3];
         ch[2][k] = tint[2] * tint[3];
         ch[3][k] = tint[3];
       }
     }
-    // Box blur, 3 passes each direction (approximates a Gaussian).
-    const tmp = new Float32Array(tw * th);
-    const R = 3;
-    for (const c of ch) {
-      for (let pass = 0; pass < 3; pass++) {
-        for (let j = 0; j < th; j++) {
-          let acc = 0;
-          for (let i = -R; i <= R; i++) acc += c[j * tw + clamp(i, 0, tw - 1)];
-          for (let i = 0; i < tw; i++) {
-            tmp[j * tw + i] = acc / (2 * R + 1);
-            acc += c[j * tw + clamp(i + R + 1, 0, tw - 1)] - c[j * tw + clamp(i - R, 0, tw - 1)];
+    let tint = null;
+    if (any) {
+      const tmp = new Float32Array(n * n);
+      const R = TINT_BLUR;
+      for (const c of ch) {
+        for (let pass = 0; pass < 3; pass++) {
+          for (let j = 0; j < n; j++) {
+            let acc = 0;
+            for (let i = -R; i <= R; i++) acc += c[j * n + clamp(i, 0, n - 1)];
+            for (let i = 0; i < n; i++) {
+              tmp[j * n + i] = acc / (2 * R + 1);
+              acc += c[j * n + clamp(i + R + 1, 0, n - 1)] - c[j * n + clamp(i - R, 0, n - 1)];
+            }
           }
-        }
-        for (let i = 0; i < tw; i++) {
-          let acc = 0;
-          for (let j = -R; j <= R; j++) acc += tmp[clamp(j, 0, th - 1) * tw + i];
-          for (let j = 0; j < th; j++) {
-            c[j * tw + i] = acc / (2 * R + 1);
-            acc += tmp[clamp(j + R + 1, 0, th - 1) * tw + i] - tmp[clamp(j - R, 0, th - 1) * tw + i];
+          for (let i = 0; i < n; i++) {
+            let acc = 0;
+            for (let j = -R; j <= R; j++) acc += tmp[clamp(j, 0, n - 1) * n + i];
+            for (let j = 0; j < n; j++) {
+              c[j * n + i] = acc / (2 * R + 1);
+              acc += tmp[clamp(j + R + 1, 0, n - 1) * n + i] - tmp[clamp(j - R, 0, n - 1) * n + i];
+            }
           }
         }
       }
+      // Keep the chunk's own cells, plus one on each side for interpolation.
+      const m = TINTS + 2;
+      tint = ch.map((c) => {
+        const out = new Float32Array(m * m);
+        for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) out[j * m + i] = c[(j + TINT_PAD - 1) * n + (i + TINT_PAD - 1)];
+        return out;
+      });
     }
-    Object.assign(this, { tw, th, tint: ch });
-  }
 
-  /** Writes the blurred tint at (x, y) into out = [r, g, b, a]. */
-  tintAt(x, y, out) {
-    const fx = clamp((x + MARGIN) / TINT_CELL, 0, this.tw - 1.001);
-    const fy = clamp((y + MARGIN) / TINT_CELL, 0, this.th - 1.001);
-    const i = fx | 0;
-    const j = fy | 0;
-    const tx = fx - i;
-    const ty = fy - j;
-    const k = j * this.tw + i;
-    for (let c = 0; c < 4; c++) {
-      const g = this.tint[c];
-      const a = g[k] + (g[k + 1] - g[k]) * tx;
-      const b = g[k + this.tw] + (g[k + this.tw + 1] - g[k + this.tw]) * tx;
-      out[c] = a + (b - a) * ty;
-    }
-    return out;
-  }
-
-  /** Points just offshore, with outward normals, for animated surf. */
-  buildCoast() {
-    const pts = [];
-    const { gw, gh, sdfGrid } = this;
-    const w = this.world;
-    for (let j = 1; j < gh - 1; j++) {
-      for (let i = 1; i < gw - 1; i++) {
-        const k = j * gw + i;
-        const s = sdfGrid[k];
-        if (s >= 0 || s < -CELL * 1.2 || (i + j) % 2) continue;
-        const x = -MARGIN + i * CELL;
-        const y = -MARGIN + j * CELL;
+    // Animated extras: surf along the shore, sparkles, reeds and current streaks.
+    const rnd = seeded(seedFrom('dynamic', cx, cy));
+    const coast = [];
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = (j % 2); i < CELLS; i += 2) {
+        const x = x0 + i * CELL;
+        const y = y0 + j * CELL;
+        const s = this.sdf(x, y);
+        if (s >= 0 || s < -CELL * 1.2) continue;
         if (x < -200 || y < -200 || x > w.width + 200 || y > w.height + 200) continue;
-        let nx = sdfGrid[k - 1] - sdfGrid[k + 1];
-        let ny = sdfGrid[k - gw] - sdfGrid[k + gw];
+        let nx = this.sdf(x - CELL, y) - this.sdf(x + CELL, y);
+        let ny = this.sdf(x, y - CELL) - this.sdf(x, y + CELL);
         const len = Math.hypot(nx, ny) || 1;
         nx /= len;
         ny /= len;
         // Irregular spacing, length and rhythm so the surf doesn't look like a dashed line.
         const jitter = (noise(x * 0.31, y * 0.31) - 0.5) * 10;
         if (noise(x * 0.2 + 7, y * 0.2) < 0.3) continue;
-        pts.push({
-          x: x - ny * jitter,
-          y: y + nx * jitter,
-          nx,
-          ny,
+        coast.push({
+          x: x - ny * jitter, y: y + nx * jitter, nx, ny,
           len: 3 + noise(x * 0.13, y * 0.13 + 3) * 8,
           phase: noise(x * 0.05, y * 0.05) * 12 + noise(x * 0.4, y * 0.4) * 2,
         });
       }
     }
-    this.coast = pts;
+    const glints = [];
+    const reeds = [];
+    const current = [];
+    for (let i = 0; i < 74; i++) {
+      const x = x0 + rnd() * CHUNK;
+      const y = y0 + rnd() * CHUNK;
+      const s = this.sdf(x, y);
+      const roll = rnd();
+      if (s >= -2) continue;
+      if (i < 12 && s < -12) glints.push({ x, y, phase: roll * 100, speed: 0.6 + rnd() * 0.8 });
+      const z = zoneAt(w, clamp(x, 0, w.width - 1), clamp(y, 0, w.height - 1));
+      if (z?.decor === 'reeds' && s > -160) {
+        reeds.push({ x, y, h: 10 + rnd() * 14, phase: rnd() * 6, blades: 2 + Math.floor(rnd() * 3), cattail: rnd() < 0.35 });
+      }
+      if (z?.decor === 'current' && i % 2 === 0) current.push({ x, y, len: 14 + rnd() * 22, phase: rnd() * 1000, min: x0, span: CHUNK });
+    }
+    reeds.sort((a, b) => a.y - b.y);
+    return { types, tint, coast, glints, reeds, current };
+  }
+
+  /** Ground type at a point (-1 = water). */
+  typeAt(x, y) {
+    const i = Math.floor(x / CELL);
+    const j = Math.floor(y / CELL);
+    const cx = Math.floor(i / CELLS);
+    const cy = Math.floor(j / CELLS);
+    const d = this.chunkData(cx, cy);
+    return d.types[(j - cy * CELLS) * CELLS + (i - cx * CELLS)];
+  }
+
+  /** Writes the blurred water tint at (x, y) into out = [r, g, b, a] (premultiplied). */
+  tintAt(x, y, out) {
+    const cx = Math.floor(x / CHUNK);
+    const cy = Math.floor(y / CHUNK);
+    const tint = this.chunkData(cx, cy).tint;
+    if (!tint) {
+      out[0] = out[1] = out[2] = out[3] = 0;
+      return out;
+    }
+    // Stored node k sits at chunk + (k - 1) * TINT_CELL (one extra node before the chunk).
+    const fx = clamp((x - cx * CHUNK) / TINT_CELL + 1, 0, TINTS + 0.999);
+    const fy = clamp((y - cy * CHUNK) / TINT_CELL + 1, 0, TINTS + 0.999);
+    const i = fx | 0;
+    const j = fy | 0;
+    const tx = fx - i;
+    const ty = fy - j;
+    const m = TINTS + 2;
+    const k = j * m + i;
+    for (let c = 0; c < 4; c++) {
+      const g = tint[c];
+      const a = g[k] + (g[k + 1] - g[k]) * tx;
+      const b = g[k + m] + (g[k + m + 1] - g[k + m]) * tx;
+      out[c] = a + (b - a) * ty;
+    }
+    return out;
+  }
+
+  /** The chunk data of every chunk overlapping a view rect (for the animated extras). */
+  dataIn(view, margin = 40) {
+    const out = [];
+    for (let cy = Math.floor((view.y0 - margin) / CHUNK); cy <= Math.floor((view.y1 + margin) / CHUNK); cy++) {
+      for (let cx = Math.floor((view.x0 - margin) / CHUNK); cx <= Math.floor((view.x1 + margin) / CHUNK); cx++) {
+        out.push(this.chunkData(cx, cy));
+      }
+    }
+    return out;
   }
 
   // ---- per-pixel colour ------------------------------------------------------------
@@ -341,7 +336,7 @@ export class Terrain {
       const n = fbm(x / 95, y / 95, 3);
       const f = noise(x / 3.5, y / 3.5) - 0.5;
       // Bright, slightly yellow meadows out in the open; dark, mossy floor under the trees.
-      const forest = this.world.shape ? this.forestAt(x, y) : 0.3;
+      const forest = this.forestAt(x, y);
       const dry = smoothstep(0.55, 0.8, fbm(x / 260 + 70, y / 260 + 11, 2)) * (1 - forest);
       r = 64 + n * 44 + f * 16 - forest * 20 + dry * 34;
       g = 104 + n * 50 + f * 18 - forest * 22 + dry * 16;
@@ -433,13 +428,7 @@ export class Terrain {
       for (let i = 0; i < px; i++) {
         const x = x0 + (i + 0.5) / res;
         const k = (j * px + i) * 4;
-        const s = this.sdf(x, y);
-        // Near the shore, organic worlds use the smooth shared field itself, so
-        // the coast you see is exactly the one you collide with. Rectangle
-        // worlds get a little wobble so edges aren't ruler-straight.
-        const e = Math.abs(s) < 24
-          ? (this.world.shape ? this.coastAt(x, y) : s + (fbm(x / 40, y / 40, 2) - 0.5) * 14)
-          : s;
+        const e = this.sdf(x, y);
         if (e < 2) {
           this.waterColor(x, y, e, col, tint);
           wd[k] = col[0];
@@ -495,7 +484,8 @@ export class Terrain {
     const out = [];
     const x0 = cx * CHUNK;
     const y0 = cy * CHUNK;
-    const nearStructure = (x, y, m) => w.structures.some((s) => x > s.x - m && x < s.x + s.w + m && y > s.y - m && y < s.y + s.h + m);
+    const structures = w.structures.filter((s) => s.x < x0 + CHUNK + 80 && s.x + s.w > x0 - 80 && s.y < y0 + CHUNK + 80 && s.y + s.h > y0 - 80);
+    const nearStructure = (x, y, m) => structures.some((s) => x > s.x - m && x < s.x + s.w + m && y > s.y - m && y < s.y + s.h + m);
     const add = (kind, x, y, layer, scale = 0.85 + rnd() * 0.3) => out.push({ kind, variant: Math.floor(rnd() * 100), x, y, layer, scale });
     for (let n = 0; n < 90; n++) {
       const x = x0 + rnd() * CHUNK;
@@ -511,7 +501,7 @@ export class Terrain {
       const type = this.typeAt(x, y);
       const roll = rnd();
       if (type === 0) {
-        const forest = w.shape ? this.forestAt(x, y) : 0.4;
+        const forest = this.forestAt(x, y);
         const pineCountry = (y < 1150 && x > 700 && x < 2300) || (outside && y < 600) || noise(x / 900 + 2, y / 900 + 5) > 0.62;
         if (s > 55 && !nearStructure(x, y, 60) && roll < (outside ? 0.85 : 0.08 + 0.72 * forest)) {
           add(pineCountry || rnd() < 0.15 ? 'pine' : 'tree', x, y, 2);
@@ -528,8 +518,7 @@ export class Terrain {
         else if (roll < 0.8) add('stone', x, y, 0);
       }
     }
-    this.decorCache.set(key, out);
-    return out;
+    return remember(this.decorCache, key, out, MAX_DATA);
   }
 
   /**
@@ -569,13 +558,7 @@ export class Terrain {
 
   ensure(cx, cy) {
     const key = `${cx},${cy}`;
-    let entry = this.cache.get(key);
-    if (!entry) {
-      entry = this.renderChunk(cx, cy);
-      this.cache.set(key, entry);
-      if (this.cache.size > MAX_CACHED) this.cache.delete(this.cache.keys().next().value);
-    }
-    return entry;
+    return this.cache.get(key) ?? remember(this.cache, key, this.renderChunk(cx, cy), MAX_CACHED);
   }
 
   /** With any time left this frame, render chunks just outside the view so walking reveals finished tiles. */
@@ -590,7 +573,7 @@ export class Terrain {
     }
   }
 
-  /** Flat colours while a chunk hasn't been rendered yet. */
+  /** Flat colours while a chunk hasn't been rendered yet (from its cell types). */
   drawPlaceholder(ctx, cx, cy, layer) {
     const x0 = cx * CHUNK;
     const y0 = cy * CHUNK;
@@ -599,65 +582,115 @@ export class Terrain {
       ctx.fillRect(x0, y0, CHUNK, CHUNK);
       return;
     }
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x0, y0, CHUNK, CHUNK);
-    ctx.clip();
-    const w = this.world;
-    if (w.shape) {
-      // A quick flat-coloured picture of the ground until the real tile is ready.
-      const o = this.overview();
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(o.canvas, (x0 + MARGIN) / o.step, (y0 + MARGIN) / o.step, CHUNK / o.step, CHUNK / o.step, x0, y0, CHUNK, CHUNK);
-      ctx.fillStyle = THEME.structure.deck;
-      for (const s of w.structures) ctx.fillRect(s.x, s.y, s.w, s.h);
-      ctx.restore();
-      return;
+    const d = this.chunkData(cx, cy);
+    if (!d.placeholder) {
+      const c = document.createElement('canvas');
+      c.width = c.height = CELLS;
+      const g = c.getContext('2d');
+      const img = g.createImageData(CELLS, CELLS);
+      const colours = TYPE_NAMES.map((t) => rgb(THEME.land[t]));
+      for (let k = 0; k < CELLS * CELLS; k++) {
+        const t = d.types[k];
+        const col = colours[t] ?? colours[0];
+        img.data[k * 4] = col[0];
+        img.data[k * 4 + 1] = col[1];
+        img.data[k * 4 + 2] = col[2];
+        img.data[k * 4 + 3] = t < 0 ? 0 : 255;
+      }
+      g.putImageData(img, 0, 0);
+      d.placeholder = c;
     }
-    for (const r of w.land) {
-      ctx.fillStyle = THEME.land[r.type] || THEME.land.grass;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
-    ctx.fillStyle = THEME.land.grass;
-    if (x0 < 0) ctx.fillRect(x0, y0, -x0, CHUNK);
-    if (y0 < 0) ctx.fillRect(x0, y0, CHUNK, -y0);
-    if (x0 + CHUNK > w.width) ctx.fillRect(w.width, y0, x0 + CHUNK - w.width, CHUNK);
-    if (y0 + CHUNK > w.height) ctx.fillRect(x0, w.height, CHUNK, y0 + CHUNK - w.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(d.placeholder, x0, y0, CHUNK, CHUNK);
     ctx.fillStyle = THEME.structure.deck;
-    for (const s of w.structures) ctx.fillRect(s.x, s.y, s.w, s.h);
-    ctx.restore();
+    for (const s of this.world.structures) {
+      if (s.x < x0 + CHUNK && s.x + s.w > x0 && s.y < y0 + CHUNK && s.y + s.h > y0) ctx.fillRect(s.x, s.y, s.w, s.h);
+    }
   }
 
-  /** Flat colours for the whole map at low resolution (cached), for placeholders. */
+  // ---- the overview (minimap) -----------------------------------------------------------
+
+  /**
+   * A low-resolution colour picture of the whole world for the minimap,
+   * OVERVIEW_STEP units per pixel. It starts blank and fills in block by
+   * block, nearest the player first (growOverview), so a huge map never
+   * stalls a frame.
+   */
   overview() {
-    if (this.overviewCache) return this.overviewCache;
-    const step = 16;
-    const cw = Math.ceil((this.world.width + 2 * MARGIN) / step);
-    const chh = Math.ceil((this.world.height + 2 * MARGIN) / step);
-    const canvas = document.createElement('canvas');
-    canvas.width = cw;
-    canvas.height = chh;
-    const g = canvas.getContext('2d');
-    const img = g.createImageData(cw, chh);
-    const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-    const colours = TYPE_NAMES.map((t) => rgb(THEME.land[t]));
-    const water = rgb(THEME.water.placeholder);
-    for (let j = 0; j < chh; j++) {
-      for (let i = 0; i < cw; i++) {
-        const x = -MARGIN + (i + 0.5) * step;
-        const y = -MARGIN + (j + 0.5) * step;
-        const t = this.sdf(x, y) < 0 ? -1 : this.typeAt(x, y);
-        const c = t < 0 ? water : colours[t] ?? colours[0];
-        const k = (j * cw + i) * 4;
-        img.data[k] = c[0];
-        img.data[k + 1] = c[1];
-        img.data[k + 2] = c[2];
-        img.data[k + 3] = 255;
+    if (!this.ov) {
+      const w = Math.ceil(this.world.width / OVERVIEW_STEP);
+      const h = Math.ceil(this.world.height / OVERVIEW_STEP);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const g = canvas.getContext('2d');
+      g.fillStyle = THEME.land.grass;
+      g.fillRect(0, 0, w, h);
+      this.ov = { canvas, g, w, h, step: OVERVIEW_STEP, done: new Set(), left: Math.ceil(w / OV_BLOCK) * Math.ceil(h / OV_BLOCK) };
+    }
+    return this.ov;
+  }
+
+  /** Render overview blocks, nearest to (x, y) first, until the deadline (always at least one). */
+  growOverview(x, y, until) {
+    const ov = this.overview();
+    if (!ov.left) return;
+    const bw = Math.ceil(ov.w / OV_BLOCK);
+    const bh = Math.ceil(ov.h / OV_BLOCK);
+    const size = OV_BLOCK * ov.step;
+    const todo = [];
+    for (let by = 0; by < bh; by++) {
+      for (let bx = 0; bx < bw; bx++) {
+        if (!ov.done.has(by * bw + bx)) todo.push([bx, by, Math.hypot((bx + 0.5) * size - x, (by + 0.5) * size - y)]);
       }
     }
-    g.putImageData(img, 0, 0);
-    this.overviewCache = { canvas, step };
-    return this.overviewCache;
+    todo.sort((a, b) => a[2] - b[2]);
+    let first = true;
+    for (const [bx, by] of todo) {
+      if (!first && performance.now() >= until) return;
+      first = false;
+      this.renderOverviewBlock(bx, by);
+      ov.done.add(by * bw + bx);
+      ov.left -= 1;
+    }
+  }
+
+  renderOverviewBlock(bx, by) {
+    const ov = this.ov;
+    const colours = TYPE_NAMES.map((t) => rgb(THEME.land[t]));
+    const S = THEME.water.shallow;
+    const D = THEME.water.deep;
+    const w = Math.min(OV_BLOCK, ov.w - bx * OV_BLOCK);
+    const h = Math.min(OV_BLOCK, ov.h - by * OV_BLOCK);
+    const img = ov.g.createImageData(w, h);
+    for (let j = 0; j < h; j++) {
+      const y = (by * OV_BLOCK + j + 0.5) * ov.step;
+      for (let i = 0; i < w; i++) {
+        const x = (bx * OV_BLOCK + i + 0.5) * ov.step;
+        const s = this.sdf(x, y);
+        let c;
+        if (s < 0) {
+          const t = smoothstep(0, 400, -s);
+          c = [S[0] + (D[0] - S[0]) * t, S[1] + (D[1] - S[1]) * t, S[2] + (D[2] - S[2]) * t];
+        } else {
+          const base = colours[this.groundType(x, y, s)];
+          const shade = 1 - this.forestAt(x, y) * 0.25;
+          c = [base[0] * shade, base[1] * shade, base[2] * shade];
+        }
+        img.data.set([c[0], c[1], c[2], 255], (j * w + i) * 4);
+      }
+    }
+    ov.g.putImageData(img, bx * OV_BLOCK, by * OV_BLOCK);
+    // Docks and bridges in this block.
+    const x0 = bx * OV_BLOCK * ov.step;
+    const y0 = by * OV_BLOCK * ov.step;
+    const size = OV_BLOCK * ov.step;
+    ov.g.fillStyle = THEME.structure.deck;
+    for (const r of this.world.structures) {
+      if (r.x < x0 + size && r.x + r.w > x0 && r.y < y0 + size && r.y + r.h > y0) {
+        ov.g.fillRect(r.x / ov.step - 1, r.y / ov.step - 1, r.w / ov.step + 2, r.h / ov.step + 2);
+      }
+    }
   }
 
   // ---- extras -------------------------------------------------------------------------
@@ -682,39 +715,6 @@ export class Terrain {
       }
     }
     g.putImageData(img, 0, 0);
-    return c;
-  }
-
-  /** A small rendered map of the whole lake for the minimap. */
-  minimapImage(widthPx) {
-    const w = this.world;
-    const scale = widthPx / w.width;
-    const hpx = Math.round(w.height * scale);
-    const c = document.createElement('canvas');
-    c.width = widthPx;
-    c.height = hpx;
-    const g = c.getContext('2d');
-    const img = g.createImageData(widthPx, hpx);
-    const col = [0, 0, 0];
-    const tint = [0, 0, 0, 0];
-    for (let j = 0; j < hpx; j++) {
-      for (let i = 0; i < widthPx; i++) {
-        const x = (i + 0.5) / scale;
-        const y = (j + 0.5) / scale;
-        const s = this.sdf(x, y);
-        if (s < 0) this.waterColor(x, y, s, col, tint);
-        else this.landColor(x, y, s + 20, col);
-        const k = (j * widthPx + i) * 4;
-        img.data[k] = col[0];
-        img.data[k + 1] = col[1];
-        img.data[k + 2] = col[2];
-        img.data[k + 3] = 255;
-      }
-    }
-    g.putImageData(img, 0, 0);
-    g.scale(scale, scale);
-    g.fillStyle = THEME.structure.deck;
-    for (const r of w.structures) g.fillRect(r.x - 8, r.y - 8, r.w + 16, r.h + 16);
     return c;
   }
 }

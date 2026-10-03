@@ -556,10 +556,18 @@ export class UI {
     const { index } = this.profile;
     const ids = Object.keys(SPECIES);
     const found = ids.filter((id) => index[id]).length;
-    const zonesFor = (id) => [
-      ...this.world.zones.filter((z) => z.fish[id]).map((z) => z.name),
-      ...seaLocationsFor(id).map((where) => `At sea: ${where}`),
-    ];
+    // Generated ponds in the wilds are summed up by type ("any wild Mire")
+    // rather than listed one by one.
+    const NOUN = { willowPond: 'Pond', frogPond: 'Pool', crystalPond: 'Tarn', blackBog: 'Mire', millPond: 'Millpond', wildLake: 'Lake' };
+    const zonesFor = (id) => {
+      const zones = this.world.zones.filter((z) => z.fish[id]);
+      const wild = [...new Set(zones.filter((z) => z.id.startsWith('wild')).map((z) => z.kind))];
+      return [
+        ...zones.filter((z) => !z.id.startsWith('wild')).map((z) => z.name),
+        ...wild.map((k) => `Any ${NOUN[k] ?? 'pond'} in the wilds`),
+        ...seaLocationsFor(id).map((where) => `At sea: ${where}`),
+      ];
+    };
     return [
       h('p', { class: 'menu-note' }, h('b', {}, `${found} / ${ids.length}`), ' species discovered.'),
       h('div', { class: 'index-grid' }, ids.map((id) => {

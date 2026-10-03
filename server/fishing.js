@@ -135,7 +135,7 @@ function land(ctx, player) {
   const crowd = ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
 
   const armour = armourOf(ctx, player);
-  const zoneArmour = armour.zoneBites.reduce((m, z) => (z.zones.includes(zone.id) ? m * z.mult : m), 1);
+  const zoneArmour = armour.zoneBites.reduce((m, z) => (z.zones.includes(zone.kind ?? zone.id) ? m * z.mult : m), 1);
   const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1)
     * armour.bite * zoneArmour * (ctx.chumBiteBonus?.(line.x, line.y) ?? 1))
     / (1 + (ctx.world.crowdPenalty ?? CROWD_PENALTY) * crowd);
@@ -376,7 +376,7 @@ function countCatch(ctx, player, fish, species, zone, hotspot, coins) {
   if (fish.kg >= 10) c.bigFish += 1;
   c.heaviest = Math.max(c.heaviest, fish.kg);
   bump('family', species.family);
-  bump('zone', zone.id);
+  bump('zone', zone.kind ?? zone.id); // generated ponds count as their type
   const area = areaAt(ctx.world, player.x, player.y);
   if (area) bump('area', area.id);
 }

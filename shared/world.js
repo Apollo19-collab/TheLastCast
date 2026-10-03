@@ -10,7 +10,7 @@
 // To add a new lake, add another object to LOCATIONS. The sea "world" used on
 // boat voyages is built by makeSeaWorld() in voyage.js.
 
-import { fbm } from './noise.js';
+import { fbm, seeded, seedFrom } from './noise.js';
 
 // ---- Organic shapes ---------------------------------------------------------------
 //
@@ -24,9 +24,26 @@ import { fbm } from './noise.js';
 // The rest is for the client's ground textures only: `beaches` and `rock` are
 // soft regions of sand and stone, and `trails` are dirt paths.
 
-// The river: it enters at the east edge of the map and flows into Mirror Lake
-// at the River Mouth. The boat follows it in (BOAT.path in voyage.js).
-export const RIVER = [[2780, 1000], [3300, 995], [3700, 985], [4100, 1030], [4500, 1000], [4900, 990], [5400, 1000]];
+// The river: it enters at the far east edge of the map and winds all the way
+// to Mirror Lake at the River Mouth. The boat follows it in (BOAT.path in voyage.js).
+export const RIVER = [
+  [2780, 1000], [3300, 995], [3700, 985], [4100, 1030], [4500, 1000], [4900, 990], [5400, 1000],
+  [6200, 1140], [7000, 1060], [7800, 1240], [8600, 1150], [9400, 1300], [10200, 1210], [11000, 1350],
+  [11800, 1260], [12600, 1320], [13200, 1300],
+];
+
+/** Zone rectangles hugging the river from `fromX` eastwards. */
+function riverRects(fromX) {
+  const rects = [];
+  for (let i = 1; i < RIVER.length; i++) {
+    const [ax, ay] = RIVER[i - 1];
+    const [bx, by] = RIVER[i];
+    if (bx <= fromX) continue;
+    const x0 = Math.max(fromX, Math.min(ax, bx));
+    rects.push({ x: x0, y: Math.min(ay, by) - 230, w: Math.max(ax, bx) - x0, h: Math.abs(by - ay) + 460 });
+  }
+  return rects;
+}
 
 const e = (cx, cy, rx, ry) => ({ e: [cx, cy, rx, ry] });
 
@@ -34,8 +51,10 @@ export const LOCATIONS = {
   mirrorLake: {
     id: 'mirrorLake',
     name: 'Mirror Lake',
-    width: 5120,
-    height: 3840,
+    // The hand-made valley around Mirror Lake fills the top-left 5120 x 3840;
+    // the wilds beyond it are generated (extendWorld, below).
+    width: 12800,
+    height: 9600,
     spawn: { x: 1500, y: 2150 },
 
     shape: {
@@ -120,7 +139,7 @@ export const LOCATIONS = {
       {
         id: 'eastRiver',
         name: 'East River',
-        rect: { x: 3200, y: 780, w: 1920, h: 440 },
+        rects: riverRects(3200),
         biteRate: 1.05,
         decor: 'current',
         fish: {
@@ -306,7 +325,7 @@ export const LOCATIONS = {
       { id: 'blackBog', name: 'The Black Bog', rect: { x: 2900, y: 2540, w: 2220, h: 1300 }, label: { x: 3600, y: 3500 } },
     ],
 
-    hotspots: { count: 9, radius: 70, minLife: 45, maxLife: 90 },
+    hotspots: { count: 30, radius: 70, minLife: 45, maxLife: 90 },
   },
 };
 
@@ -364,45 +383,102 @@ export function warpPoint(shape, x, y) {
   ];
 }
 
-/** Raw field value: < 0 is water, > 0 is land (roughly the distance to the shore). */
-export function waterValue(shape, x, y) {
+// Beyond this distance from any shape, the field just reads "far from water".
+const FIELD_CAP = 600;
+
+function shapeBox(sh) {
+  if (sh.e) {
+    const [cx, cy, rx, ry] = sh.e;
+    return [cx - rx, cy - ry, cx + rx, cy + ry];
+  }
+  const xs = sh.line.map((pt) => pt[0]);
+  const ys = sh.line.map((pt) => pt[1]);
+  return [Math.min(...xs) - sh.w, Math.min(...ys) - sh.w, Math.max(...xs) + sh.w, Math.max(...ys) + sh.w];
+}
+
+/** The shapes that can matter inside a box (anything within FIELD_CAP of it). */
+function shapesNear(list, x0, y0, x1, y1) {
+  const m = FIELD_CAP;
+  return (list ?? []).filter((sh) => {
+    const b = sh.box ?? (sh.box = shapeBox(sh));
+    return b[0] < x1 + m && b[2] > x0 - m && b[1] < y1 + m && b[3] > y0 - m;
+  });
+}
+
+/**
+ * Raw field value: < 0 is water, > 0 is land (roughly the distance to the
+ * shore, capped at FIELD_CAP). `near` optionally limits which shapes are
+ * checked (see shapesNear).
+ */
+export function waterValue(shape, x, y, near = null) {
   const [wx, wy] = warpPoint(shape, x, y);
-  let v = shapesDistance(shape.water, wx, wy);
-  if (shape.land) v = Math.max(v, -shapesDistance(shape.land, wx, wy));
+  let v = Math.min(FIELD_CAP, shapesDistance(near?.water ?? shape.water, wx, wy));
+  const land = near?.land ?? shape.land;
+  if (land?.length) v = Math.max(v, -shapesDistance(land, wx, wy));
   const { amp, scale } = shape.bump;
   return v + (fbm(x / scale + 5.1, y / scale + 9.4, 2) - 0.5) * 2 * amp;
 }
 
 const FIELD_CELL = 8;
+const BLOCK = 64; // field cells per block side (512 world units)
 const fields = new WeakMap();
 
-/** The world's water field, sampled on a grid once and cached. */
+/**
+ * The world's water field, sampled on a grid. Blocks are filled in only
+ * when something first looks at them, so a huge map costs nothing until
+ * someone walks (or casts, or looks) there.
+ */
 export function waterField(world) {
   let f = fields.get(world);
-  if (f) return f;
-  const gw = Math.ceil(world.width / FIELD_CELL) + 1;
-  const gh = Math.ceil(world.height / FIELD_CELL) + 1;
-  const v = new Float32Array(gw * gh);
-  for (let j = 0; j < gh; j++) {
-    for (let i = 0; i < gw; i++) v[j * gw + i] = waterValue(world.shape, i * FIELD_CELL, j * FIELD_CELL);
+  if (!f) {
+    f = {
+      bw: Math.ceil(world.width / FIELD_CELL / BLOCK),
+      bh: Math.ceil(world.height / FIELD_CELL / BLOCK),
+      blocks: new Map(),
+    };
+    fields.set(world, f);
   }
-  f = { gw, gh, v };
-  fields.set(world, f);
   return f;
+}
+
+function fieldBlock(world, bx, by) {
+  const f = waterField(world);
+  const key = by * 4096 + bx;
+  let block = f.blocks.get(key);
+  if (block) return block;
+  const size = BLOCK * FIELD_CELL;
+  const x0 = bx * size;
+  const y0 = by * size;
+  const amp = world.shape.warp.amp;
+  const near = {
+    water: shapesNear(world.shape.water, x0 - amp, y0 - amp, x0 + size + amp, y0 + size + amp),
+    land: shapesNear(world.shape.land, x0 - amp, y0 - amp, x0 + size + amp, y0 + size + amp),
+  };
+  block = new Float32Array((BLOCK + 1) * (BLOCK + 1));
+  for (let j = 0; j <= BLOCK; j++) {
+    for (let i = 0; i <= BLOCK; i++) block[j * (BLOCK + 1) + i] = waterValue(world.shape, x0 + i * FIELD_CELL, y0 + j * FIELD_CELL, near);
+  }
+  f.blocks.set(key, block);
+  return block;
 }
 
 /** Field value at any point (bilinear), clamped to the world's edges. */
 export function fieldAt(world, x, y) {
-  const { gw, gh, v } = waterField(world);
-  const fx = Math.max(0, Math.min(gw - 1.001, x / FIELD_CELL));
-  const fy = Math.max(0, Math.min(gh - 1.001, y / FIELD_CELL));
-  const i = fx | 0;
-  const j = fy | 0;
-  const tx = fx - i;
-  const ty = fy - j;
-  const k = j * gw + i;
-  const a = v[k] + (v[k + 1] - v[k]) * tx;
-  const b = v[k + gw] + (v[k + gw + 1] - v[k + gw]) * tx;
+  const fx = Math.max(0, Math.min(world.width / FIELD_CELL - 0.001, x / FIELD_CELL));
+  const fy = Math.max(0, Math.min(world.height / FIELD_CELL - 0.001, y / FIELD_CELL));
+  const bx = Math.floor(fx / BLOCK);
+  const by = Math.floor(fy / BLOCK);
+  const block = fieldBlock(world, bx, by);
+  const lx = fx - bx * BLOCK;
+  const ly = fy - by * BLOCK;
+  const i = Math.min(BLOCK - 1, lx | 0);
+  const j = Math.min(BLOCK - 1, ly | 0);
+  const tx = lx - i;
+  const ty = ly - j;
+  const W = BLOCK + 1;
+  const k = j * W + i;
+  const a = block[k] + (block[k + 1] - block[k]) * tx;
+  const b = block[k + W] + (block[k + W + 1] - block[k + W]) * tx;
   return a + (b - a) * ty;
 }
 
@@ -459,3 +535,195 @@ export function stepMovement(world, pos, input, speed, dt) {
   if (isWalkable(world, x, y + dy)) y += dy;
   return { x, y, moved: x !== pos.x || y !== pos.y };
 }
+
+// ---- the wilds: generated ponds, lakes, trails and bridges ------------------------------
+//
+// Everything outside the hand-made valley is generated from a fixed seed, so
+// every server and every player gets exactly the same map. Ponds copy one of
+// the valley's pond types (fish, bite rate, decor) under their own name;
+// their zones keep `kind` = the type, so achievements and gear that care
+// about a type of water count them all.
+
+const WILD_LAKE = {
+  id: 'wildLake', name: 'Wild Lake', biteRate: 0.85,
+  fish: {
+    boot: 3, cisco: 15, perch: 15, walleye: 14, smallmouth: 10, pike: 10, whitefish: 10, laketrout: 10,
+    muskie: 4, sturgeon: 4, chinook: 3, stonejaw: 0.3, mossback: 0.3,
+  },
+};
+
+const PREFIXES = [
+  'Heron', 'Otter', 'Mossy', 'Cedar', 'Hollow', 'Bramble', 'Fox', 'Lantern', 'Misty', 'Copper', 'Silver', 'Reedy',
+  'Stony', 'Amber', 'Raven', 'Birch', 'Thistle', 'Kingfisher', 'Moonlit', 'Owl', 'Badger', 'Hazel', 'Juniper',
+  'Wren', 'Elder', 'Fern', 'Glimmer', 'Hart', 'Ivy', 'Larch', 'Marten', 'Nettle', 'Oak', 'Pebble', 'Quill', 'Rowan',
+  'Sedge', 'Tansy', 'Umber', 'Vole', 'Whistle', 'Yarrow', 'Alder', 'Bluebell', 'Cobble', 'Dipper', 'Ember', 'Frost',
+  'Gorse', 'Heather', 'Kestrel', 'Lark', 'Marsh', 'Newt', 'Osprey', 'Plover', 'Robin', 'Sparrow', 'Teal', 'Willet',
+  'Aspen', 'Bracken', 'Clover', 'Dusk', 'Echo', 'Finch', 'Gully', 'Hidden', 'Iron', 'Jade',
+];
+const NOUNS = { willowPond: 'Pond', frogPond: 'Pool', crystalPond: 'Tarn', blackBog: 'Mire', millPond: 'Millpond', wildLake: 'Lake' };
+
+/** Named regions of the wilds (checked after the valley's own areas). */
+const WILD_AREAS = [
+  ['northernWilds', 'Northern Wilds', 5120, 0, 3840, 3300],
+  ['frostpine', 'Frostpine Reach', 8960, 0, 3840, 3300],
+  ['heartwood', 'Heartwood', 5120, 3300, 3840, 3100],
+  ['easternMarches', 'Eastern Marches', 8960, 3300, 3840, 3100],
+  ['southernFens', 'Southern Fens', 0, 3840, 5120, 2560],
+  ['lostValley', 'Lost Valley', 0, 6400, 4300, 3200],
+  ['mistmoor', 'Mistmoor', 4300, 6400, 4300, 3200],
+  ['farReaches', 'The Far Reaches', 8600, 6400, 4200, 3200],
+];
+
+function riverDistance(x, y) {
+  let d = Infinity;
+  for (let i = 1; i < RIVER.length; i++) d = Math.min(d, segmentDistance(x, y, RIVER[i - 1], RIVER[i]));
+  return d;
+}
+
+/** Where the river crosses the segment a-b, or null. */
+function riverCrossing(a, b) {
+  for (let i = 1; i < RIVER.length; i++) {
+    const p = RIVER[i - 1];
+    const q = RIVER[i];
+    const d = (b[0] - a[0]) * (q[1] - p[1]) - (b[1] - a[1]) * (q[0] - p[0]);
+    if (!d) continue;
+    const t = ((p[0] - a[0]) * (q[1] - p[1]) - (p[1] - a[1]) * (q[0] - p[0])) / d;
+    const u = ((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])) / d;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+  }
+  return null;
+}
+
+function pondKind(x, y) {
+  // Thresholds sit at the noise's quintiles, so each type is about as common.
+  const b = fbm(x / 2600 + 3.3, y / 2600 + 8.1, 2);
+  if (b < 0.403) return 'blackBog';
+  if (b < 0.486) return 'frogPond';
+  if (b < 0.567) return 'millPond';
+  if (b < 0.647) return 'willowPond';
+  return 'crystalPond';
+}
+
+function extendWorld(world) {
+  const rnd = seeded(seedFrom('the wilds', world.id));
+  const sh = world.shape;
+  const VALLEY = { w: 5120, h: 3840 };
+  const templates = Object.fromEntries(world.zones.map((z) => [z.id, z]));
+  templates.wildLake = WILD_LAKE;
+  const names = [...PREFIXES];
+  for (let i = names.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [names[i], names[j]] = [names[j], names[i]];
+  }
+
+  // 1. Two great lakes of the wilds, then ponds (and the odd big lake) on a jittered grid.
+  const lake = (name, x, y, rx, ry, lobes) => ({ name, x, y, rx, ry, reach: Math.max(rx, ry) * 1.3, lobes: [e(x, y, rx, ry), ...lobes], kind: 'wildLake' });
+  const ponds = [
+    lake('Silvermere', 8300, 5000, 900, 560, [e(8900, 5350, 420, 300), e(7700, 4750, 380, 260)]),
+    lake('Stillwater Lake', 2900, 7500, 760, 480, [e(2400, 7700, 360, 260), e(3350, 7250, 320, 220)]),
+  ];
+  const CELL = 1000;
+  for (let gy = 0; gy < Math.ceil(world.height / CELL); gy++) {
+    for (let gx = 0; gx < Math.ceil(world.width / CELL); gx++) {
+      const roll = rnd();
+      const cx = (gx + 0.5) * CELL + (rnd() - 0.5) * CELL * 0.55;
+      const cy = (gy + 0.5) * CELL + (rnd() - 0.5) * CELL * 0.55;
+      const big = rnd() < 0.16;
+      const rx = big ? 560 + rnd() * 240 : 190 + rnd() * 190;
+      const ry = rx * (0.6 + rnd() * 0.35);
+      const extra = [rnd(), rnd(), rnd(), rnd(), rnd()];
+      if (roll < 0.2) continue; // open country
+      const reach = Math.max(rx, ry) * 1.35;
+      if (cx < VALLEY.w + reach + 150 && cy < VALLEY.h + reach + 150) continue;
+      if (cx < reach + 200 || cy < reach + 200 || cx > world.width - reach - 200 || cy > world.height - reach - 200) continue;
+      if (riverDistance(cx, cy) < reach + 320) continue;
+      if (ponds.some((q) => Math.hypot(q.x - cx, q.y - cy) < reach + q.reach + 260)) continue;
+      const lobes = [e(cx, cy, rx, ry)];
+      lobes.push(e(cx + (extra[0] - 0.5) * rx * 1.1, cy + (extra[1] - 0.5) * ry * 1.1, rx * (0.45 + extra[2] * 0.3), ry * (0.45 + extra[3] * 0.3)));
+      if (extra[4] < 0.5) lobes.push(e(cx - (extra[1] - 0.5) * rx, cy - (extra[0] - 0.5) * ry, rx * 0.4, ry * 0.45));
+      ponds.push({ x: cx, y: cy, rx, ry, reach, lobes, kind: big ? 'wildLake' : pondKind(cx, cy) });
+    }
+  }
+  for (const p of ponds) sh.water.push(...p.lobes);
+
+  // 2. Zones, jetties and trail anchors.
+  const zones = [];
+  const anchors = [[4500, 2420], [4250, 840], [3120, 2900], [640, 2820], [2150, 2850], [4900, 3300]];
+  ponds.forEach((p, i) => {
+    const t = templates[p.kind];
+    const name = p.name ?? `${names[i % names.length]} ${NOUNS[p.kind]}${i >= names.length ? ' II' : ''}`;
+    const x0 = Math.min(...p.lobes.map((l) => l.e[0] - l.e[2])) - 90;
+    const y0 = Math.min(...p.lobes.map((l) => l.e[1] - l.e[3])) - 90;
+    const x1 = Math.max(...p.lobes.map((l) => l.e[0] + l.e[2])) + 90;
+    const y1 = Math.max(...p.lobes.map((l) => l.e[1] + l.e[3])) + 90;
+    zones.push({
+      ...t, id: `wild${i}`, kind: p.kind, name, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, label: true,
+    });
+    // A jetty from the nearest shore (of the four compass directions) out into the water.
+    let best = null;
+    const R = 1700;
+    const near = { water: shapesNear(sh.water, p.x - R, p.y - R, p.x + R, p.y + R), land: shapesNear(sh.land, p.x - R, p.y - R, p.x + R, p.y + R) };
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      let d = 0;
+      while (d < 1600 && waterValue(sh, p.x + dx * d, p.y + dy * d, near) < 0) d += 12;
+      if (d < 1600 && (!best || d < best.d)) best = { dx, dy, d };
+    }
+    if (!best) return;
+    const out = Math.min(best.d * 0.55, 260);
+    const inLand = 70;
+    const [sx, sy] = [p.x + best.dx * best.d, p.y + best.dy * best.d];
+    const a = [sx - best.dx * out, sy - best.dy * out];
+    const b = [sx + best.dx * inLand, sy + best.dy * inLand];
+    const vertical = best.dx === 0;
+    world.structures.push(vertical
+      ? { x: sx - 20, y: Math.min(a[1], b[1]), w: 40, h: Math.abs(b[1] - a[1]), type: 'dock' }
+      : { x: Math.min(a[0], b[0]), y: sy - 20, w: Math.abs(b[0] - a[0]), h: 40, type: 'dock' });
+    p.anchor = [sx + best.dx * (inLand + 30), sy + best.dy * (inLand + 30)];
+  });
+  const open = world.zones.findIndex((z) => z.id === 'open');
+  world.zones.splice(open, 0, ...zones);
+
+  // 3. Trails: connect every jetty to the valley's trails, nearest first, and
+  //    bridge the river wherever a trail crosses it.
+  const done = [...anchors];
+  const todo = ponds.filter((p) => p.anchor).map((p) => p.anchor);
+  const bridges = world.structures.filter((st) => st.type === 'bridge').map((st) => st.x + st.w / 2);
+  while (todo.length) {
+    let pick = null;
+    for (let i = 0; i < todo.length; i++) {
+      for (const d of done) {
+        const dist = Math.hypot(todo[i][0] - d[0], todo[i][1] - d[1]);
+        if (!pick || dist < pick.dist) pick = { i, d, dist };
+      }
+    }
+    const [a] = todo.splice(pick.i, 1);
+    const b = pick.d;
+    const mid = [(a[0] + b[0]) / 2 + (rnd() - 0.5) * pick.dist * 0.25, (a[1] + b[1]) / 2 + (rnd() - 0.5) * pick.dist * 0.25];
+    sh.trails.push([a, mid, b]);
+    done.push(a);
+    for (const [p, q] of [[a, mid], [mid, b]]) {
+      const c = riverCrossing(p, q);
+      if (c && !bridges.some((x) => Math.abs(x - c[0]) < 500)) {
+        bridges.push(c[0]);
+        world.structures.push({ x: Math.round(c[0] - 30), y: Math.round(c[1] - 170), w: 60, h: 340, type: 'bridge' });
+      }
+    }
+  }
+
+  // Fixed crossings further east, so the north and south wilds connect.
+  for (const x of [6600, 9000, 11400]) {
+    const i = RIVER.findIndex(([rx]) => rx > x);
+    const [ax, ay] = RIVER[i - 1];
+    const [bx, by] = RIVER[i];
+    const y = ay + ((by - ay) * (x - ax)) / (bx - ax);
+    world.structures.push({ x: x - 30, y: Math.round(y - 170), w: 60, h: 340, type: 'bridge' });
+  }
+
+  // 4. Named regions.
+  for (const [id, name, x, y, w, h] of WILD_AREAS) {
+    world.areas.push({ id, name, rect: { x, y, w, h }, label: { x: x + w / 2, y: y + h / 2 } });
+  }
+  world.wildPonds = ponds.length;
+}
+
+extendWorld(LOCATIONS.mirrorLake);

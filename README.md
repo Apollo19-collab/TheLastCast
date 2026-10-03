@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.16.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.17.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -23,9 +23,13 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 
 ### The lake
 
-Mirror Lake is a big lake with a shore you can walk all the way around, in a wide valley of woods, meadows and smaller ponds. The camera stays centred on you, a **minimap** (bottom-right) shows the whole map with every player and hotspot, and your current location is shown under your score.
+Mirror Lake is a big lake with a shore you can walk all the way around, in a valley of woods, meadows and smaller ponds. Beyond the valley lie **the wilds**: a huge map (12,800 x 9,600) of forest and meadow with dozens of generated ponds and two great lakes, **Silvermere** and **Stillwater Lake**. The camera stays centred on you, a **minimap** (bottom-right) shows the area around you with every player and hotspot, and your current location is shown under your score.
 
 The ground is natural: shorelines curve and wander, and beaches, rocky ground, meadows, forest and dirt trails blend into each other. Water and land come from one organic shape (soft ellipses and a river, domain-warped with noise) in `shared/world.js`. The server's collision and the client's rendering sample the same field, so the shore you see is the shore you walk on.
+
+**Only what's on screen is worked out.** The shoreline field is computed in 512-unit blocks the first time anything looks there, checking only nearby shapes. On the client, ground types, water tints, surf, sparkles, reeds and current are built per 256-unit tile as the camera gets close, kept in small caches and dropped when you leave. Off-screen anglers aren't drawn. The minimap's overview fills in block by block, nearest you first. A huge map loads as fast as a small one.
+
+**The wilds are generated** from a fixed seed (`extendWorld` in `shared/world.js`), so every player and server gets the same map. Ponds are scattered on a jittered grid, away from the river and each other. Each one copies one of the valley's pond types (fish, bite rate, decor) under its own name, with a jetty from its nearest shore. Dirt trails join every jetty to the valley's paths, nearest first, and the river gets bridges where trails cross it. Generated zones keep `kind` = their type, so achievements like Pond Hopper count them all.
 
 | Location | Waters | Signature fish |
 | --- | --- | --- |

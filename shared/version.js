@@ -2,9 +2,22 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.16.0';
+export const VERSION = '0.17.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.17.0',
+    date: '2026-10-03',
+    title: 'Into the wilds',
+    changes: [
+      'The map is now huge: 12,800 x 9,600, more than six times bigger than before. Beyond the valley lie the wilds: Northern Wilds, Frostpine Reach, Heartwood, the Eastern Marches, the Southern Fens, the Lost Valley, Mistmoor and the Far Reaches.',
+      'Dozens of new ponds and two great lakes, Silvermere and Stillwater Lake, each with its own name, a jetty to fish from and fish to match its type (pools, tarns, mires, millponds and wild lakes). Dirt trails link them all, and the East River winds the whole width of the map with new bridges.',
+      'The game only works on what is near your screen: ground, water, surf, sparkles and reeds are built tile by tile as you get close and forgotten again when you leave, and off-screen anglers are skipped. The server only works out the shoreline where someone actually goes. A huge map loads as fast as a small one.',
+      'The minimap now shows the area around you instead of the whole map, and fills itself in nearest-first.',
+      'The Fish Index sums up the wild ponds by type ("Any Tarn in the wilds") instead of listing every one.',
+      '30 hotspots across the map (up from 9).',
+    ],
+  },
   {
     version: '0.16.0',
     date: '2026-10-03',

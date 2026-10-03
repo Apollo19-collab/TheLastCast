@@ -14,7 +14,6 @@ import { THEME } from './theme.js';
 import { castDistance, FishingState } from '/shared/constants.js';
 import { isWalkable, zoneAt, zoneRects } from '/shared/world.js';
 import { Terrain } from './gfx/terrain.js';
-import { seeded } from './gfx/noise.js';
 import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/characters.js';
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
@@ -28,6 +27,7 @@ import { BOAT, BOSS, SEA_BOAT } from '/shared/voyage.js';
 const VIEW_W = 950;
 const VIEW_H = 650;
 const MINIMAP_WIDTH = 200; // CSS pixels (smaller on narrow screens)
+const MINIMAP_SPAN = 5200; // world units across the minimap
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -45,7 +45,6 @@ export class Renderer {
     } else {
       this.terrain = new Terrain(world);
       this.causticPattern = this.ctx.createPattern(Terrain.causticTile(), 'repeat');
-      this.dynamic = this.buildDynamicDecor();
     }
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -151,15 +150,20 @@ export class Renderer {
     for (const h of frame.hotspots) this.drawHotspot(h, time);
     this.drawChums(frame, time);
     this.updateAnims(frame.players);
-    for (const p of frame.players) if (p.s !== FishingState.IDLE && p.bx != null) drawLineAndBobber(ctx, p, time);
+    // Only what's on screen: anglers far away are skipped (a line can reach a
+    // long way, so those get a wider margin).
+    for (const p of frame.players) {
+      if (p.s !== FishingState.IDLE && p.bx != null && (this.onScreen(p.x, p.y, 120) || this.onScreen(p.bx, p.by, 60))) drawLineAndBobber(ctx, p, time);
+    }
     if (frame.aim) this.drawAim(frame.aim);
-    const sorted = [...frame.players].sort((a, b) => a.y - b.y);
+    const shown = frame.players.filter((p) => this.onScreen(p.x, p.y, 120));
+    const sorted = shown.sort((a, b) => a.y - b.y);
     for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
-    this.drawPets(frame.players, time);
+    this.drawPets(sorted, time);
     for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
     // Your own fight bars last, so nothing covers them.
-    for (const p of frame.players) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
-    for (const p of frame.players) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
+    for (const p of sorted) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
+    for (const p of sorted) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
     this.drawEffects(time);
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -270,51 +274,6 @@ export class Renderer {
 
   // ---- water ------------------------------------------------------------------
 
-  buildDynamicDecor() {
-    const rnd = seeded(4242);
-    const w = this.world;
-    const t = this.terrain;
-    const glints = [];
-    const count = Math.round((1400 * w.width * w.height) / (3200 * 2400));
-    for (let i = 0; i < count; i++) {
-      const x = -400 + rnd() * (w.width + 800);
-      const y = -400 + rnd() * (w.height + 800);
-      if (t.sdf(x, y) < -12) glints.push({ x, y, phase: rnd() * 100, speed: 0.6 + rnd() * 0.8 });
-    }
-    const reeds = [];
-    const current = [];
-    for (const z of w.zones) {
-      for (const r of zoneRects(z) || []) {
-        if (z.decor === 'reeds') {
-          for (let i = 0; i < (r.w * r.h) / 900; i++) {
-            const x = r.x + rnd() * r.w;
-            const y = r.y + rnd() * r.h;
-            if (zoneAt(w, x, y) === z && t.sdf(x, y) > -160) {
-              reeds.push({ x, y, h: 10 + rnd() * 14, phase: rnd() * 6, blades: 2 + Math.floor(rnd() * 3), cattail: rnd() < 0.35 });
-            }
-          }
-        }
-        if (z.decor === 'current') {
-          for (let i = 0; i < (r.w * r.h) / 1800; i++) {
-            const x = r.x + rnd() * r.w;
-            const y = r.y + rnd() * r.h;
-            if (zoneAt(w, x, y) === z) current.push({ x, y, len: 14 + rnd() * 22, phase: rnd() * 1000, min: r.x, span: r.w });
-          }
-        }
-      }
-    }
-    // The river keeps flowing past the edge of the map.
-    const river = w.zones.find((z) => z.decor === 'current');
-    const channel = river && zoneRects(river).find((r) => r.x + r.w >= w.width);
-    if (channel) {
-      for (let i = 0; i < 60; i++) {
-        current.push({ x: w.width + rnd() * 600, y: channel.y + rnd() * channel.h, len: 14 + rnd() * 22, phase: rnd() * 1000, min: channel.x, span: 600 + (w.width - channel.x) });
-      }
-    }
-    reeds.sort((a, b) => a.y - b.y);
-    return { glints, reeds, current };
-  }
-
   drawCaustics(view, time) {
     const { ctx } = this;
     const p = this.causticPattern;
@@ -333,7 +292,7 @@ export class Renderer {
   drawGlints(time) {
     const { ctx } = this;
     ctx.fillStyle = '#ffffff';
-    for (const g of this.dynamic.glints) {
+    for (const d of this.terrain.dataIn(this.viewRect(0))) for (const g of d.glints) {
       const s = Math.sin(time * 0.0016 * g.speed + g.phase);
       if (s < 0.94 || !this.onScreen(g.x, g.y)) continue;
       const k = (s - 0.94) / 0.06;
@@ -355,10 +314,10 @@ export class Renderer {
     ctx.lineWidth = 1.6;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    for (const c of this.dynamic.current) {
-      // Streaks drift west, into the lake.
+    for (const d of this.terrain.dataIn(this.viewRect(0))) for (const c of d.current) {
+      // Streaks drift west, into the lake (and skip any stretch that drifts over a bank).
       const x = c.min + ((((c.x - c.min) - time * 0.045 - c.phase) % c.span) + c.span) % c.span;
-      if (!this.onScreen(x, c.y)) continue;
+      if (!this.onScreen(x, c.y) || this.terrain.sdf(x, c.y) > -4) continue;
       ctx.moveTo(x, c.y);
       ctx.lineTo(x + c.len, c.y + Math.sin(x * 0.05) * 1.5);
     }
@@ -384,7 +343,7 @@ export class Renderer {
     const { ctx } = this;
     ctx.lineCap = 'round';
     ctx.lineWidth = 1.6;
-    for (const p of this.terrain.coast) {
+    for (const d of this.terrain.dataIn(this.viewRect(0))) for (const p of d.coast) {
       if (!this.onScreen(p.x, p.y, 20)) continue;
       // Each bit of shoreline washes in and out on its own rhythm.
       const wave = 0.5 + 0.5 * Math.sin(time * 0.0016 + p.phase);
@@ -403,7 +362,7 @@ export class Renderer {
     const { ctx } = this;
     const R = THEME.reed;
     ctx.lineCap = 'round';
-    for (const r of this.dynamic.reeds) {
+    for (const d of this.terrain.dataIn(this.viewRect(0))) for (const r of d.reeds) {
       if (!this.onScreen(r.x, r.y, 30)) continue;
       const sway = Math.sin(time / 900 + r.phase) * 3;
       for (let b = 0; b < r.blades; b++) {
@@ -651,33 +610,43 @@ export class Renderer {
     const { ctx, dpr } = this;
     const cssWidth = window.innerWidth < 800 ? 140 : MINIMAP_WIDTH;
     const width = Math.round(cssWidth * dpr);
-    if (!this.minimap || this.minimap.width !== width) {
-      this.minimap = { canvas: this.terrain.minimapImage(width), width, scale: width / this.world.width };
-    }
-    const { canvas: mm, scale } = this.minimap;
+    const height = Math.round(width * 0.75);
+    const ov = this.terrain.overview();
+    // Fill in the overview around you first (at least one block a frame).
+    this.terrain.growOverview(this.camera.x, this.camera.y, performance.now() + 2);
+    const w = this.world;
+    // The map is huge, so the minimap shows the area around you.
+    const spanX = Math.min(w.width, MINIMAP_SPAN);
+    const spanY = Math.min(w.height, spanX * 0.75);
+    const c = this.camera;
+    const wx0 = clamp(c.x - spanX / 2, 0, w.width - spanX);
+    const wy0 = clamp(c.y - spanY / 2, 0, w.height - spanY);
+    const scale = width / spanX;
     const margin = 12 * dpr;
-    const x0 = this.canvas.width - mm.width - margin;
-    const y0 = this.canvas.height - mm.height - 16 * dpr;
+    const x0 = this.canvas.width - width - margin;
+    const y0 = this.canvas.height - height - 16 * dpr;
+    const mx = (x) => x0 + (x - wx0) * scale;
+    const my = (y) => y0 + (y - wy0) * scale;
 
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(x0, y0, mm.width, mm.height, 8 * dpr);
+    ctx.roundRect(x0, y0, width, height, 8 * dpr);
     ctx.clip();
     ctx.globalAlpha = 0.95;
-    ctx.drawImage(mm, x0, y0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(ov.canvas, wx0 / ov.step, wy0 / ov.step, spanX / ov.step, spanY / ov.step, x0, y0, width, height);
     ctx.globalAlpha = 1;
 
-    const c = this.camera;
     const vw = (this.canvas.width / c.zoom) * scale;
     const vh = (this.canvas.height / c.zoom) * scale;
     ctx.strokeStyle = THEME.minimap.view;
     ctx.lineWidth = 1 * dpr;
-    ctx.strokeRect(x0 + c.x * scale - vw / 2, y0 + c.y * scale - vh / 2, vw, vh);
+    ctx.strokeRect(mx(c.x) - vw / 2, my(c.y) - vh / 2, vw, vh);
 
     ctx.fillStyle = THEME.minimap.hotspot;
     for (const h of frame.hotspots) {
       ctx.beginPath();
-      ctx.arc(x0 + h.x * scale, y0 + h.y * scale, 2.5 * dpr, 0, Math.PI * 2);
+      ctx.arc(mx(h.x), my(h.y), 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
     }
     if (frame.zoo) {
@@ -685,9 +654,9 @@ export class Renderer {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1 * dpr;
       ctx.beginPath();
-      ctx.moveTo(x0 + frame.zoo.x * scale, y0 + frame.zoo.y * scale - 5 * dpr);
-      ctx.lineTo(x0 + frame.zoo.x * scale + 4.5 * dpr, y0 + frame.zoo.y * scale + 3.5 * dpr);
-      ctx.lineTo(x0 + frame.zoo.x * scale - 4.5 * dpr, y0 + frame.zoo.y * scale + 3.5 * dpr);
+      ctx.moveTo(mx(frame.zoo.x), my(frame.zoo.y) - 5 * dpr);
+      ctx.lineTo(mx(frame.zoo.x) + 4.5 * dpr, my(frame.zoo.y) + 3.5 * dpr);
+      ctx.lineTo(mx(frame.zoo.x) - 4.5 * dpr, my(frame.zoo.y) + 3.5 * dpr);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -695,18 +664,18 @@ export class Renderer {
     ctx.fillStyle = '#c1121f';
     for (const c of frame.chums ?? []) {
       ctx.beginPath();
-      ctx.arc(x0 + c.x * scale, y0 + c.y * scale, 2.5 * dpr, 0, Math.PI * 2);
+      ctx.arc(mx(c.x), my(c.y), 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.fillStyle = '#ffd166';
     for (const shop of this.world.shops ?? []) {
-      ctx.fillRect(x0 + shop.x * scale - 3 * dpr, y0 + shop.y * scale - 3 * dpr, 6 * dpr, 6 * dpr);
+      ctx.fillRect(mx(shop.x) - 3 * dpr, my(shop.y) - 3 * dpr, 6 * dpr, 6 * dpr);
     }
     const boat = frame.boat;
     if (boat?.x != null) {
       // The visiting boat: a small hull shape.
       ctx.save();
-      ctx.translate(x0 + boat.x * scale, y0 + boat.y * scale);
+      ctx.translate(mx(boat.x), my(boat.y));
       ctx.rotate(boat.h);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#7a2e2e';
@@ -724,7 +693,7 @@ export class Renderer {
       const self = p.id === frame.meId;
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(x0 + p.x * scale, y0 + p.y * scale, (self ? 4 : 3) * dpr, 0, Math.PI * 2);
+      ctx.arc(mx(p.x), my(p.y), (self ? 4 : 3) * dpr, 0, Math.PI * 2);
       ctx.fill();
       if (self) {
         ctx.strokeStyle = '#fff';
@@ -736,7 +705,7 @@ export class Renderer {
     ctx.strokeStyle = THEME.minimap.border;
     ctx.lineWidth = 2 * dpr;
     ctx.beginPath();
-    ctx.roundRect(x0, y0, mm.width, mm.height, 8 * dpr);
+    ctx.roundRect(x0, y0, width, height, 8 * dpr);
     ctx.stroke();
   }
 }
