@@ -68,6 +68,10 @@ Every 10 minutes something happens at one of the lakes or ponds: in the valley, 
 
 Only catches inside the event's ring count, and duels don't. Each event you join counts towards the **Community Angler** achievement (10 events).
 
+### The Angler's Map
+
+Buy it once at the Bait Shop (750 coins, `WORLD_MAP` in `shared/constants.js`). Then press **B** to see the whole world: areas, lakes, shops, the current map event and every angler.
+
 ### Travelling tackle shops
 
 Three shops out in the wilds sell gear you can't buy anywhere else. You have to walk there, press E, and be a high enough level:

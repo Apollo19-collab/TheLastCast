@@ -5,7 +5,7 @@
 // server says which (MSG.ROOM); each room has its own world and renderer.
 
 import { EVENT_TYPES, eventsAround } from '/shared/events.js';
-import { FishingState, MSG, castDistance } from '/shared/constants.js';
+import { FishingState, MSG, WORLD_MAP, castDistance } from '/shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
 import { computeStats } from '/shared/gear.js';
 import { VERSION } from '/shared/version.js';
@@ -107,6 +107,7 @@ function setRoom(info) {
   room = next;
   world = room === 'voyage' ? seaWorld : lakeWorld;
   renderer = getRenderer(room);
+  setMapOpen(false);
   buffer.clear();
   castStarts.clear();
   lastStates.clear();
@@ -186,11 +187,13 @@ net.on(MSG.WELCOME, (msg) => {
     onAnswer: answerInvite,
     onChum: () => net.send({ t: MSG.CHUM }),
     onMenu: (tab) => {
+      setMapOpen(false);
       ui.toggleMenu(tab);
       if (ui.menuOpen) { charge = null; input.releaseAll(); }
     },
     onMute: () => ui.setSoundButton(audio.toggleMute()),
-    isBlocked: () => ui.menuOpen,
+    onMap: toggleMap,
+    isBlocked: () => ui.menuOpen || mapOpen,
   });
 });
 
@@ -239,8 +242,34 @@ function onActionUp() {
   audio.play('cast');
 }
 
+// ---- the Angler's Map (B) --------------------------------------------------------------
+
+let mapOpen = false;
+
+function setMapOpen(open) {
+  mapOpen = open;
+  document.body.classList.toggle('map-open', open); // hides the HUD panels under it
+}
+
+function toggleMap() {
+  document.getElementById('map-toggle')?.blur();
+  if (mapOpen) { setMapOpen(false); return; }
+  if (room !== 'lake') { ui.flash('Your map only covers the land. Wait until you\'re back from the voyage.', 2500); return; }
+  if (!ui.profile?.worldMap) {
+    ui.flash(`You need the Angler's Map to see the whole world. Buy it at the Bait Shop on South Beach for ${WORLD_MAP.price} coins.`, 3500);
+    audio.play('error');
+    return;
+  }
+  ui.closeMenu();
+  charge = null;
+  input?.releaseAll();
+  setMapOpen(true);
+}
+document.getElementById('map-toggle')?.addEventListener('click', toggleMap);
+
 function onCancel() {
-  if (ui.menuOpen) ui.closeMenu();
+  if (mapOpen) setMapOpen(false);
+  else if (ui.menuOpen) ui.closeMenu();
   else if (!document.getElementById('results').hidden) ui.hideResults();
   else if (charge) charge = null;
   else net.send({ t: MSG.CANCEL });
@@ -885,6 +914,7 @@ function frame(now) {
     chums: snap?.chums ?? [],
     zoo: room === 'lake' ? snap?.zoo ?? null : null,
     mapEvent: room === 'lake' ? snap?.we ?? null : null,
+    worldMap: mapOpen && room === 'lake',
     meId,
     aim,
     boat,

@@ -40,6 +40,7 @@ export function newProfile(name = 'Angler') {
     inventory: starterInventory(), // owned rods, reels and lines (see shared/gear.js)
     bait: {}, // consumable bait and lures: item id -> uses left
     chum: 0, // chum buckets in your bag (shared/chum.js)
+    worldMap: false, // owns the Angler's Map (WORLD_MAP in shared/constants.js)
     xp: 0, // total XP; your level comes from this (shared/levels.js)
     armourOwned: [], // armour piece ids (shared/armour.js)
     armour: emptyArmour(), // slot -> piece id or null
@@ -101,6 +102,7 @@ export function normalize(saved) {
     if (id && (ARMOUR[id]?.slot !== slot || !p.armourOwned.includes(id))) p.armour[slot] = null;
   }
   p.chum = Math.max(0, p.chum | 0);
+  p.worldMap = p.worldMap === true;
   p.trophies = Array.isArray(p.trophies) ? p.trophies.filter((t) => SPECIES[t?.species]) : [];
   p.notices = Array.isArray(p.notices) ? p.notices : [];
   p.pets = [...new Set((p.pets || []).filter((id) => PETS[id]))];

@@ -2,6 +2,12 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.21.0 - The Angler's Map (2026-10-04)
+
+- The Angler's Map: buy it once at the Bait Shop on South Beach (750 coins). Press B, or the new Map button, to see the whole world on one screen.
+- The map shows every area, lake and pond, the Bait Shop and the three travelling tackle shops by name, the current map event, hotspots, the Travelling Zoo, the boat and every angler, with you marked.
+- The HUD panels step aside while the map is open; press B or Esc to close it. Without a map, B tells you where to get one.
+
 ## 0.20.0 - Travelling tackle shops (2026-10-04)
 
 - Three travelling tackle shops have opened out in the wilds, each by one of the great lakes. Walk there and press E to browse. Each has its own stock that you can't buy anywhere else:

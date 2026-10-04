@@ -2,9 +2,19 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.20.0';
+export const VERSION = '0.21.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.21.0',
+    date: '2026-10-04',
+    title: 'The Angler\'s Map',
+    changes: [
+      'The Angler\'s Map: buy it once at the Bait Shop on South Beach (750 coins). Press B, or the new Map button, to see the whole world on one screen.',
+      'The map shows every area, lake and pond, the Bait Shop and the three travelling tackle shops by name, the current map event, hotspots, the Travelling Zoo, the boat and every angler, with you marked.',
+      'The HUD panels step aside while the map is open; press B or Esc to close it. Without a map, B tells you where to get one.',
+    ],
+  },
   {
     version: '0.20.0',
     date: '2026-10-04',

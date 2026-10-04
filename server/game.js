@@ -3,7 +3,7 @@
 // reel); everything that matters for scoring is decided here. The Hub
 // (hub.js) owns all rooms and moves players between them.
 
-import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED, SPRINT } from '../shared/constants.js';
+import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED, SPRINT, WORLD_MAP } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
 import { BULK_PACKS, ITEMS, STARTER, baitCount, computeStats, isConsumable, packPrice } from '../shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
@@ -166,6 +166,7 @@ export class Game {
         break;
       case MSG.BUY:
         if (msg.item === 'chum') { this.buyChum(player, msg.packs === 5 ? 5 : 1); return; }
+        if (msg.item === 'map') { this.buyMap(player); return; }
         if (Object.hasOwn(PETS, String(msg.item))) { this.buyPet(player, msg.item); return; }
         if (Object.hasOwn(ARMOUR, String(msg.item))) { this.buyArmour(player, msg.item); return; }
         if (this.tackleLocked(player)) return;
@@ -387,6 +388,25 @@ export class Game {
     this.profileChanged(player);
   }
 
+  /** Buy the Angler's Map at the Bait Shop: once, and it's yours for good. */
+  buyMap(player) {
+    const { profile } = player;
+    let message = null;
+    if (profile.worldMap) message = 'You already have the Angler\'s Map. Press B to open it.';
+    else if (this.kind !== 'lake' || !this.atBaitShop(player)) message = 'The Angler\'s Map is sold at the Bait Shop on South Beach.';
+    else if (profile.coins < WORLD_MAP.price) message = `You need ${WORLD_MAP.price - profile.coins} more coins for that.`;
+    if (message) {
+      this.emitTo(player, { kind: 'shop', ok: false, message });
+      return;
+    }
+    profile.coins -= WORLD_MAP.price;
+    profile.counters.coinsSpent += WORLD_MAP.price;
+    profile.worldMap = true;
+    this.emitTo(player, { kind: 'shop', ok: true, message: 'You bought the Angler\'s Map! Press B to see the whole world.' });
+    this.checkAchievements(player);
+    this.profileChanged(player);
+  }
+
   /** Put a chum bucket down at your feet (one out at a time). */
   placeChum(player) {
     const { profile } = player;
@@ -506,6 +526,7 @@ export class Game {
       inventory: p.inventory,
       bait: p.bait,
       chum: p.chum,
+      worldMap: p.worldMap,
       equipped: p.equipped,
       xp: p.xp,
       armourOwned: p.armourOwned,

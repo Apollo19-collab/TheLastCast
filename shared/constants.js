@@ -22,6 +22,9 @@ export const BITE_WINDOW = 1.3; // seconds to hook a fish after it bites
 
 export const CROWD_RADIUS = 90; // other bobbers within this range slow your bites
 
+// The Angler's Map: bought once at the Bait Shop, it shows the whole world (B).
+export const WORLD_MAP = Object.freeze({ name: 'Angler\'s Map', price: 750 });
+
 // Coins earned per point when you land a fish (score is the points themselves).
 export const COINS_PER_POINT = 1.25;
 

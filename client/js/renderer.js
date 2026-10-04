@@ -183,7 +183,8 @@ export class Renderer {
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawMinimap(frame);
-    if (q.prefetch) this.terrain.prefetch(view, budget);
+    if (frame.worldMap) this.drawWorldMap(frame);
+    else if (q.prefetch) this.terrain.prefetch(view, budget);
   }
 
   drawSeaFrame(frame) {
@@ -694,6 +695,147 @@ export class Renderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ---- the Angler's Map (screen space, full screen) ------------------------------
+
+  /** The whole world on one screen: lakes, areas, shops, events and anglers. */
+  drawWorldMap(frame) {
+    const { ctx, dpr, canvas } = this;
+    const w = this.world;
+    const ov = this.terrain.overview();
+    // Chart the rest of the world quickly while the map is open.
+    this.terrain.growOverview(this.camera.x, this.camera.y, performance.now() + 12);
+    const pad = 28 * dpr;
+    const top = 64 * dpr;
+    const scale = Math.min((canvas.width - pad * 2) / w.width, (canvas.height - top - pad) / w.height);
+    const mw = w.width * scale;
+    const mh = w.height * scale;
+    const x0 = (canvas.width - mw) / 2;
+    const y0 = top + (canvas.height - top - pad - mh) / 2;
+    const mx = (x) => x0 + x * scale;
+    const my = (y) => y0 + y * scale;
+    const px = (n) => n * dpr;
+    const label = (text, x, y, { size = 12, weight = 700, color = '#fff', outline = 'rgba(0,0,0,0.7)', italic = false } = {}) => {
+      ctx.font = `${italic ? 'italic ' : ''}${weight} ${px(size)}px system-ui, sans-serif`;
+      ctx.lineWidth = px(3);
+      ctx.strokeStyle = outline;
+      ctx.strokeText(text, x, y);
+      ctx.fillStyle = color;
+      ctx.fillText(text, x, y);
+    };
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(6,12,20,0.86)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    label("THE ANGLER'S MAP", canvas.width / 2, px(24), { size: 20, weight: 900, color: '#f4e1a0' });
+    const charted = ov.left ? ` · charting ${Math.round(100 * (1 - ov.left / (Math.ceil(ov.w / 16) * Math.ceil(ov.h / 16))))}%` : '';
+    label(`B or Esc to close${charted}`, canvas.width / 2, px(46), { size: 12, weight: 500, color: '#cfd8dc' });
+
+    // Parchment border, then the world.
+    ctx.fillStyle = '#c9b48a';
+    ctx.beginPath();
+    ctx.roundRect(x0 - px(6), y0 - px(6), mw + px(12), mh + px(12), px(6));
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, mw, mh);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(ov.canvas, 0, 0, ov.w, ov.h, x0, y0, ov.w * ov.step * scale, ov.h * ov.step * scale);
+
+    // Area names, then the big lakes'.
+    for (const a of w.areas ?? []) {
+      const r = a.rect;
+      const at = a.label ?? (r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null);
+      if (at) label(a.name.toUpperCase(), mx(at.x), my(at.y), { size: 11, weight: 800, color: 'rgba(255,243,214,0.9)' });
+    }
+    for (const z of w.zones) {
+      const r = z.rect;
+      if (!r || z.label === false || r.w * r.h < 600000) continue;
+      label(z.name, mx(r.x + r.w / 2), my(r.y + r.h / 2), { size: 11, weight: 600, italic: true, color: '#caf0f8', outline: 'rgba(0,30,60,0.7)' });
+    }
+
+    // Hotspots, the map event, the zoo and the boat.
+    ctx.fillStyle = THEME.minimap.hotspot;
+    for (const h of frame.hotspots) {
+      ctx.beginPath();
+      ctx.arc(mx(h.x), my(h.y), px(2.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (frame.mapEvent) {
+      const we = frame.mapEvent;
+      const T = EVENT_TYPES[we.type];
+      const s = px(8 + Math.sin(performance.now() / 250) * 1.5);
+      ctx.fillStyle = T.color;
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = px(1);
+      ctx.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
+        const r = k % 2 ? s * 0.45 : s;
+        ctx.lineTo(mx(we.px) + Math.cos(a) * r, my(we.py) + Math.sin(a) * r);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      label(`${T.icon} ${T.name}`, mx(we.px), my(we.py) - px(16), { size: 11, color: T.color });
+    }
+    if (frame.zoo) {
+      ctx.fillStyle = '#c77dff';
+      ctx.beginPath();
+      ctx.arc(mx(frame.zoo.x), my(frame.zoo.y), px(4), 0, Math.PI * 2);
+      ctx.fill();
+      label('Travelling Zoo', mx(frame.zoo.x), my(frame.zoo.y) + px(12), { size: 10, color: '#e0aaff' });
+    }
+    if (frame.boat?.x != null) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(mx(frame.boat.x), my(frame.boat.y), px(3.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Shops, with their names.
+    for (const shop of w.shops ?? []) {
+      const sx = mx(shop.x);
+      const sy = my(shop.y);
+      ctx.fillStyle = shop.minimap ?? '#ffd166';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = px(1.5);
+      ctx.fillRect(sx - px(5), sy - px(5), px(10), px(10));
+      ctx.strokeRect(sx - px(5), sy - px(5), px(10), px(10));
+      label(shop.name, sx, sy + px(15), { size: 11, color: shop.minimap ?? '#ffd166' });
+    }
+
+    // Anglers: everyone else small, you with a pulsing ring.
+    for (const p of frame.players) {
+      if (p.id === frame.meId) continue;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(mx(p.x), my(p.y), px(3.5), 0, Math.PI * 2);
+      ctx.fill();
+      label(p.name, mx(p.x), my(p.y) - px(10), { size: 10, weight: 600 });
+    }
+    const me = frame.players.find((p) => p.id === frame.meId);
+    if (me) {
+      const pulse = px(9 + 3 * Math.sin(performance.now() / 300));
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = px(2);
+      ctx.beginPath();
+      ctx.arc(mx(me.x), my(me.y), pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = me.color;
+      ctx.beginPath();
+      ctx.arc(mx(me.x), my(me.y), px(5), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      label('You', mx(me.x), my(me.y) - px(18), { size: 12, weight: 900, color: '#ffd166' });
+    }
+    ctx.restore();
+    ctx.restore();
   }
 
   // ---- minimap (screen space, bottom-right) --------------------------------------

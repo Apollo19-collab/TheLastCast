@@ -17,7 +17,7 @@ const MOVE_KEYS = {
 export class Input {
   constructor(canvas, {
     onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute,
-    onInteract = () => {}, onAnswer = () => {}, onChum = () => {}, isBlocked = () => false,
+    onInteract = () => {}, onAnswer = () => {}, onChum = () => {}, onMap = () => {}, isBlocked = () => false,
   }) {
     this.move = { up: false, down: false, left: false, right: false, sprint: false };
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -42,6 +42,7 @@ export class Input {
       if (e.target instanceof HTMLInputElement) return;
       if (MENU_KEYS[e.code] && !e.repeat) { onMenu(MENU_KEYS[e.code]); return; }
       if (e.code === 'KeyM' && !e.repeat) { onMute(); return; }
+      if (e.code === 'KeyB' && !e.repeat) { onMap(); return; }
       if ((e.code === 'KeyY' || e.code === 'KeyN') && !e.repeat) { onAnswer(e.code === 'KeyY'); return; }
       if (isBlocked()) return;
       const dir = MOVE_KEYS[e.code];

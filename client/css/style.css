@@ -767,3 +767,7 @@ html, body, button, input { font-family: var(--ui-font); }
 .store-keeper { font-style: italic; opacity: 0.85; margin: 2px 0 4px; }
 .store-meta { font-size: 13px; }
 .locked.store-away { color: #9ad1ff; }
+
+/* ---- the Angler's Map hides the HUD panels under it ---- */
+body.map-open #me-panel, body.map-open #leaderboard, body.map-open #event-panel, body.map-open #prompt,
+body.map-open #feed, body.map-open #status, body.map-open #catch-popup { visibility: hidden; }

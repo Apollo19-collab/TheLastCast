@@ -9,6 +9,7 @@ import { QUALITY, graphics } from './graphics.js';
 import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice, shopStock } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
+import { WORLD_MAP } from '/shared/constants.js';
 import { BOSS, BOSSES, BOSS_ATTACKS, DECK_AREAS, SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
 import { DUEL } from '/shared/duel.js';
 import { CHUM } from '/shared/chum.js';
@@ -359,6 +360,7 @@ export class UI {
         ['Chum', 'C: put a chum bucket down (buy them at the Bait Shop)'],
         ['Pets', 'P: your pets · E at the Travelling Zoo to adopt one'],
         ['Menus', 'G tackle · R armour · P pets · I fish index · H history · K trophies & records · T achievements · V events · O options'],
+        ['Map', 'B: open the Angler\'s Map (buy it at the Bait Shop)'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];
@@ -416,7 +418,7 @@ export class UI {
       : this.shopAccess
         ? h('p', { class: 'shop-note open' }, '🪱 Bait Shop: buy packs here. Each bite uses one; Bread Crumbs are free and never run out.')
         : h('p', { class: 'shop-note' }, '🪱 Bait and lures are used up, one per bite. Buy more at the Bait Shop on South Beach (or from the deckhand on a voyage).');
-    const chumRow = this.tackleSlot === 'bait' ? this.chumRow() : null;
+    const chumRow = this.tackleSlot === 'bait' ? [this.mapRow(), this.chumRow()] : null;
     return [
       h('p', { class: 'menu-note' }, h('b', {}, `${num(p.coins)} coins`), '. Mix and match: equip any rod, reel, line and bait you own.'),
       loadout,
@@ -427,9 +429,26 @@ export class UI {
         onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
       }, SLOT_LABELS[slot]))),
       baitNote,
-      chumRow,
+      ...(chumRow ?? []),
       ...list,
     ].filter(Boolean);
+  }
+
+  /** The Angler's Map at the top of the bait list: bought once at the Bait Shop. */
+  mapRow() {
+    const p = this.profile;
+    let action;
+    if (p.worldMap) action = h('span', { class: 'tag equipped' }, 'Owned · press B');
+    else if (this.shopAccess) {
+      action = h('button', { class: 'btn buy', disabled: p.coins < WORLD_MAP.price, onclick: () => this.onBuy('map') }, `Buy · ${num(WORLD_MAP.price)}c`);
+    } else action = h('div', { class: 'locked' }, h('div', {}, '🏪 ', h('b', {}, 'Bait Shop')), h('div', { class: 'locked-progress' }, `${num(WORLD_MAP.price)}c on South Beach`));
+    return h('div', { class: `item-row${p.worldMap ? ' owned' : ''}` },
+      h('div', { class: 'gear-icon chum-icon' }, '🗺️'),
+      h('div', { class: 'item-text' },
+        h('div', { class: 'item-name' }, WORLD_MAP.name),
+        h('div', { class: 'item-desc' }, 'A hand-drawn map of the whole country: every lake, pond and trail, the three tackle shops, the map events and other anglers. Press B (or the Map button) to open it.'),
+        h('div', { class: 'gear-stats' }, `${num(WORLD_MAP.price)} coins, once · Yours for good`)),
+      h('div', { class: 'bait-actions' }, action));
   }
 
   /** Chum buckets at the top of the bait list. */

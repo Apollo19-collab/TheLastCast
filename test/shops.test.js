@@ -148,3 +148,23 @@ test('every new item has its own look', async () => {
     if (it.shop) assert.match(art, new RegExp(`\\n  ${id}: \\{`), `${id} has a look in gearArt.js`);
   }
 });
+
+test("the Angler's Map: bought once, only at the Bait Shop, and kept", async () => {
+  const { WORLD_MAP } = await import('../shared/constants.js');
+  const { normalize } = await import('../server/profiles.js');
+  const { game, player, inbox, p } = shopper({ level: 1, coins: 2000 });
+  const bait = world.shops.find((s) => s.id === 'bait');
+  Object.assign(player, { x: 6000, y: 6000 });
+  game.handleMessage(player, { t: MSG.BUY, item: 'map' });
+  assert.equal(p.worldMap, false, 'not out in the wilds');
+  Object.assign(player, { x: bait.x, y: bait.y + bait.range - 10 });
+  game.handleMessage(player, { t: MSG.BUY, item: 'map' });
+  assert.equal(p.worldMap, true);
+  assert.equal(p.coins, 2000 - WORLD_MAP.price);
+  game.handleMessage(player, { t: MSG.BUY, item: 'map' });
+  assert.equal(p.coins, 2000 - WORLD_MAP.price, 'only once');
+  assert.match(inbox.filter((m) => m.kind === 'shop').at(-1).message, /already/);
+  assert.equal(inbox.filter((m) => m.t === MSG.PROFILE).at(-1).worldMap, true, 'the client is told');
+  assert.equal(normalize({ name: 'Old' }).worldMap, false);
+  assert.equal(normalize({ ...p }).worldMap, true);
+});
