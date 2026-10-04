@@ -68,6 +68,18 @@ Every 10 minutes something happens at one of the lakes or ponds: in the valley, 
 
 Only catches inside the event's ring count, and duels don't. Each event you join counts towards the **Community Angler** achievement (10 events).
 
+### Travelling tackle shops
+
+Three shops out in the wilds sell gear you can't buy anywhere else. You have to walk there, press E, and be a high enough level:
+
+| Shop | Where | Stock |
+| --- | --- | --- |
+| Stillwater Finesse Co. | Stillwater Lake (south) | Light, sensitive, stealthy tackle: levels 12-36 |
+| Silvermere Outfitters | Silvermere (east) | Heavy big-game tackle: levels 20-60 |
+| The Ember Curio | Ember Lake (far east) | Rare, lucky endgame tackle: levels 42-70 |
+
+Items set `shop` and `level` in `shared/gear.js`, and the shops themselves are in `shared/world.js` (`shops`, with `kind: 'tackle'`).
+
 ### Trophies and records (inspired by Russian Fishing 4)
 
 - Every species has a **trophy weight**, the top 8% of its range, shown in the Fish Index. Trophies are worth 1.5x points.

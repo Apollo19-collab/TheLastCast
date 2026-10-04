@@ -272,11 +272,12 @@ test('late-game tackle is locked behind achievements', () => {
   assert.ok(p.inventory.includes('master'));
 
   // Most later items need an unlock, and every unlock points at a real achievement.
-  const locked = Object.values(ITEMS).filter((it) => it.unlock);
+  // (or are sold only at a far-off tackle shop, from a set level: see shops.test.js).
+  const locked = Object.values(ITEMS).filter((it) => it.unlock || it.shop);
   assert.ok(locked.length > Object.keys(ITEMS).length / 2, `${locked.length} of ${Object.keys(ITEMS).length} locked`);
   const ids = new Set(ACHIEVEMENTS.map((a) => a.id));
-  for (const it of locked) assert.ok(ids.has(it.unlock), `${it.name} -> ${it.unlock}`);
-  assert.equal(Object.keys(ITEMS).length, 50);
+  for (const it of locked.filter((x) => x.unlock)) assert.ok(ids.has(it.unlock), `${it.name} -> ${it.unlock}`);
+  assert.equal(Object.keys(ITEMS).length, 86);
   for (const slot of SLOTS) assert.ok(Object.values(ITEMS).some((it) => it.slot === slot && it.price === 0), `free ${slot}`);
 });
 

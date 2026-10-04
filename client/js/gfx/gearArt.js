@@ -18,6 +18,18 @@ export const ROD_LOOK = {
   bamboo: { color: '#d4a373', tip: '#e9c46a', length: 31, width: 2.4, wraps: '#6a040f' },
   abyssrod: { color: '#0b2545', tip: '#7df9ff', length: 34, width: 3.4, wraps: '#e63946', glow: '#7df9ff' },
   starrod: { color: '#240046', tip: '#ff9ef0', length: 38, width: 2.6, wraps: '#ffd166', glow: '#ff5ce1' },
+  reedwhisper: { color: '#a3b18a', tip: '#dad7cd', length: 30, width: 1.8, wraps: '#2a9d8f' },
+  glassfeather: { color: '#caf0f8', tip: '#ffffff', length: 31, width: 1.7, wraps: '#48cae4' },
+  dropshot: { color: '#344e41', tip: '#a3b18a', length: 30, width: 2.1, wraps: '#ffd166' },
+  silkstream: { color: '#588157', tip: '#e9f5db', length: 35, width: 1.6, wraps: '#f4a261' },
+  ironwood: { color: '#3d2b1f', tip: '#6f4e37', length: 32, width: 3.4, wraps: '#adb5bd' },
+  silverheavy: { color: '#ced4da', tip: '#f8f9fa', length: 33, width: 3.4, wraps: '#3a4a6b' },
+  leviathanpole: { color: '#14213d', tip: '#4cc9f0', length: 34, width: 4, wraps: '#e5e5e5' },
+  titanrod: { color: '#495057', tip: '#dee2e6', length: 35, width: 4.2, wraps: '#ffba08', glow: '#dee2e6' },
+  emberwood: { color: '#7f1d1d', tip: '#f97316', length: 36, width: 2.6, wraps: '#fde68a', glow: '#f97316' },
+  runecarved: { color: '#1f2937', tip: '#a78bfa', length: 37, width: 2.7, wraps: '#a78bfa', glow: '#a78bfa' },
+  moonlit: { color: '#cbd5e1', tip: '#ffffff', length: 37, width: 2.4, wraps: '#93c5fd', glow: '#e0f2fe' },
+  phoenixrod: { color: '#b91c1c', tip: '#fde047', length: 39, width: 2.8, wraps: '#fb923c', glow: '#fb923c' },
 };
 
 export const REEL_LOOK = {
@@ -32,6 +44,15 @@ export const REEL_LOOK = {
   levelwind: { body: '#6c757d', rim: '#ced4da', big: true },
   stormreel: { body: '#3a4a6b', rim: '#4cc9f0', glow: '#4cc9f0', big: true },
   starreel: { body: '#7209b7', rim: '#ff9ef0', glow: '#ff5ce1' },
+  featherreel: { body: '#e9f5db', rim: '#2a9d8f' },
+  finessereel: { body: '#90e0ef', rim: '#0077b6' },
+  whisperreel: { body: '#dad7cd', rim: '#588157' },
+  winchreel: { body: '#343a40', rim: '#adb5bd', big: true },
+  trollingreel: { body: '#3a4a6b', rim: '#ced4da', big: true },
+  titanreel: { body: '#495057', rim: '#ffba08', glow: '#dee2e6', big: true },
+  emberreel: { body: '#9a3412', rim: '#fdba74', glow: '#f97316' },
+  runicreel: { body: '#312e81', rim: '#a78bfa', glow: '#a78bfa' },
+  phoenixreel: { body: '#dc2626', rim: '#fde047', glow: '#fb923c', big: true },
 };
 
 export const LINE_LOOK = {
@@ -45,6 +66,15 @@ export const LINE_LOOK = {
   copoly: { color: 'rgba(120,200,180,0.75)', width: 0.9 },
   kevlar: { color: 'rgba(255,214,10,0.9)', width: 1.2 },
   starline: { color: 'rgba(255,158,240,0.85)', width: 1, glow: '#ff5ce1' },
+  ghostfluoro: { color: 'rgba(230,245,255,0.3)', width: 0.6 },
+  microbraid: { color: 'rgba(80,140,110,0.85)', width: 0.8 },
+  mirageline: { color: 'rgba(200,220,255,0.35)', width: 0.7, glow: '#e0f2fe' },
+  wirecore: { color: 'rgba(140,150,160,0.95)', width: 1.2 },
+  dyneema: { color: 'rgba(240,240,240,0.95)', width: 1.2 },
+  titancable: { color: 'rgba(255,186,8,0.95)', width: 1.5 },
+  emberthread: { color: 'rgba(249,115,22,0.85)', width: 1, glow: '#f97316' },
+  runespun: { color: 'rgba(167,139,250,0.85)', width: 1, glow: '#a78bfa' },
+  phoenixsilk: { color: 'rgba(253,224,71,0.9)', width: 1.1, glow: '#fb923c' },
 };
 
 // kind: 'float' shows a bobber; 'lure' shows the lure itself on the line.
@@ -64,6 +94,12 @@ export const BAIT_LOOK = {
   leech: { kind: 'float', top: '#344e41', bottom: '#f1faee', icon: 'leech' },
   crayfish: { kind: 'lure', top: '#bc4749', bottom: '#6a040f', icon: 'crayfish' },
   stardust: { kind: 'lure', top: '#ff9ef0', bottom: '#3c096c', glow: '#ff5ce1', icon: 'stardust' },
+  waxworms: { kind: 'float', top: '#e9f5db', bottom: '#f1faee', icon: 'worms' },
+  microjig: { kind: 'lure', top: '#ffd166', bottom: '#2a9d8f', icon: 'spinner' },
+  cutbait: { kind: 'float', top: '#9d0208', bottom: '#f1faee', icon: 'squid' },
+  liveshad: { kind: 'float', top: '#ced4da', bottom: '#f8f9fa', icon: 'minnow' },
+  embergrubs: { kind: 'lure', top: '#f97316', bottom: '#7f1d1d', glow: '#fdba74', icon: 'leech' },
+  moonbait: { kind: 'lure', top: '#e0f2fe', bottom: '#64748b', glow: '#e0f2fe', icon: 'glowjig' },
 };
 
 const TABLES = { rod: ROD_LOOK, reel: REEL_LOOK, line: LINE_LOOK, bait: BAIT_LOOK };

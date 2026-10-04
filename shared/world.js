@@ -113,8 +113,32 @@ export const LOCATIONS = {
     ],
 
     // Shops: walk up and press E. The stall itself is solid.
-    shops: [{ id: 'bait', name: 'Bait Shop', x: 1395, y: 2075, range: 70 }],
-    solid: [{ x: 1365, y: 2050, w: 60, h: 40 }], // the Bait Shop stall
+    // The three travelling tackle shops are out in the wilds by the great
+    // lakes; each sells its own stock (see `shop` in gear.js).
+    shops: [
+      { id: 'bait', name: 'Bait Shop', x: 1395, y: 2075, range: 70 },
+      {
+        id: 'stillwater', kind: 'tackle', name: 'Stillwater Finesse Co.', keeper: 'Mae', x: 2560, y: 6920, range: 80,
+        sign: 'FINESSE', awning: ['#2a9d8f', '#e9f5db'], minimap: '#7bd389',
+        greeting: 'Light lines, soft rods and a gentle touch. Shy fish never know you\'re there.',
+      },
+      {
+        id: 'silvermere', kind: 'tackle', name: 'Silvermere Outfitters', keeper: 'Brannock', x: 7200, y: 4640, range: 80,
+        sign: 'OUTFITTERS', awning: ['#3a4a6b', '#ced4da'], minimap: '#9ad1ff',
+        greeting: 'Heavy rods, big reels and line you could tow a boat with. For the monsters.',
+      },
+      {
+        id: 'ember', kind: 'tackle', name: 'The Ember Curio', keeper: 'Old Ysolde', x: 10960, y: 5400, range: 80,
+        sign: 'CURIO', awning: ['#9d0208', '#ffba08'], minimap: '#ff7b54',
+        greeting: 'You walked a long way, angler. Everything here is old, rare and a little bit lucky.',
+      },
+    ],
+    solid: [
+      { x: 1365, y: 2050, w: 60, h: 40 }, // the Bait Shop stall
+      { x: 2530, y: 6895, w: 60, h: 40 }, // the tackle shop stalls
+      { x: 7170, y: 4615, w: 60, h: 40 },
+      { x: 10930, y: 5375, w: 60, h: 40 },
+    ],
 
     // Water zones, checked in order; the first match wins.
     // `rect` (or `rects` for an L-shaped zone); `rect: null` is the default for

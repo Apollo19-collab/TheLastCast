@@ -2,6 +2,17 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.20.0 - Travelling tackle shops (2026-10-04)
+
+- Three travelling tackle shops have opened out in the wilds, each by one of the great lakes. Walk there and press E to browse. Each has its own stock that you can't buy anywhere else:
+- Stillwater Finesse Co. (Stillwater Lake, to the south): light, sensitive and stealthy tackle for fast bites. 12 items, levels 12-36.
+- Silvermere Outfitters (Silvermere, to the east): heavy big-game rods, winch reels and line you could tow a boat with. 12 items, levels 20-60.
+- The Ember Curio (Ember Lake, far east): rare, lucky endgame tackle, up to the Phoenix Rod, Reel and Silk at levels 66-70. 12 items, levels 42-70.
+- 36 new items in all: 12 rods, 9 reels, 9 lines and 6 baits. Once bought, they work anywhere.
+- The Tackle menu lists the three shops with how far away they are and the level range of their stock. Shop-only items show where they're sold, or the level you need.
+- Shops show on the minimap in their own colours, with their names over the stalls.
+- Reels can now speed up bites too (the Whisper Reel). Affinities that cover every legendary or mythic fish now say so in one line.
+
 ## 0.19.0 - Trophies, giants & the Hall of Records (2026-10-04)
 
 - Trophy fish: every species (except junk) now has a trophy weight, the top 8% of its weight range. Land one at or above it and it's a Trophy, worth 1.5x points. The Fish Index shows each species' trophy weight and how many you've landed.

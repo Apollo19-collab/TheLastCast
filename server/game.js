@@ -207,6 +207,7 @@ export class Game {
     if (it.unlock && !profile.achievements[it.unlock]) {
       return { ok: false, message: `The ${it.name} unlocks with the "${ACHIEVEMENT_BY_ID[it.unlock].name}" achievement.` };
     }
+    if (it.level && levelFor(profile.xp) < it.level) return { ok: false, message: `The ${it.name} needs level ${it.level}.` };
     const price = consumable ? packPrice(itemId, packs) : it.price;
     if (profile.coins < price) return { ok: false, message: `You need ${price - profile.coins} more coins for that.` };
     return { ok: true, price };
@@ -218,12 +219,24 @@ export class Game {
     return !!this.world.shops?.some((s) => s.id === 'bait' && Math.hypot(player.x - s.x, player.y - s.y) <= s.range);
   }
 
+  /** Whether a player is standing at one of the travelling tackle shops. */
+  atShop(player, shopId) {
+    const shop = this.world.shops?.find((s) => s.id === shopId);
+    return !!shop && Math.hypot(player.x - shop.x, player.y - shop.y) <= shop.range;
+  }
+
   /** Buy an item by id; it is equipped straight away. */
   buy(player, itemId, packs = 1) {
     if (typeof itemId !== 'string' || !Object.hasOwn(ITEMS, itemId)) return;
     const { profile } = player;
     const consumable = isConsumable(itemId);
-    if (consumable && !this.atBaitShop(player)) {
+    const sold = ITEMS[itemId].shop;
+    if (sold && !this.atShop(player, sold)) {
+      const shop = this.world.shops?.find((s) => s.id === sold);
+      this.emitTo(player, { kind: 'shop', ok: false, message: `The ${ITEMS[itemId].name} is only sold at ${shop?.name ?? 'a travelling tackle shop'}.` });
+      return;
+    }
+    if (consumable && !sold && !this.atBaitShop(player)) {
       this.emitTo(player, { kind: 'shop', ok: false, message: 'Bait is sold at the Bait Shop on South Beach.' });
       return;
     }

@@ -20,7 +20,7 @@ import { drawAngler, drawLineAndBobber, drawNameTag, drawReelBars } from './gfx/
 import { FISH_SPRITE_SIZE, fishSprite } from './gfx/fishArt.js';
 import { drawBoat, drawBoatLights, drawGangplank, drawWake } from './gfx/boat.js';
 import { SeaScene } from './gfx/sea.js';
-import { drawBaitShop, drawChumBucket, drawPet, drawZoo } from './gfx/shop.js';
+import { drawBaitShop, drawTackleShop, drawChumBucket, drawPet, drawZoo } from './gfx/shop.js';
 import { PETS, PET_RARITIES } from '/shared/pets.js';
 import { CHUM } from '/shared/chum.js';
 import { BOAT, BOSS, SEA_BOAT } from '/shared/voyage.js';
@@ -151,7 +151,11 @@ export class Renderer {
     if (boat?.ph === 'docked') drawGangplank(ctx, BOAT.landing.x + 26, boat.x - BOAT.beam / 2 + 4, boat.y);
     if (q.surf) this.drawSurf(time);
     if (q.reeds) this.drawReeds(time);
-    for (const shop of this.world.shops ?? []) if (this.onScreen(shop.x, shop.y, 80)) drawBaitShop(ctx, shop.x, shop.y);
+    for (const shop of this.world.shops ?? []) {
+      if (!this.onScreen(shop.x, shop.y, 100)) continue;
+      if (shop.kind === 'tackle') drawTackleShop(ctx, shop);
+      else drawBaitShop(ctx, shop.x, shop.y);
+    }
     if (frame.zoo && this.onScreen(frame.zoo.x, frame.zoo.y, 120)) drawZoo(ctx, frame.zoo.x, frame.zoo.y, time);
     this.drawAreaLabels();
 
@@ -774,8 +778,8 @@ export class Renderer {
       ctx.arc(mx(c.x), my(c.y), 2.5 * dpr, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.fillStyle = '#ffd166';
     for (const shop of this.world.shops ?? []) {
+      ctx.fillStyle = shop.minimap ?? '#ffd166';
       ctx.fillRect(mx(shop.x) - 3 * dpr, my(shop.y) - 3 * dpr, 6 * dpr, 6 * dpr);
     }
     const boat = frame.boat;

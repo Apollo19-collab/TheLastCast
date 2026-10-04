@@ -6,7 +6,7 @@
 import { EVENT_TYPES, directionTo, eventsAround, shoalBite } from '/shared/events.js';
 import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
 import { QUALITY, graphics } from './graphics.js';
-import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
+import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice, shopStock } from '/shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '/shared/achievements.js';
 import { CHANGELOG, VERSION } from '/shared/version.js';
 import { BOSS, BOSSES, BOSS_ATTACKS, DECK_AREAS, SEA_EVENTS, SEA_LOCATIONS, seaLocationsFor } from '/shared/voyage.js';
@@ -96,6 +96,13 @@ export function clock(seconds) {
 
 /** "Trout & salmon ×1.8, Steelhead ×1.5" */
 function affinityText(affinity) {
+  // "Legendary fish ×1.6" rather than every legendary by name.
+  const keys = Object.keys(affinity || {});
+  const rarity = SPECIES[keys[0]]?.rarity;
+  const all = rarity ? Object.keys(SPECIES).filter((id) => SPECIES[id].rarity === rarity) : [];
+  if (keys.length > 3 && keys.length === all.length && keys.every((k) => SPECIES[k]?.rarity === rarity && affinity[k] === affinity[keys[0]])) {
+    return `${RARITY[rarity].label} fish ×${affinity[keys[0]]}`;
+  }
   return Object.entries(affinity || {})
     .map(([k, m]) => `${FAMILIES[k] || SPECIES[k]?.name || k} ×${Math.round(m * 100) / 100}`)
     .join(', ');
@@ -106,6 +113,7 @@ function itemStats(it) {
   const parts = [];
   if (it.slot === 'rod') parts.push(`Cast ${it.range}`, `Power ×${it.power}`);
   if (it.slot === 'reel') parts.push(`Reel speed ×${it.speed}`);
+  if (it.level) parts.push(`Level ${it.level}`);
   if (it.slot === 'line') parts.push(`Strength ×${it.strength}`);
   if (it.drag) parts.push(`Drag ×${it.drag}`);
   if (it.slot === 'bait') parts.push(`Bites ×${it.bite}`, `Rare odds ×${it.rare}`);
@@ -130,6 +138,8 @@ export class UI {
     this.onEquip = onEquip;
     this.tackleSlot = 'rod';
     this.shopAccess = false; // standing at the Bait Shop (or at sea): bait can be bought
+    this.storeHere = null; // the travelling tackle shop you're standing at, if any
+    this.storeId = null; // the tackle shop whose window is open
     this.zooAccess = false; // standing at the Travelling Zoo
     this.zoo = null; // { stock, x, y, area, tl } from the latest lake snapshot
     for (const el of document.querySelectorAll('.version-label')) {
@@ -205,6 +215,7 @@ export class UI {
       armour: () => this.renderArmour(),
       pets: () => this.renderPets(),
       trophies: () => this.renderTrophies(),
+      store: () => this.renderStore(),
     };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
     body.scrollTop = scroll; // keep your place when the profile updates
@@ -381,6 +392,7 @@ export class UI {
       let action;
       if (p.equipped[it.slot] === it.id) action = h('span', { class: 'tag equipped' }, 'Equipped');
       else if (owned.has(it.id)) action = h('button', { class: 'btn', onclick: () => this.onEquip(it.id) }, 'Equip');
+      else if (it.shop) action = this.storeBuy(it);
       else if (it.unlock && !p.achievements[it.unlock]) {
         const a = ACHIEVEMENT_BY_ID[it.unlock];
         const pr = progressOf(p, a);
@@ -409,6 +421,7 @@ export class UI {
       h('p', { class: 'menu-note' }, h('b', {}, `${num(p.coins)} coins`), '. Mix and match: equip any rod, reel, line and bait you own.'),
       loadout,
       summary,
+      this.storeList(),
       h('div', { class: 'slot-tabs' }, SLOTS.map((slot) => h('button', {
         class: slot === this.tackleSlot ? 'active' : '',
         onclick: () => { this.tackleSlot = slot; this.renderMenu(); },
@@ -456,7 +469,9 @@ export class UI {
         h('div', {}, '🔒 ', h('b', {}, a.name)),
         h('div', { class: 'bar small' }, h('div', { style: { width: `${pr.fraction * 100}%` } })),
         h('div', { class: 'locked-progress' }, `${num(pr.value)} / ${num(pr.goal)}${a.unit ? ` ${a.unit}` : ''}`)));
-    } else if (!free && this.shopAccess) {
+    } else if (it.shop && (this.storeHere !== it.shop || levelFor(p.xp) < it.level)) {
+      actions.push(this.storeBuy(it));
+    } else if (!free && (it.shop ? this.storeHere === it.shop : this.shopAccess)) {
       for (const packs of [1, BULK_PACKS]) {
         const price = packPrice(it.id, packs);
         actions.push(h('button', { class: 'btn buy', disabled: p.coins < price, onclick: () => this.onBuy(it.id, packs) },
@@ -478,6 +493,97 @@ export class UI {
     this.tackleSlot = 'bait';
     this.shopAccess = true;
     this.openMenu('gear');
+  }
+
+  /** Open a travelling tackle shop's window. */
+  openStore(shopId) {
+    this.storeId = shopId;
+    this.storeHere = shopId;
+    this.openMenu('store');
+  }
+
+  /** The tackle shop you're standing at (or null); refreshes the shop windows if that changes. */
+  setStoreAccess(shopId) {
+    if (this.storeHere === shopId) return;
+    this.storeHere = shopId;
+    if (this.menuTab === 'store' || this.menuTab === 'gear') this.renderMenu();
+  }
+
+  shopById(id) {
+    return this.lakeWorld?.shops.find((s) => s.id === id) ?? null;
+  }
+
+  /** "2.4 km north-east" from you to a shop. */
+  shopDirection(shop) {
+    return this.myPos ? directionTo(this.myPos.x, this.myPos.y, shop.x, shop.y) : '';
+  }
+
+  /** The three tackle shops at the top of the Tackle menu: where they are and what they sell. */
+  storeList() {
+    const shops = this.lakeWorld?.shops.filter((s) => s.kind === 'tackle') ?? [];
+    if (!shops.length) return null;
+    return h('div', { class: 'store-list' },
+      h('div', { class: 'store-list-title' }, '🏪 Travelling tackle shops: walk there to buy their gear'),
+      shops.map((s) => {
+        const stock = shopStock(s.id);
+        const levels = stock.map((it) => it.level);
+        return h('div', { class: 'store-chip', style: { '--accent': s.awning[0] } },
+          h('b', {}, s.name),
+          h('span', {}, ` · ${stock.length} items, level ${Math.min(...levels)}-${Math.max(...levels)} · `),
+          h('span', { class: 'store-dir' }, this.storeHere === s.id ? 'you are here' : this.shopDirection(s)));
+      }));
+  }
+
+  /** Buy button for a shop-only item: works at its shop, from its level. */
+  storeBuy(it) {
+    const p = this.profile;
+    const shop = this.shopById(it.shop);
+    const level = levelFor(p.xp);
+    if (level < it.level) {
+      return h('div', { class: 'locked' }, h('div', {}, '🔒 ', h('b', {}, `Level ${it.level}`)),
+        h('div', { class: 'locked-progress' }, `${shop?.name ?? ''}`));
+    }
+    if (this.storeHere !== it.shop) {
+      return h('div', { class: 'locked store-away' }, h('div', {}, '🏪 ', h('b', {}, shop?.name ?? 'A tackle shop')),
+        h('div', { class: 'locked-progress' }, `${num(it.price)}c · ${shop ? this.shopDirection(shop) : ''}`));
+    }
+    return h('button', { class: 'btn buy', disabled: p.coins < it.price, onclick: () => this.onBuy(it.id) }, `Buy · ${num(it.price)}`);
+  }
+
+  /** A tackle shop's window: its keeper, and everything it sells. */
+  renderStore() {
+    const shop = this.shopById(this.storeId);
+    if (!shop) return [h('p', { class: 'menu-note' }, 'No shop here.')];
+    const p = this.profile;
+    const owned = new Set(p.inventory);
+    const here = this.storeHere === shop.id;
+    const out = [
+      h('div', { class: 'store-head', style: { '--accent': shop.awning[0] } },
+        h('div', { class: 'store-name' }, shop.name),
+        h('div', { class: 'store-keeper' }, `${shop.keeper}: “${shop.greeting}”`),
+        h('div', { class: 'store-meta' }, h('b', {}, `${num(p.coins)} coins`), ` · Level ${levelFor(p.xp)}`,
+          here ? '' : ` · You've left the counter (${this.shopDirection(shop)}). Walk back to buy.`)),
+    ];
+    for (const slot of SLOTS) {
+      const items = shopStock(shop.id).filter((it) => it.slot === slot).sort((a, b) => a.level - b.level);
+      if (!items.length) continue;
+      out.push(h('h4', { class: 'option-heading' }, SLOT_LABELS[slot]));
+      for (const it of items) {
+        if (slot === 'bait') { out.push(this.baitRow(it)); continue; }
+        let action;
+        if (p.equipped[slot] === it.id) action = h('span', { class: 'tag equipped' }, 'Equipped');
+        else if (owned.has(it.id)) action = h('button', { class: 'btn', onclick: () => this.onEquip(it.id) }, 'Equip');
+        else action = this.storeBuy(it);
+        out.push(h('div', { class: `item-row${owned.has(it.id) ? ' owned' : ''}` },
+          h('img', { class: 'gear-icon', src: gearIconURL(it.id), alt: '' }),
+          h('div', { class: 'item-text' },
+            h('div', { class: 'item-name' }, it.name),
+            h('div', { class: 'item-desc' }, it.desc),
+            h('div', { class: 'gear-stats' }, itemStats(it))),
+          action));
+      }
+    }
+    return out;
   }
 
   /** Whether you're standing at a shop; refreshes the Tackle menu if that changes. */

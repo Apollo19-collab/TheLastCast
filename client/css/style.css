@@ -756,3 +756,14 @@ html, body, button, input { font-family: var(--ui-font); }
   .record-cols { grid-template-columns: 1fr; }
   .trophy-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- travelling tackle shops ---- */
+.store-list { margin: 8px 0 10px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); }
+.store-list-title { font-size: 12px; font-weight: 700; margin-bottom: 4px; opacity: 0.85; }
+.store-chip { font-size: 12px; padding: 2px 0 2px 8px; border-left: 3px solid var(--accent); margin-top: 3px; }
+.store-dir { color: #9ad1ff; }
+.store-head { padding: 10px 12px; margin-bottom: 6px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border-left: 4px solid var(--accent); }
+.store-name { font-size: 18px; font-weight: 800; }
+.store-keeper { font-style: italic; opacity: 0.85; margin: 2px 0 4px; }
+.store-meta { font-size: 13px; }
+.locked.store-away { color: #9ad1ff; }

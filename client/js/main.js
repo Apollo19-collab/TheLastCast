@@ -253,6 +253,12 @@ function atBaitShop() {
   return Math.hypot(selfPos.x - shop.x, selfPos.y - shop.y) <= shop.range;
 }
 
+/** The travelling tackle shop the local player is standing at, if any. */
+function tackleShopHere() {
+  if (room !== 'lake') return null;
+  return lakeWorld.shops.find((s) => s.kind === 'tackle' && Math.hypot(selfPos.x - s.x, selfPos.y - s.y) <= s.range) ?? null;
+}
+
 /** The nearest thing the boss has grabbing the rail, if it's within reach. */
 function nearGrab() {
   const bs = buffer.latest()?.vy?.bs;
@@ -279,6 +285,8 @@ function interaction(me) {
     }
   }
   if (!me.ab && atZoo()) return { text: 'E: visit the Travelling Zoo', run: () => ui.openZoo() };
+  const store = !me.ab && !me.du ? tackleShopHere() : null;
+  if (store) return { text: `E: browse ${store.name}`, run: () => ui.openStore(store.id) };
   if (!me.ab && !me.du && atBaitShop()) {
     return { text: room === 'voyage' ? 'E: buy bait from the deckhand' : 'E: open the Bait Shop', run: () => ui.openShop() };
   }
@@ -855,6 +863,7 @@ function frame(now) {
     ui.updateMe(me, aimZone, where);
     ui.prompt(ui.menuOpen ? null : interaction(me)?.text ?? null);
     ui.setShopAccess(atBaitShop());
+    ui.setStoreAccess(tackleShopHere()?.id ?? null);
     ui.setZooAccess(atZoo(), snap?.zoo ?? null);
     updateBoatLine(me, snap?.boat);
     updateDuelPanel(me, snap?.players ?? []);

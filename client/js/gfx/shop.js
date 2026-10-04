@@ -1,18 +1,39 @@
-// The Bait Shop stall on South Beach: a wooden counter under a striped
-// awning, a sign, and buckets of bait. Painted once and cached.
+// Shop stalls: a wooden counter under a striped awning, with a sign. The
+// Bait Shop on South Beach has buckets of bait; the travelling tackle shops
+// (world.js `shops` with kind 'tackle') have rods and reels on display, in
+// their own colours. Each is painted once and cached.
 
 const PX = 2; // sprite pixels per world unit
-const W = 96;
+const W = 120;
 const H = 92;
-let sprite = null;
+const sprites = new Map();
+const BAIT_LOOK = { awning: ['#e63946', '#f1faee'], sign: 'BAIT', goods: 'bait' };
 
-/** Draw the stall centred on (x, y): the shop's position in world.js. */
+/** Draw the Bait Shop centred on (x, y): the shop's position in world.js. */
 export function drawBaitShop(ctx, x, y) {
-  if (!sprite) sprite = paint();
-  ctx.drawImage(sprite, x - W / 2, y - H / 2 - 14, W, H);
+  drawStall(ctx, x, y, 'bait', BAIT_LOOK);
 }
 
-function paint() {
+/** Draw a travelling tackle shop (a world.js shop entry), with its name over it. */
+export function drawTackleShop(ctx, shop) {
+  drawStall(ctx, shop.x, shop.y, shop.id, { awning: shop.awning, sign: shop.sign, goods: 'tackle' });
+  ctx.save();
+  ctx.font = '700 13px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillStyle = '#fff3d6';
+  ctx.strokeText(shop.name, shop.x, shop.y - 70);
+  ctx.fillText(shop.name, shop.x, shop.y - 70);
+  ctx.restore();
+}
+
+function drawStall(ctx, x, y, id, look) {
+  if (!sprites.has(id)) sprites.set(id, paint(look));
+  ctx.drawImage(sprites.get(id), x - W / 2, y - H / 2 - 14, W, H);
+}
+
+function paint(look) {
   const c = document.createElement('canvas');
   c.width = W * PX;
   c.height = H * PX;
@@ -51,7 +72,7 @@ function paint() {
   g.fillRect(-30, -26, 4, 32);
   g.fillRect(26, -26, 4, 32);
   for (let i = 0; i < 8; i++) {
-    g.fillStyle = i % 2 ? '#f1faee' : '#e63946';
+    g.fillStyle = look.awning[i % 2 ? 1 : 0];
     g.beginPath();
     g.moveTo(-36 + i * 9, -30);
     g.lineTo(-27 + i * 9, -30);
@@ -65,20 +86,27 @@ function paint() {
   g.strokeRect(-36, -30, 72, 14);
 
   // Sign.
+  g.font = '900 10px system-ui, sans-serif';
+  const signW = Math.max(40, g.measureText(look.sign).width + 14);
   g.fillStyle = '#f4e1a0';
   g.strokeStyle = '#5b3c22';
   g.lineWidth = 1.5;
   g.beginPath();
-  g.roundRect(-20, -44, 40, 14, 3);
+  g.roundRect(-signW / 2, -44, signW, 14, 3);
   g.fill();
   g.stroke();
   g.fillStyle = '#3a2410';
-  g.font = '900 10px system-ui, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('BAIT', 0, -36.5);
+  g.fillText(look.sign, 0, -36.5);
 
-  // Buckets of worms and a barrel on the counter.
+  if (look.goods === 'tackle') paintTackle(g, look);
+  else paintBait(g);
+  return c;
+}
+
+/** Buckets of worms and a barrel on the counter. */
+function paintBait(g) {
   const bucket = (bx, fill) => {
     g.fillStyle = '#6c757d';
     g.beginPath();
@@ -105,7 +133,54 @@ function paint() {
     g.lineTo(44, y);
     g.stroke();
   }
-  return c;
+}
+
+/** Rods leaning on a rack beside the stall, and reels and spools on the counter. */
+function paintTackle(g, look) {
+  // The rack.
+  g.fillStyle = '#5b3c22';
+  g.fillRect(34, 26, 22, 4);
+  g.fillRect(36, -8, 3, 36);
+  g.fillRect(51, -8, 3, 36);
+  const rods = ['#2b2d42', look.awning[0], '#d4a373', '#e9c46a'];
+  rods.forEach((color, i) => {
+    g.strokeStyle = color;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(38 + i * 5, 28);
+    g.lineTo(34 + i * 6, -36 + i * 3);
+    g.stroke();
+    g.fillStyle = '#c0c7cf';
+    g.beginPath();
+    g.arc(38 + i * 5, 20, 2, 0, Math.PI * 2);
+    g.fill();
+  });
+  // Reels and spools on the counter.
+  const reel = (bx, body) => {
+    g.fillStyle = body;
+    g.strokeStyle = '#343a40';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(bx, -2, 5, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#e9edf0';
+    g.beginPath();
+    g.arc(bx, -2, 2, 0, Math.PI * 2);
+    g.fill();
+  };
+  reel(-18, look.awning[0]);
+  reel(-4, '#c0c7cf');
+  g.fillStyle = look.awning[1];
+  g.strokeStyle = '#495057';
+  g.beginPath();
+  g.roundRect(8, -6, 8, 9, 1.5);
+  g.fill();
+  g.stroke();
+  g.beginPath();
+  g.roundRect(18, -6, 8, 9, 1.5);
+  g.fill();
+  g.stroke();
 }
 
 /**
