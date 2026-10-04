@@ -1,6 +1,6 @@
 # The Last Cast
 
-**Version 0.17.1** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
+**Version 0.18.0** · see [CHANGELOG.md](CHANGELOG.md), or click the version label in-game.
 
 A lightweight multiplayer fishing game that runs in the browser. Walk around Mirror Lake, cast your line, and reel in fish while everyone else at the lake watches your catches in real time. Challenge other anglers to duels, or catch the boat that docks every 15 minutes and sail out to sea with the crew.
 
@@ -9,6 +9,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Action | Controls |
 | --- | --- |
 | Move | `WASD` / arrow keys |
+| Sprint | Hold `Shift` while moving (uses stamina) |
 | Aim | Mouse |
 | Cast | Hold `Space` or left mouse to charge power, release to cast |
 | Hook a fish | Press `Space` / click when the bobber dips and shows **!** |
@@ -17,7 +18,7 @@ A lightweight multiplayer fishing game that runs in the browser. Walk around Mir
 | Open the Bait Shop / board the boat / challenge an angler to a duel | `E` when you're next to the shop, the boat or another angler |
 | Accept / decline a duel | `Y` / `N` |
 | Put down a chum bucket | `C` |
-| Tackle / Armour / Pets / Fish Index / Achievements / Catch History | `G` / `R` / `P` / `I` / `T` / `H` (or the icon dock at the bottom of the screen) |
+| Tackle / Armour / Pets / Fish Index / Achievements / Catch History / Events | `G` / `R` / `P` / `I` / `T` / `H` / `V` (or the icon dock at the bottom of the screen) |
 | Options (volume, controls) | `O` (or the Options button) |
 | Sound on/off | `M` (or the Sound button) |
 
@@ -54,6 +55,18 @@ The middle of the lake is Open Lake: a mix of Crappie, Carp, Walleye and Longnos
 - **Crowding.** Every other bobber within ~90 units of yours slows your bites. Spread out, or race others to the hotspot.
 
 The aim line previews where your cast will land and which zone it hits.
+
+### Map events
+
+Every 10 minutes something happens at one of the lakes or ponds: in the valley, or at a wild pond within reach. All three kinds are built for fishing together, and they take turns, so each one comes round every 30 minutes. The schedule follows the clock with a fixed seed (`shared/events.js`), so everyone sees the same plan. The **Events** window (`V`) lists what's on now, with live progress, and the next six events: where they are, how far away and when they start. A live event also gets a panel at the top of the screen, a ring on the water, a star on the minimap and a line on your player card.
+
+| Event | Length | How it works | Rewards |
+| --- | --- | --- | --- |
+| 🐟 **Feeding Shoal** | 6 min | Bites in the shoal are 25% faster, plus 30% for every other angler fishing it (up to 2.6x). Crowding helps here instead of hurting, and rare fish are 40% more likely. | 5 coins per fish you catch in it (up to 40), times the number of anglers who fished it (up to 4) |
+| 🧺 **The Great Haul** | 8 min | One shared goal: `10 + 6 x anglers online` fish (counting up to 10 anglers) caught in the area. Bites are 15% faster there. It ends as soon as the goal is hit. | Hit it: 150 coins + 15 per fish you caught (up to 40) + 250 XP each. Miss it: 5 coins per fish |
+| ✨ **Golden Tide** | 8 min | Every catch in the area adds its points to a shared meter (`250 + 120 x anglers online`). When it fills, everyone there gets a 45-second **Golden Rush**: double points (so coins and XP too) and rare fish 50% more likely. Then it fills again. | 50 coins + 40 per Golden Rush |
+
+Only catches inside the event's ring count, and duels don't. Each event you join counts towards the **Community Angler** achievement (10 events).
 
 ### Duels
 

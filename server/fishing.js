@@ -132,12 +132,14 @@ function land(ctx, player) {
   const line = player.line;
   const zone = zoneById(ctx.world, line.zoneId);
   const hotspot = ctx.hotspotAt(line.x, line.y);
-  const crowd = ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
+  const ev = ctx.eventMods?.(player, line.x, line.y) ?? null; // map events (shared/events.js)
+  // In a Feeding Shoal, company helps instead of crowding.
+  const crowd = ev?.ignoreCrowd ? 0 : ctx.countBobbersNear(player, line.x, line.y, CROWD_RADIUS);
 
   const armour = armourOf(ctx, player);
   const zoneArmour = armour.zoneBites.reduce((m, z) => (z.zones.includes(zone.kind ?? zone.id) ? m * z.mult : m), 1);
   const rate = (zone.biteRate * player.stats.biteSpeed * (hotspot ? HOTSPOT_BITE_BOOST : 1) * (ctx.mods?.biteSpeed ?? 1)
-    * armour.bite * zoneArmour * (ctx.chumBiteBonus?.(line.x, line.y) ?? 1))
+    * armour.bite * zoneArmour * (ctx.chumBiteBonus?.(line.x, line.y) ?? 1) * (ev?.bite ?? 1))
     / (1 + (ctx.world.crowdPenalty ?? CROWD_PENALTY) * crowd);
   line.state = WAITING;
   line.timer = (4 + ctx.rng() * 8) / rate;
@@ -151,8 +153,9 @@ function bite(ctx, player) {
   const zone = zoneById(ctx.world, line.zoneId);
   const mods = ctx.mods ?? {};
   const armour = armourOf(ctx, player);
+  const ev = ctx.eventMods?.(player, line.x, line.y) ?? null;
   const species = pickSpecies(ctx.rng, zone, line.hotspot, {
-    rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1) * armour.rare,
+    rareBoost: player.stats.rareBoost * (mods.rareBoost ?? 1) * armour.rare * (ev?.rare ?? 1),
     legendaryBoost: armour.legendary,
     mythicBoost: armour.mythic,
     affinity: mergeAffinity(player.stats.affinity, armour.affinity),
@@ -280,7 +283,7 @@ function fight(ctx, player, dt) {
 }
 
 function landCatch(ctx, player) {
-  const { fish, hotspot, zoneId } = player.line;
+  const { fish, hotspot, zoneId, x, y } = player.line;
   const s = SPECIES[fish.species];
   const event = ctx.mods?.event ?? null; // a special event at sea is on
   const zone = zoneById(ctx.world, zoneId);
@@ -299,21 +302,22 @@ function landCatch(ctx, player) {
 
   resetLine(player);
   const armour = armourOf(ctx, player);
-  rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus: false });
+  rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus: false, x, y });
   // Armour set effect: a second fish of the same kind on the line.
   if (armour.double && ctx.rng() < armour.double) {
     const extra = { species: fish.species, kg: rollKg(ctx.rng, fish.species, armour.weight) };
-    rewardCatch(ctx, player, extra, { hotspot, zone, event, armour, bonus: true });
+    rewardCatch(ctx, player, extra, { hotspot, zone, event, armour, bonus: true, x, y });
   }
   ctx.checkAchievements(player);
   ctx.profileChanged(player);
 }
 
 /** Score, coins, XP, Fish Index and history for one landed fish. */
-function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus }) {
+function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus, x, y }) {
   const s = SPECIES[fish.species];
   const atSea = ctx.kind === 'voyage';
-  const multiplier = (hotspot ? HOTSPOT_SCORE_BONUS * armour.hotspot : 1) * (ctx.mods?.points ?? 1) * (atSea ? armour.sea : 1);
+  const ev = ctx.eventMods?.(player, x, y) ?? null; // e.g. a Golden Rush
+  const multiplier = (hotspot ? HOTSPOT_SCORE_BONUS * armour.hotspot : 1) * (ctx.mods?.points ?? 1) * (atSea ? armour.sea : 1) * (ev?.points ?? 1);
   const points = scoreCatch(fish.species, fish.kg, multiplier);
   let coins = Math.round(points * COINS_PER_POINT * armour.coins);
   // Pets that dig up coins (Field Mouse, Raccoon, Pirate Parrot).
@@ -341,7 +345,7 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus })
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, coins);
-  ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event, hotspot: !!hotspot });
+  ctx.hooks?.onCatch?.(player, { species: fish.species, kg: fish.kg, rarity: s.rarity, points, event, hotspot: !!hotspot, x, y });
   ctx.chumCatch?.(player, s.rarity);
   ctx.gainXp?.(player, xp);
 

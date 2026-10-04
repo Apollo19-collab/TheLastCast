@@ -3,6 +3,7 @@
 // the multiplayer bits: duel invites and scoreboard, the boat timer, the
 // voyage panel, banners and results.
 
+import { EVENT_TYPES, directionTo, eventsAround, shoalBite } from '/shared/events.js';
 import { FAMILIES, RARITY, SPECIES } from '/shared/fish.js';
 import { QUALITY, graphics } from './graphics.js';
 import { BULK_PACKS, ITEMS, SLOTS, SLOT_LABELS, STARTER, baitCount, computeStats, isConsumable, itemsForSlot, packPrice } from '/shared/gear.js';
@@ -178,6 +179,7 @@ export class UI {
     const body = $('menu-body');
     if (this.menuTab === 'options') { body.replaceChildren(...this.renderOptions()); return; }
     if (this.menuTab === 'news') { body.replaceChildren(...this.renderChangelog()); return; }
+    if (this.menuTab === 'events') { body.replaceChildren(...this.renderEvents()); return; }
     if (!this.profile) { body.replaceChildren(h('p', {}, 'Join the lake to see this.')); return; }
     const scroll = body.scrollTop;
     const render = {
@@ -190,6 +192,92 @@ export class UI {
     };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
     body.scrollTop = scroll; // keep your place when the profile updates
+  }
+
+  // ---- map events -------------------------------------------------------------------
+
+  /** Live map-event state from the lake snapshot, the server clock and where you are. */
+  setMapEvents(we, serverNow, pos) {
+    this.mapEvent = we ?? null;
+    this.serverNow = serverNow;
+    this.myPos = pos;
+    // The Events window counts down live.
+    const second = Math.floor(serverNow);
+    if (this.menuTab === 'events' && second !== this.eventsSecond) {
+      this.eventsSecond = second;
+      this.renderMenu();
+    }
+  }
+
+  /** The Events window: what's on now, and what's coming up. */
+  renderEvents() {
+    const world = this.lakeWorld;
+    if (!world) return [h('p', { class: 'menu-note' }, 'Join the lake to see the map events.')];
+    const now = this.serverNow ?? Date.now() / 1000;
+    const { upcoming } = eventsAround(world, now, 6);
+    const live = this.mapEvent;
+    const where = (x, y) => (this.myPos ? directionTo(this.myPos.x, this.myPos.y, x, y) : '');
+    const card = (type, place, title, extra) => {
+      const T = EVENT_TYPES[type];
+      return h('div', { class: 'event-card', style: { '--accent': T.color } },
+        h('div', { class: 'event-icon' }, T.icon),
+        h('div', { class: 'event-main' },
+          h('div', { class: 'event-title' }, h('b', {}, T.name), ' · ', place),
+          h('div', { class: 'event-when' }, title),
+          extra ?? h('div', { class: 'event-desc' }, T.desc)));
+    };
+    const out = [h('p', { class: 'menu-note' }, 'Map events happen at a lake or pond every 10 minutes. They all go better with company: head over, fish together, and everyone who helps is rewarded.')];
+    if (live) {
+      out.push(h('h4', { class: 'option-heading' }, 'Happening now'));
+      out.push(card(live.type, live.pn, `${clock(Math.max(0, live.end - now))} left · ${where(live.px, live.py)}`,
+        h('div', { class: 'event-desc' }, this.mapEventProgress(live))));
+    }
+    out.push(h('h4', { class: 'option-heading' }, 'Coming up'));
+    for (const ev of upcoming) {
+      out.push(card(ev.type, ev.place.name, `in ${clock(Math.max(0, ev.start - now))} · lasts ${Math.round(EVENT_TYPES[ev.type].duration / 60)} min · ${where(ev.place.x, ev.place.y)}`));
+    }
+    return out;
+  }
+
+  /** One line of progress for a live event. */
+  mapEventProgress(we) {
+    if (we.type === 'haul') return `Crew catch: ${we.pg} / ${we.gl} fish · ${we.n} angler${we.n === 1 ? '' : 's'} helping`;
+    if (we.type === 'tide') return we.ru ? `GOLDEN RUSH! Double points for ${we.ru}s` : `Golden meter: ${Math.round((we.pg / we.gl) * 100)}% · ${we.n} angler${we.n === 1 ? '' : 's'} helping`;
+    const n = we.in ?? 1;
+    return `${n} angler${n === 1 ? '' : 's'} fishing the shoal: bites ${Math.round(shoalBite(n) * 100)}% as fast · bring friends for more!`;
+  }
+
+  /** The live event panel (top of the screen) while an event is on and you're not in a duel. */
+  mapEventPanel(we, me) {
+    const el = $('event-panel');
+    if (!we) { this.hidePanel('mapEvent'); return; }
+    if (this.panelKind && this.panelKind !== 'mapEvent') return; // a duel panel takes priority
+    const T = EVENT_TYPES[we.type];
+    const now = this.serverNow ?? Date.now() / 1000;
+    const left = Math.max(0, Math.ceil(we.end - now));
+    const dist = me ? directionTo(me.x, me.y, we.px, we.py) : '';
+    const frac = we.gl ? Math.min(1, we.pg / we.gl) : 0;
+    const key = `ev|${we.id}|${we.pg}|${we.gl}|${we.ru}|${we.n}|${we.in}|${left}|${dist}`;
+    if (this.panelKey === key) return;
+    this.panelKey = key;
+    this.panelKind = 'mapEvent';
+    el.className = `panel event-panel map-event${we.ru ? ' rush' : ''}`;
+    el.style.setProperty('--accent', T.color);
+    fill(el,
+      h('div', { class: 'ep-head' }, h('span', { class: 'ep-title' }, `${T.icon} ${T.name}`), h('span', { class: 'ep-time' }, clock(left))),
+      h('div', { class: 'ep-note' }, `${we.pn}${dist === 'here' ? ' · you are here!' : ` · ${dist}`}`),
+      we.type !== 'shoal' ? h('div', { class: 'boss-bar event-bar' }, h('div', { style: { width: `${(we.ru ? 1 : frac) * 100}%` } }),
+        h('span', {}, we.type === 'haul' ? `${we.pg} / ${we.gl} fish` : we.ru ? `RUSH ${we.ru}s` : `${Math.round(frac * 100)}%`)) : null,
+      h('div', { class: 'ep-stats' }, this.mapEventProgress(we)));
+    el.hidden = false;
+  }
+
+  /** "Next event" line on your player card. */
+  setEventLine(text, live = false) {
+    const el = $('event-line');
+    if (!el) return;
+    setText(el, text);
+    el.classList.toggle('live', live);
   }
 
   setStats(profile) {
@@ -233,6 +321,7 @@ export class UI {
       h('h4', { class: 'option-heading' }, 'Controls'),
       h('table', { class: 'controls' }, h('tbody', {}, [
         ['Move', 'WASD / arrow keys'],
+        ['Sprint', 'Hold Shift while moving (uses stamina)'],
         ['Aim', 'Mouse'],
         ['Cast', 'Hold Space or left mouse, release to cast'],
         ['Hook', 'Space / click when the bobber dips'],
@@ -242,7 +331,7 @@ export class UI {
         ['Duels', 'Y accept · N decline a challenge'],
         ['Chum', 'C: put a chum bucket down (buy them at the Bait Shop)'],
         ['Pets', 'P: your pets · E at the Travelling Zoo to adopt one'],
-        ['Menus', 'G tackle · R armour · P pets · I fish index · H history · T achievements · O options'],
+        ['Menus', 'G tackle · R armour · P pets · I fish index · H history · T achievements · V events · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];

@@ -2,9 +2,23 @@
 // Bump VERSION together with "version" in package.json (a test checks they
 // match) and add an entry here and in CHANGELOG.md.
 
-export const VERSION = '0.17.1';
+export const VERSION = '0.18.0';
 
 export const CHANGELOG = [
+  {
+    version: '0.18.0',
+    date: '2026-10-04',
+    title: 'Map events & sprinting',
+    changes: [
+      'Sprinting: hold Shift while moving to run 65% faster. It uses stamina (shown under your angler): about 5 seconds from full, refilling once you stop sprinting. Run it dry and you have to catch your breath before sprinting again.',
+      'Map events: every 10 minutes something happens at one of the lakes or ponds, made for fishing together. Three kinds take turns:',
+      'Feeding Shoal (6 min): a huge shoal arrives. Bites get faster with every angler fishing in it (crowding helps instead of hurting), and everyone\'s bonus at the end is multiplied by the size of the group.',
+      'The Great Haul (8 min): everyone shares one catch goal, bigger with more anglers online. Hit it in time and everyone who helped gets coins and XP for their share; it ends as soon as the goal is reached.',
+      'Golden Tide (8 min): every catch in the area fills a shared golden meter. Fill it and everyone there gets a 45-second Golden Rush of double points and better odds, as many times as you can fill it.',
+      'New Events window (V, or the Events button): what is happening now with live progress, and the next six events with where they are, how far away and when they start. Live events also get a panel at the top, a ring on the water, a star on the minimap and a line on your player card.',
+      'New achievement: Community Angler (take part in 10 map events).',
+    ],
+  },
   {
     version: '0.17.1',
     date: '2026-10-03',

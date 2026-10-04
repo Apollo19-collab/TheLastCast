@@ -3,7 +3,7 @@
 // reel); everything that matters for scoring is decided here. The Hub
 // (hub.js) owns all rooms and moves players between them.
 
-import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED } from '../shared/constants.js';
+import { FishingState, MAX_NAME_LENGTH, MSG, PLAYER_SPEED, SPRINT } from '../shared/constants.js';
 import { isWater, stepMovement } from '../shared/world.js';
 import { BULK_PACKS, ITEMS, STARTER, baitCount, computeStats, isConsumable, packPrice } from '../shared/gear.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_BY_ID, progressOf, unlocksFor } from '../shared/achievements.js';
@@ -142,7 +142,7 @@ export class Game {
   handleMessage(player, msg) {
     switch (msg.t) {
       case MSG.INPUT:
-        player.input = { up: !!msg.up, down: !!msg.down, left: !!msg.left, right: !!msg.right };
+        player.input = { up: !!msg.up, down: !!msg.down, left: !!msg.left, right: !!msg.right, sprint: !!msg.sprint };
         break;
       case MSG.CAST:
         tryCast(this, player, Number(msg.angle), Number(msg.power));
@@ -501,16 +501,47 @@ export class Game {
     for (const p of this.players.values()) {
       if (p.dazed > 0) p.dazed = Math.max(0, p.dazed - dt);
       // Players stand still while their line is out, or while aboard the boat.
+      let sprinting = false;
       if (p.line.state === FishingState.IDLE && !p.aboard) {
-        const next = stepMovement(this.world, p, p.input, PLAYER_SPEED, dt);
+        sprinting = this.canSprint(p);
+        const next = stepMovement(this.world, p, p.input, PLAYER_SPEED * (sprinting ? SPRINT.speed : 1), dt);
         if (next.moved) {
           p.facing = Math.atan2(next.y - p.y, next.x - p.x);
           p.x = next.x;
           p.y = next.y;
-        }
+        } else sprinting = false;
       }
+      this.updateStamina(p, sprinting, dt);
       updateLine(this, p, dt);
     }
+  }
+
+  // ---- sprinting ----------------------------------------------------------------
+
+  canSprint(p) {
+    const i = p.input;
+    if (!i?.sprint || !(i.up || i.down || i.left || i.right)) return false;
+    if (p.stamina === undefined) p.stamina = 1;
+    if (p.winded && p.stamina < SPRINT.recover) return false;
+    p.winded = false;
+    return p.stamina > 0;
+  }
+
+  updateStamina(p, sprinting, dt) {
+    if (p.stamina === undefined) p.stamina = 1;
+    if (sprinting) {
+      p.stamina = Math.max(0, p.stamina - SPRINT.drain * dt);
+      p.restFor = SPRINT.delay;
+      if (p.stamina === 0) p.winded = true;
+    } else if ((p.restFor = Math.max(0, (p.restFor ?? 0) - dt)) === 0) {
+      p.stamina = Math.min(1, p.stamina + SPRINT.regen * dt);
+    }
+    p.sprinting = sprinting;
+  }
+
+  /** Map-event bonuses for a bobber at (x, y), or null. */
+  eventMods(player, x, y) {
+    return this.worldEvents?.modsAt(player, x, y) ?? null;
   }
 
   // ---- hotspots: visible, temporary areas with better fishing --------------
@@ -602,6 +633,8 @@ export class Game {
       if (worn.head || worn.body || worn.legs || worn.feet) s.ar = [worn.head, worn.body, worn.legs, worn.feet];
       if (p.profile.pet && !p.duel) s.pt = p.profile.pet;
       if (p.aboard) s.ab = 1;
+      if (p.stamina !== undefined && p.stamina < 1) s.st = r2(p.stamina);
+      if (p.sprinting) s.sr = 1;
       if (p.duel) Object.assign(s, this.duels.snapshotFor(p));
       if (line.state !== FishingState.IDLE) {
         s.bx = r1(line.x);

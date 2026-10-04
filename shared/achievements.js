@@ -60,6 +60,7 @@ export const ACHIEVEMENTS = [
   { id: 'high_roller', name: 'High Roller', desc: 'Earn 50,000 coins in total.', metric: 'coinsEarned', goal: 50000, coins: 1500 },
   { id: 'lake_legend', name: 'Lake Legend', desc: 'Reach a score of 100,000.', metric: 'score', goal: 100000, coins: 3000 },
   // Multiplayer: duels and boat voyages
+  { id: 'community_angler', name: 'Community Angler', desc: 'Take part in 10 map events.', metric: 'mapEvents', goal: 10, coins: 1000 },
   { id: 'duelist', name: 'Duelist', desc: 'Win 10 fishing duels.', metric: 'duelsWon', goal: 10, coins: 500 },
   { id: 'sea_legs', name: 'Sea Legs', desc: 'Complete 5 boat voyages.', metric: 'voyages', goal: 5, coins: 600 },
   { id: 'old_salt', name: 'Old Salt', desc: 'Catch 300 fish at sea.', metric: 'seaCatches', goal: 300, coins: 800 },
@@ -85,7 +86,7 @@ export function newCounters() {
   return {
     catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0, mythicCatches: 0,
     bigFish: 0, heaviest: 0, snaps: 0, family: {}, zone: {}, area: {},
-    duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0, bossKills: 0,
+    duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0, bossKills: 0, mapEvents: 0,
   };
 }
 

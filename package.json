@@ -1,6 +1,6 @@
 {
   "name": "the-last-cast",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "description": "A multiplayer browser fishing game.",
   "private": true,
   "type": "module",

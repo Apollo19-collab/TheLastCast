@@ -4,13 +4,14 @@
 // Y / N answer a duel challenge.
 // While `isBlocked()` is true (a menu is open) gameplay input is ignored.
 
-const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements', KeyR: 'armour', KeyP: 'pets' };
+const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements', KeyR: 'armour', KeyP: 'pets', KeyV: 'events' };
 
 const MOVE_KEYS = {
   KeyW: 'up', ArrowUp: 'up',
   KeyS: 'down', ArrowDown: 'down',
   KeyA: 'left', ArrowLeft: 'left',
   KeyD: 'right', ArrowRight: 'right',
+  ShiftLeft: 'sprint', ShiftRight: 'sprint', // hold to sprint
 };
 
 export class Input {
@@ -18,7 +19,7 @@ export class Input {
     onMoveChange, onActionDown, onActionUp, onCancel, onMenu, onMute,
     onInteract = () => {}, onAnswer = () => {}, onChum = () => {}, isBlocked = () => false,
   }) {
-    this.move = { up: false, down: false, left: false, right: false };
+    this.move = { up: false, down: false, left: false, right: false, sprint: false };
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     this.actionHeld = false;
 
@@ -30,7 +31,7 @@ export class Input {
 
     const releaseMoves = () => {
       if (Object.values(this.move).some(Boolean)) {
-        this.move = { up: false, down: false, left: false, right: false };
+        this.move = { up: false, down: false, left: false, right: false, sprint: false };
         onMoveChange({ ...this.move });
       }
     };

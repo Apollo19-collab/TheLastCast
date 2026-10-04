@@ -4,6 +4,14 @@
 export const TICK_RATE = 20; // server simulation ticks per second
 
 export const PLAYER_SPEED = 210; // world units per second
+// Sprinting (hold Shift): faster, using stamina (0..1) that refills when you walk or stand.
+export const SPRINT = Object.freeze({
+  speed: 1.65, // x PLAYER_SPEED
+  drain: 0.2, // stamina per second while sprinting (5 s from full)
+  regen: 0.16, // stamina per second otherwise
+  delay: 0.8, // seconds after sprinting before stamina refills
+  recover: 0.35, // once empty, you must recover this much before sprinting again
+});
 export const PLAYER_RADIUS = 12;
 export const MAX_NAME_LENGTH = 16;
 

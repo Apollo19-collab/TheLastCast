@@ -4,6 +4,7 @@
 // You are always in one room: the lake, or a boat voyage out at sea. The
 // server says which (MSG.ROOM); each room has its own world and renderer.
 
+import { EVENT_TYPES, eventsAround } from '/shared/events.js';
 import { FishingState, MSG, castDistance } from '/shared/constants.js';
 import { DEFAULT_LOCATION, LOCATIONS, areaAt, zoneAt } from '/shared/world.js';
 import { computeStats } from '/shared/gear.js';
@@ -574,6 +575,33 @@ net.on(MSG.EVENT, (ev) => {
       ui.toast({ title: 'Crew mission complete', name: ev.text, detail: `+${ev.reward} bonus coins for everyone` });
       audio.play('mission');
       break;
+    case 'mapEvent': {
+      const T = EVENT_TYPES[ev.type];
+      if (ev.phase === 'start') {
+        ui.banner(`${T.icon} ${ev.name}`, `At ${ev.place}. ${T.desc}`, T.color, 5000);
+        ui.feed(`${T.icon} ${ev.name} has started at ${ev.place}! Press V for details.`, T.color);
+        audio.play('seaEvent');
+      } else if (ev.phase === 'rush') {
+        ui.banner('GOLDEN RUSH!', `${ev.by} filled the golden meter: double points for ${ev.seconds} seconds!`, T.color, 3500);
+        audio.play('achievement');
+      } else if (ev.phase === 'rushEnd') {
+        ui.feed('The Golden Rush has faded. Fill the meter again!', T.color);
+      } else if (ev.phase === 'end') {
+        const how = ev.type === 'haul'
+          ? (ev.completed ? `The crew hit the goal (${ev.goal} fish)!` : `Time ran out at ${ev.progress} / ${ev.goal} fish.`)
+          : ev.type === 'tide' ? `${ev.rushes} Golden Rush${ev.rushes === 1 ? '' : 'es'} with ${ev.helpers} angler${ev.helpers === 1 ? '' : 's'}.`
+            : `${ev.helpers} angler${ev.helpers === 1 ? '' : 's'} fished the shoal.`;
+        ui.feed(`${T.icon} ${ev.name} at ${ev.place} is over. ${how}`, T.color);
+      }
+      break;
+    }
+    case 'mapEventReward': {
+      const T = EVENT_TYPES[ev.type];
+      const why = ev.type === 'shoal' ? `${ev.fish} fish x ${ev.group} in your group` : ev.type === 'haul' ? `${ev.fish} fish for the crew${ev.success ? '' : ' (goal missed)'}` : 'for the Golden Tide';
+      ui.toast({ title: `${T.icon} ${ev.name}`, name: `+${ev.coins} coins${ev.xp ? `, +${ev.xp} XP` : ''}`, detail: why });
+      if (ev.coins) audio.play('coin');
+      break;
+    }
     case 'bossIncoming':
       ui.banner('Something is rising...', ev.desc, '#ff4d6d', 4000);
       ui.feed(`⚠ Lines in! ${ev.name} is rising from the deep!`, '#ff4d6d');
@@ -663,6 +691,28 @@ const STATUS_TEXT = {
 };
 
 /** Boat timer in the player panel (lake). */
+// The server's clock (seconds), from the lake snapshot, so event times match it.
+let serverOffset = 0;
+function serverNow() {
+  return Date.now() / 1000 + serverOffset;
+}
+
+/** Map events: the live panel, the line on your card, and the Events window. */
+function updateMapEvents(me, snap) {
+  ui.lakeWorld = lakeWorld;
+  if (room !== 'lake') { ui.mapEventPanel(null); return; }
+  if (snap?.ts) serverOffset += (snap.ts + 0.5 - Date.now() / 1000 - serverOffset) * 0.2;
+  const we = snap?.we ?? null;
+  const now = serverNow();
+  ui.setMapEvents(we, now, me ? { x: me.x, y: me.y } : null);
+  ui.mapEventPanel(me?.du ? null : we, me);
+  if (we) ui.setEventLine(`${EVENT_TYPES[we.type].icon} ${EVENT_TYPES[we.type].name} at ${we.pn} now! (V)`, true);
+  else {
+    const next = eventsAround(lakeWorld, now, 1).upcoming[0];
+    if (next) ui.setEventLine(`${EVENT_TYPES[next.type].icon} ${EVENT_TYPES[next.type].name} in ${clock(Math.max(0, next.start - now))} (V)`);
+  }
+}
+
 function updateBoatLine(me, boat) {
   if (!boat || room !== 'lake') return;
   if (me?.ab) ui.setBoatLine(boat.ph === 'docked' ? `⛴ Aboard! Sailing in ${clock(boat.tl)} (E to step off)` : '⛴ Aboard! Heading out to sea...', true);
@@ -786,6 +836,7 @@ function frame(now) {
     updateBoatLine(me, snap?.boat);
     updateDuelPanel(me, snap?.players ?? []);
     updateVoyagePanel(me, snap);
+    updateMapEvents(me, snap);
   }
 
   audio.listener = selfPos;
@@ -801,6 +852,7 @@ function frame(now) {
     hotspots: snap?.hotspots ?? [],
     chums: snap?.chums ?? [],
     zoo: room === 'lake' ? snap?.zoo ?? null : null,
+    mapEvent: room === 'lake' ? snap?.we ?? null : null,
     meId,
     aim,
     boat,

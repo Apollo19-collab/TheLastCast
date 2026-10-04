@@ -10,6 +10,7 @@
 // What things look like lives in gfx/ (terrain, sprites, characters, fish art)
 // and theme.js; this file only decides what to draw where.
 
+import { EVENT_TYPES } from '/shared/events.js';
 import { THEME } from './theme.js';
 import { castDistance, FishingState } from '/shared/constants.js';
 import { isWalkable, zoneAt, zoneRects } from '/shared/world.js';
@@ -155,6 +156,7 @@ export class Renderer {
     this.drawAreaLabels();
 
     for (const h of frame.hotspots) this.drawHotspot(h, time);
+    if (frame.mapEvent) this.drawMapEvent(frame.mapEvent, time);
     this.drawChums(frame, time);
     this.updateAnims(frame.players);
     // Only what's on screen: anglers far away are skipped (a line can reach a
@@ -168,6 +170,8 @@ export class Renderer {
     for (const p of sorted) drawAngler(ctx, p, { self: p.id === frame.meId, time, anim: this.anims.get(p.id) });
     this.drawPets(sorted, time);
     for (const p of sorted) drawNameTag(ctx, p, p.id === frame.meId);
+    const self = sorted.find((p) => p.id === frame.meId);
+    if (self?.st !== undefined) this.drawStamina(self);
     // Your own fight bars last, so nothing covers them.
     for (const p of sorted) if (p.s === FishingState.REELING && p.id !== frame.meId) drawReelBars(ctx, p, false, time);
     for (const p of sorted) if (p.s === FishingState.REELING && p.id === frame.meId) drawReelBars(ctx, p, true, time);
@@ -551,6 +555,83 @@ export class Renderer {
     ctx.textBaseline = 'alphabetic';
   }
 
+  // ---- map events and sprinting ------------------------------------------------------
+
+  /** A map event's area: a glowing ring with its name, and a swirling shoal for Feeding Shoals. */
+  drawMapEvent(we, time) {
+    const { ctx } = this;
+    if (!this.onScreen(we.px, we.py, we.r + 80)) return;
+    const T = EVENT_TYPES[we.type];
+    const pulse = 0.5 + 0.5 * Math.sin(time / 400);
+    ctx.save();
+    const g = ctx.createRadialGradient(we.px, we.py, we.r * 0.2, we.px, we.py, we.r);
+    g.addColorStop(0, `${T.color}${we.ru ? '55' : '22'}`);
+    g.addColorStop(1, `${T.color}00`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(we.px, we.py, we.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = T.color;
+    ctx.globalAlpha = 0.45 + 0.35 * pulse;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([18, 12]);
+    ctx.lineDashOffset = -time / 60;
+    ctx.beginPath();
+    ctx.arc(we.px, we.py, we.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (we.type === 'shoal') {
+      // Dozens of little fish circling under the surface.
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = 'rgba(20,40,60,0.8)';
+      for (let i = 0; i < 40; i++) {
+        const a = time / (900 + (i % 7) * 120) + i * 2.4;
+        const r = we.r * (0.2 + ((i * 37) % 70) / 100);
+        const x = we.px + Math.cos(a) * r;
+        const y = we.py + Math.sin(a) * r * 0.8;
+        if (this.terrain.sdf(x, y) > -6) continue; // only in the water
+        ctx.beginPath();
+        ctx.ellipse(x, y, 6, 2.4, a + Math.PI / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (we.ru) {
+      // Golden Rush: sparkles all over the water.
+      ctx.fillStyle = '#ffe8a3';
+      for (let i = 0; i < 30; i++) {
+        const a = i * 2.39996;
+        const r = we.r * Math.sqrt(((i * 53) % 100) / 100);
+        const tw = 0.5 + 0.5 * Math.sin(time / 150 + i);
+        ctx.globalAlpha = tw;
+        ctx.beginPath();
+        ctx.arc(we.px + Math.cos(a) * r, we.py + Math.sin(a) * r, 2 + tw * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.font = '900 18px Nunito, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    const label = `${T.icon} ${T.name}`;
+    ctx.strokeText(label, we.px, we.py - we.r - 12);
+    ctx.fillStyle = T.color;
+    ctx.fillText(label, we.px, we.py - we.r - 12);
+    ctx.restore();
+  }
+
+  /** Your stamina while sprinting or recovering: a small bar under your angler. */
+  drawStamina(p) {
+    const { ctx } = this;
+    const w = 34;
+    const x = p.x - w / 2;
+    const y = p.y + 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(x - 1, y - 1, w + 2, 6);
+    ctx.fillStyle = p.st < 0.25 ? '#ff6b6b' : p.sr ? '#ffd166' : '#7bd389';
+    ctx.fillRect(x, y, w * p.st, 4);
+  }
+
   // ---- effects -----------------------------------------------------------------
 
   drawEffects(time) {
@@ -664,6 +745,25 @@ export class Renderer {
       ctx.moveTo(mx(frame.zoo.x), my(frame.zoo.y) - 5 * dpr);
       ctx.lineTo(mx(frame.zoo.x) + 4.5 * dpr, my(frame.zoo.y) + 3.5 * dpr);
       ctx.lineTo(mx(frame.zoo.x) - 4.5 * dpr, my(frame.zoo.y) + 3.5 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    if (frame.mapEvent) {
+      // The map event: a pulsing star in its colour.
+      const we = frame.mapEvent;
+      const ex = mx(we.px);
+      const ey = my(we.py);
+      const s = (5 + Math.sin(performance.now() / 250) * 1.2) * dpr;
+      ctx.fillStyle = EVENT_TYPES[we.type].color;
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1 * dpr;
+      ctx.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2 - Math.PI / 2;
+        const r = k % 2 ? s * 0.45 : s;
+        ctx.lineTo(ex + Math.cos(a) * r, ey + Math.sin(a) * r);
+      }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();

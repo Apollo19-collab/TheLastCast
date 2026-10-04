@@ -3,6 +3,7 @@
 // Each room keeps its own players, events and snapshots; index.js broadcasts
 // each room's state only to the players in it.
 
+import { WorldEvents } from './events.js';
 import { MSG } from '../shared/constants.js';
 import { BOAT, VOYAGE } from '../shared/voyage.js';
 import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
@@ -34,8 +35,12 @@ export class Hub {
       now,
       maxPlayers: Infinity, // the hub enforces the total
       onProfileChange,
-      hooks: { snapshot: () => ({ boat: this.boat.snapshot() }) },
+      hooks: {
+        snapshot: () => ({ boat: this.boat.snapshot(), we: this.lake.worldEvents.snapshot(), ts: Math.floor(now() / 1000) }),
+        onCatch: (p, c) => this.lake.worldEvents.onCatch(p, c),
+      },
     });
+    this.lake.worldEvents = new WorldEvents(this.lake, { now });
     this.boat = new Boat(this, { now, interval: boatInterval });
   }
 
@@ -67,6 +72,7 @@ export class Hub {
 
   tick(dt) {
     this.boat.tick();
+    this.lake.worldEvents.tick(dt);
     this.lake.tick(dt);
     for (const v of [...this.voyages]) v.tick(dt);
   }
