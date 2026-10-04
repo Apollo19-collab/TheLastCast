@@ -2,6 +2,15 @@
 
 All notable changes to The Last Cast. The same notes appear in-game (version button in the bottom-left).
 
+## 0.19.0 - Trophies, giants & the Hall of Records (2026-10-04)
+
+- Trophy fish: every species (except junk) now has a trophy weight, the top 8% of its weight range. Land one at or above it and it's a Trophy, worth 1.5x points. The Fish Index shows each species' trophy weight and how many you've landed.
+- Named giants: about 1 fish in 300 is a Giant, up to half again heavier than its kind should ever grow. You're warned when one is hooked, because it fights 30% harder. Land it for 2.5x points.
+- Every trophy and giant gets its own name, like Old Gnasher or Goliath the Unbroken. Everyone hears when one is landed.
+- New Trophies window (K, or the Trophies button) with two pages. My Trophy Cabinet shows your 100 newest trophies on wooden plaques; giants are kept for good. Hall of Records shows the five heaviest trophies of every species of all time, plus this week's top three.
+- Weekly records: each week ends Monday 00:00 UTC. The top three of every species that week win coins (1st up to 3,000, 2nd half that, 3rd a quarter). Prizes are paid even if you're offline, and you're told next time you join. A new all-time record is announced to everyone.
+- New achievements: Trophy Room, Trophy Collector, Wall of Fame (trophies of 40 species), Giant Slayer, Giant Hunter, Record Breaker and Weekly Champion. The old weight-based Trophy Hunter goal is renamed Big Game Angler.
+
 ## 0.18.0 - Map events & sprinting (2026-10-04)
 
 - Sprinting: hold Shift while moving to run 65% faster. It uses stamina (shown under your angler): about 5 seconds from full, refilling once you stop sprinting. Run it dry and you have to catch your breath before sprinting again.

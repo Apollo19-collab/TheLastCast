@@ -68,6 +68,15 @@ Every 10 minutes something happens at one of the lakes or ponds: in the valley, 
 
 Only catches inside the event's ring count, and duels don't. Each event you join counts towards the **Community Angler** achievement (10 events).
 
+### Trophies and records (inspired by Russian Fishing 4)
+
+- Every species has a **trophy weight**, the top 8% of its range, shown in the Fish Index. Trophies are worth 1.5x points.
+- About 1 fish in 300 is a **giant**. It can weigh up to 1.5x the species' normal maximum, fights 30% harder and is worth 2.5x points. Trophy Hunter armour makes both more likely.
+- Every trophy and giant gets a **name** and goes into your **Trophy Cabinet** (K).
+- The **Hall of Records** keeps the five heaviest trophies of each species of all time, plus this week's top three. Each angler holds one place per species.
+- When the week ends (Monday 00:00 UTC), the weekly top three win coins, even if they're offline.
+- Tuning lives in `shared/trophies.js` and the records in `server/records.js`. Records are saved in `profiles.json`.
+
 ### Duels
 
 Walk up to another angler at the lake and press `E` to challenge them. They have 20 seconds to accept (`Y`) or decline (`N`).

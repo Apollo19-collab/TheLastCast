@@ -4,7 +4,7 @@
 // Y / N answer a duel challenge.
 // While `isBlocked()` is true (a menu is open) gameplay input is ignored.
 
-const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements', KeyR: 'armour', KeyP: 'pets', KeyV: 'events' };
+const MENU_KEYS = { KeyG: 'gear', KeyI: 'index', KeyH: 'history', KeyO: 'options', KeyT: 'achievements', KeyR: 'armour', KeyP: 'pets', KeyV: 'events', KeyK: 'trophies' };
 
 const MOVE_KEYS = {
   KeyW: 'up', ArrowUp: 'up',

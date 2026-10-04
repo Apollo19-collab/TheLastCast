@@ -24,6 +24,7 @@ import {
 } from '../shared/constants.js';
 import { SPECIES, STRENGTH_TIERS, fishDifficulty, scoreCatch, strengthTier } from '../shared/fish.js';
 import { affinityFor } from '../shared/gear.js';
+import { CABINET_LIMIT, GIANT_FIGHT, TROPHY_TIERS, kgFromRoll, trophyName, trophyTier } from '../shared/trophies.js';
 import { NO_ARMOUR } from '../shared/armour.js';
 import { areaAt } from '../shared/world.js';
 import { HISTORY_LIMIT } from './profiles.js';
@@ -76,7 +77,8 @@ export function hook(ctx, player) {
   const line = player.line;
   if (line.state !== BITE) return;
   const mods = ctx.mods ?? {};
-  const fight = fishDifficulty(line.fish.species, line.fish.kg) * (mods.fight ?? 1) * armourOf(ctx, player).fight;
+  const giant = trophyTier(line.fish.species, line.fish.kg) === 'giant';
+  const fight = fishDifficulty(line.fish.species, line.fish.kg) * (mods.fight ?? 1) * armourOf(ctx, player).fight * (giant ? GIANT_FIGHT : 1);
   Object.assign(line, {
     state: REELING,
     progress: 0.1 + 0.07 * Math.min(fight, 2), // weak fish start further out, so even they need reeling in
@@ -90,7 +92,7 @@ export function hook(ctx, player) {
     lineStrength: player.stats.lineStrength / ((mods.tension ?? 1) * armourOf(ctx, player).tension),
     drag: player.stats.drag,
   });
-  ctx.emitTo(player, { kind: 'hooked', strength: STRENGTH_TIERS[strengthTier(fight)].label });
+  ctx.emitTo(player, { kind: 'hooked', strength: STRENGTH_TIERS[strengthTier(fight)].label, ...(giant ? { giant: true } : {}) });
 }
 
 export function setReel(player, on) {
@@ -182,12 +184,11 @@ function armourOf(ctx, player) {
 
 /**
  * A fish's weight. The squared roll skews towards smaller fish, so trophies
- * are uncommon; `weight` > 1 (Trophy Hunter armour) shifts it towards bigger fish.
+ * are uncommon and giants rare (see shared/trophies.js); `weight` > 1 (Trophy
+ * Hunter armour) shifts it towards bigger fish.
  */
 export function rollKg(rng, speciesId, weight = 1) {
-  const s = SPECIES[speciesId];
-  const kg = s.minKg + (s.maxKg - s.minKg) * rng() ** (2 / weight);
-  return Math.round(kg * 100) / 100;
+  return kgFromRoll(speciesId, rng() ** (2 / weight));
 }
 
 // Better bait shifts odds away from junk and towards rarer fish.
@@ -317,7 +318,9 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus, x
   const s = SPECIES[fish.species];
   const atSea = ctx.kind === 'voyage';
   const ev = ctx.eventMods?.(player, x, y) ?? null; // e.g. a Golden Rush
-  const multiplier = (hotspot ? HOTSPOT_SCORE_BONUS * armour.hotspot : 1) * (ctx.mods?.points ?? 1) * (atSea ? armour.sea : 1) * (ev?.points ?? 1);
+  const tier = trophyTier(fish.species, fish.kg); // 'trophy', 'giant' or null
+  const multiplier = (hotspot ? HOTSPOT_SCORE_BONUS * armour.hotspot : 1) * (ctx.mods?.points ?? 1) * (atSea ? armour.sea : 1) * (ev?.points ?? 1)
+    * (tier ? TROPHY_TIERS[tier].points : 1);
   const points = scoreCatch(fish.species, fish.kg, multiplier);
   let coins = Math.round(points * COINS_PER_POINT * armour.coins);
   // Pets that dig up coins (Field Mouse, Raccoon, Pirate Parrot).
@@ -341,7 +344,9 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus, x
     count: (entry?.count ?? 0) + 1,
     bestKg: Math.max(entry?.bestKg ?? 0, fish.kg),
     firstAt: entry?.firstAt ?? Date.now(),
+    ...(entry?.trophies || tier ? { trophies: (entry?.trophies ?? 0) + (tier ? 1 : 0) } : {}),
   };
+  const trophy = tier ? landTrophy(ctx, player, fish, tier, zone) : undefined;
   profile.history.unshift({ species: fish.species, kg: fish.kg, points, zone: zone.name, hotspot: !!hotspot, at: Date.now() });
   if (profile.history.length > HISTORY_LIMIT) profile.history.length = HISTORY_LIMIT;
   countCatch(ctx, player, fish, s, zone, hotspot, coins);
@@ -365,7 +370,26 @@ function rewardCatch(ctx, player, fish, { hotspot, zone, event, armour, bonus, x
     isNew,
     event: event ? true : undefined,
     double: bonus || undefined,
+    trophy,
   });
+}
+
+/** Name a trophy, put it in the angler's cabinet and enter it for the records. */
+function landTrophy(ctx, player, fish, tier, zone) {
+  const profile = player.profile;
+  const name = trophyName(tier, profile.id, fish.species, fish.kg, profile.catches);
+  const at = Date.now();
+  (profile.trophies ??= []).unshift({ species: fish.species, kg: fish.kg, name, tier, zone: zone.name, at });
+  if (profile.trophies.length > CABINET_LIMIT) {
+    // Full: let the oldest ordinary trophy go (giants are kept for good).
+    const drop = profile.trophies.findLastIndex((t) => t.tier !== 'giant');
+    profile.trophies.splice(drop >= 0 ? drop : CABINET_LIMIT, 1);
+  }
+  const c = profile.counters;
+  c.trophies = (c.trophies || 0) + 1;
+  if (tier === 'giant') c.giants = (c.giants || 0) + 1;
+  const record = ctx.records?.submit(profile, { species: fish.species, kg: fish.kg, name, tier, zone: zone.name }) ?? {};
+  return { tier, name, ...(record.allTime != null ? { allTime: record.allTime } : {}), ...(record.weekly != null ? { weekly: record.weekly } : {}) };
 }
 
 /** Lifetime counters that achievements measure. */

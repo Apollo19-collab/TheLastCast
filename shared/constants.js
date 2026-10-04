@@ -49,6 +49,7 @@ export const MSG = Object.freeze({
   BOARD: 'board', // board or leave the boat while it is docked
   CHUM: 'chum', // place a chum bucket where you stand
   STRIKE: 'strike', // beat off whatever the voyage boss has grabbing the rail
+  RECORDS: 'records', // ask for the Hall of Records (answered with a 'records' event)
   // server -> client
   WELCOME: 'welcome',
   STATE: 'state',

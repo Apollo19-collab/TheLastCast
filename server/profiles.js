@@ -50,6 +50,8 @@ export function newProfile(name = 'Angler') {
     counters: newCounters(), // lifetime stats that achievements measure
     index: {}, // species id -> { count, bestKg, firstAt }
     history: [], // newest first: { species, kg, points, zone, hotspot, at }
+    trophies: [], // Trophy Cabinet, newest first: { species, kg, name, tier, zone, at } (shared/trophies.js)
+    notices: [], // news for the next time you join, e.g. a weekly records prize
     createdAt: Date.now(),
   };
 }
@@ -99,6 +101,8 @@ export function normalize(saved) {
     if (id && (ARMOUR[id]?.slot !== slot || !p.armourOwned.includes(id))) p.armour[slot] = null;
   }
   p.chum = Math.max(0, p.chum | 0);
+  p.trophies = Array.isArray(p.trophies) ? p.trophies.filter((t) => SPECIES[t?.species]) : [];
+  p.notices = Array.isArray(p.notices) ? p.notices : [];
   p.pets = [...new Set((p.pets || []).filter((id) => PETS[id]))];
   if (!p.pets.includes(p.pet)) p.pet = null;
   p.bait = { ...p.bait };
@@ -139,6 +143,8 @@ export class ProfileStore {
     this.guestTokens = new Map(); // hashed token -> profile id
     this.dirty = false;
     this.timer = null;
+    this.records = null; // the Hall of Records (server/records.js), saved in the same file
+    this.recordsData = null; // ...as loaded, until it is created
   }
 
   // ---- persistence -------------------------------------------------------------
@@ -164,6 +170,7 @@ export class ProfileStore {
       for (const [id, p] of Object.entries(data.profiles || {})) this.profiles.set(id, normalize({ ...p, id }));
       for (const [k, v] of Object.entries(data.accounts || {})) this.accounts.set(k, v);
       for (const [k, v] of Object.entries(data.guestTokens || {})) this.guestTokens.set(k, v);
+      this.recordsData = data.records ?? null;
       const now = Date.now();
       for (const [k, v] of Object.entries(data.sessions || {})) {
         if (now - v.createdAt < SESSION_TTL_MS) this.sessions.set(k, v);
@@ -191,6 +198,7 @@ export class ProfileStore {
         accounts: Object.fromEntries(this.accounts),
         sessions: Object.fromEntries(this.sessions),
         guestTokens: Object.fromEntries(this.guestTokens),
+        records: this.records?.toJSON() ?? this.recordsData,
       }));
       await rename(tmp, this.file); // atomic replace so a crash never leaves half a file
     } catch (err) {

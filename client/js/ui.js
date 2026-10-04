@@ -15,6 +15,7 @@ import { CHUM } from '/shared/chum.js';
 import { PETS, PET_IDS, PET_RARITIES, petPrice } from '/shared/pets.js';
 import { ARMOUR_SLOTS, ARMOUR_SLOT_LABELS, SETS, computeArmour } from '/shared/armour.js';
 import { MAX_LEVEL, levelFor, levelProgress } from '/shared/levels.js';
+import { TROPHY_TIERS, trophyKg, weeklyPrize } from '/shared/trophies.js';
 
 const SLOT_ICONS = { head: '🎩', body: '🧥', legs: '👖', feet: '🥾' };
 
@@ -76,6 +77,17 @@ function timeAgo(ms) {
 
 const num = (n) => Math.round(n).toLocaleString();
 
+/** 200000000 -> "2d 7h" (time left, in ms) */
+function untilText(ms) {
+  const m = Math.max(0, Math.round(ms / 60000));
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
+}
+
+const PLACES = ['🥇', '🥈', '🥉', '4th', '5th'];
+const RARITY_ORDER = Object.keys(RARITY);
+
 /** 125 -> "2:05" */
 export function clock(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
@@ -129,6 +141,8 @@ export class UI {
     this.lastBoard = '';
     this.profile = null;
     this.menuTab = null; // null when the menu is closed
+    this.trophyView = 'cabinet'; // Trophies window: 'cabinet' or 'records'
+    this.records = null; // the Hall of Records, as last sent by the server
 
     $('menu-close').addEventListener('click', () => this.closeMenu());
     for (const btn of document.querySelectorAll('[data-tab]')) {
@@ -144,6 +158,7 @@ export class UI {
 
   openMenu(tab) {
     this.menuTab = tab;
+    if (tab === 'trophies' && this.trophyView === 'records') this.onRecords?.();
     $('menu').hidden = false;
     for (const btn of document.querySelectorAll('#menu [data-tab]')) {
       btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -189,6 +204,7 @@ export class UI {
       achievements: () => this.renderAchievements(),
       armour: () => this.renderArmour(),
       pets: () => this.renderPets(),
+      trophies: () => this.renderTrophies(),
     };
     body.replaceChildren(...[].concat(render[this.menuTab]()));
     body.scrollTop = scroll; // keep your place when the profile updates
@@ -331,7 +347,7 @@ export class UI {
         ['Duels', 'Y accept · N decline a challenge'],
         ['Chum', 'C: put a chum bucket down (buy them at the Bait Shop)'],
         ['Pets', 'P: your pets · E at the Travelling Zoo to adopt one'],
-        ['Menus', 'G tackle · R armour · P pets · I fish index · H history · T achievements · V events · O options'],
+        ['Menus', 'G tackle · R armour · P pets · I fish index · H history · K trophies & records · T achievements · V events · O options'],
         ['Sound', 'M mute'],
       ].map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
     ];
@@ -681,9 +697,98 @@ export class UI {
           e
             ? h('div', { class: 'index-stats' }, `Caught ${e.count}× · Best ${e.bestKg} kg`)
             : h('div', { class: 'index-stats' }, 'Not caught yet'),
+          trophyKg(id) != null
+            ? h('div', { class: `index-trophy${e?.trophies ? ' got' : ''}` },
+              `🏆 Trophy ${trophyKg(id)} kg+`, e?.trophies ? ` · ${e.trophies} landed` : '')
+            : null,
           h('div', { class: 'index-where' }, `Found in: ${zonesFor(id).join(', ') || 'unknown'}`));
       })),
     ];
+  }
+
+  /** The Trophies window: your cabinet, or the Hall of Records. */
+  renderTrophies() {
+    const views = { cabinet: 'My Trophy Cabinet', records: 'Hall of Records' };
+    const tabs = h('div', { class: 'slot-tabs' }, Object.entries(views).map(([key, label]) => h('button', {
+      class: key === this.trophyView ? 'active' : '',
+      onclick: () => {
+        this.trophyView = key;
+        if (key === 'records') this.onRecords?.();
+        this.renderMenu();
+      },
+    }, label)));
+    return [tabs, ...(this.trophyView === 'records' ? this.renderRecords() : this.renderCabinet())];
+  }
+
+  renderCabinet() {
+    const list = this.profile.trophies ?? [];
+    const c = this.profile.counters ?? {};
+    const out = [
+      h('p', { class: 'menu-note' },
+        'A ', h('b', {}, 'trophy'), ' is one of the heaviest of its kind (the Fish Index shows each trophy weight). About 1 fish in 300 is a ',
+        h('b', {}, 'giant'), ', bigger than its kind should ever grow, and fights much harder. Every trophy gets a name, and the heaviest go into the Hall of Records.'),
+      h('div', { class: 'trophy-stats' },
+        [['🏆', c.trophies || 0, 'trophies'], ['👑', c.giants || 0, 'giants'], ['📜', c.recordsSet || 0, 'records set'], ['🥇', c.weeklyWins || 0, 'weekly wins']]
+          .map(([icon, n, label]) => h('div', {}, h('b', {}, `${icon} ${num(n)}`), h('span', {}, label)))),
+    ];
+    if (!list.length) {
+      out.push(h('p', { class: 'menu-note' }, 'Your cabinet is empty. Land a trophy-sized fish to put it on the wall.'));
+      return out;
+    }
+    out.push(h('div', { class: 'trophy-grid' }, list.map((t) => {
+      const s = SPECIES[t.species];
+      const T = TROPHY_TIERS[t.tier];
+      return h('div', { class: `trophy-card tier-${t.tier}`, style: { '--trophy': T.color, '--rarity': RARITY[s.rarity].color } },
+        h('div', { class: 'trophy-plaque' }, T.icon),
+        h('img', { class: 'trophy-fish', src: fishImageURL(t.species), alt: '' }),
+        h('div', { class: 'trophy-name' }, `“${t.name}”`),
+        h('div', { class: 'trophy-species' }, s.name),
+        h('div', { class: 'trophy-kg' }, `${t.kg} kg`, h('span', {}, ` · ${T.label}`)),
+        h('div', { class: 'trophy-when' }, `${t.zone} · ${timeAgo(t.at)}`));
+    })));
+    if (list.length >= 100) out.push(h('p', { class: 'menu-note' }, 'Your cabinet holds your 100 newest trophies; giants are kept for good.'));
+    return out;
+  }
+
+  /** Records from the server (a 'records' event). */
+  setRecords(records) {
+    this.records = records;
+    if (this.menuTab === 'trophies' && this.trophyView === 'records') this.renderMenu();
+  }
+
+  renderRecords() {
+    const r = this.records;
+    if (!r) return [h('p', { class: 'menu-note' }, 'Opening the Hall of Records...')];
+    const ids = Object.keys(r.species).filter((id) => SPECIES[id])
+      .sort((a, b) => RARITY_ORDER.indexOf(SPECIES[b].rarity) - RARITY_ORDER.indexOf(SPECIES[a].rarity) || SPECIES[a].name.localeCompare(SPECIES[b].name));
+    const out = [h('p', { class: 'menu-note' },
+      'The heaviest trophies anyone has landed. When the week ends (in ', h('b', {}, untilText(r.endsAt - Date.now())),
+      '), the top three of each species this week win coins.')];
+    if (!ids.length) {
+      out.push(h('p', { class: 'menu-note' }, 'No records yet. The first trophy of each kind sets the record!'));
+      return out;
+    }
+    const rows = (list, prize) => (list.length
+      ? list.map((e, i) => h('div', { class: `record-row${e.mine ? ' mine' : ''}` },
+        h('span', { class: 'record-place' }, PLACES[i]),
+        h('span', { class: 'record-angler' }, e.angler, e.tier === 'giant' ? ' 👑' : ''),
+        h('span', { class: 'record-kg' }, `${e.kg} kg`),
+        h('span', { class: 'record-fish' }, `“${e.name}”`),
+        prize ? h('span', { class: 'record-prize' }, `${num(prize(i))}c`) : null))
+      : [h('div', { class: 'record-row empty' }, 'Nobody yet this week')]);
+    for (const id of ids) {
+      const s = SPECIES[id];
+      const { all, week } = r.species[id];
+      out.push(h('div', { class: 'record-card', style: { '--rarity': RARITY[s.rarity].color } },
+        h('div', { class: 'record-head' },
+          h('img', { src: fishImageURL(id), alt: '' }),
+          h('b', {}, s.name),
+          h('span', { class: 'record-trophy' }, `trophy ${trophyKg(id)} kg+ · 1st wins ${num(weeklyPrize(id, 0))}c`)),
+        h('div', { class: 'record-cols' },
+          h('div', {}, h('div', { class: 'record-col-title' }, 'This week'), rows(week, (i) => weeklyPrize(id, i))),
+          h('div', {}, h('div', { class: 'record-col-title' }, 'All-time'), rows(all)))));
+    }
+    return out;
   }
 
   renderHistory() {
@@ -740,7 +845,7 @@ export class UI {
     el.style.setProperty('--rarity', rarity.color);
     fill(el,
       h('div', { class: 'catch-rays' }),
-      h('div', { class: 'catch-title' }, ev.isNew ? 'New species!' : 'You caught'),
+      h('div', { class: 'catch-title' }, ev.trophy?.tier === 'giant' ? 'A GIANT!' : ev.trophy ? 'Trophy fish!' : ev.isNew ? 'New species!' : 'You caught'),
       h('img', { class: 'catch-fish', src: fishImageURL(ev.species), alt: '' }),
       h('div', { class: 'catch-name' }, ev.speciesName),
       h('div', { class: 'catch-meta' },
@@ -748,6 +853,7 @@ export class UI {
         ` · ${ev.kg} kg · +${ev.points} ${ev.duel ? 'duel pts' : `pts · +${ev.coins ?? ev.points} coins`}`,
         ev.hotspot ? ' · hotspot bonus' : '',
         ev.event ? ' · event bonus' : ''),
+      ev.trophy ? this.trophyLine(ev.trophy) : null,
       ev.duel ? h('div', { class: 'catch-note' }, 'Duel catch: counts for the duel only') : null,
     );
     el.hidden = false;
@@ -756,7 +862,19 @@ export class UI {
     el.style.animation = '';
     el.onclick = () => { el.hidden = true; };
     clearTimeout(this.catchTimer);
-    this.catchTimer = setTimeout(() => { el.hidden = true; }, ev.rarity === 'legendary' || ev.rarity === 'mythic' ? 5500 : 3400);
+    this.catchTimer = setTimeout(() => { el.hidden = true; }, ev.rarity === 'legendary' || ev.rarity === 'mythic' || ev.trophy ? 5500 : 3400);
+  }
+
+  /** The trophy badge on the catch card: its name and any record it set. */
+  trophyLine(t) {
+    const T = TROPHY_TIERS[t.tier];
+    const notes = [];
+    if (t.allTime === 0) notes.push('NEW ALL-TIME RECORD!');
+    else if (t.allTime != null) notes.push(`#${t.allTime + 1} all-time`);
+    if (t.weekly != null && t.allTime !== 0) notes.push(t.weekly === 0 ? 'top of this week\'s records' : `#${t.weekly + 1} this week`);
+    return h('div', { class: `catch-trophy tier-${t.tier}`, style: { '--trophy': T.color } },
+      h('div', { class: 'catch-trophy-name' }, `${T.icon} “${t.name}”`),
+      h('div', { class: 'catch-trophy-note' }, [`${T.label} · points ×${T.points}`, ...notes].join(' · ')));
   }
 
   showGame() {

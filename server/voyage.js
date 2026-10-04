@@ -31,7 +31,7 @@ export class Voyage {
    * timing: VOYAGE, or shorter values for tests.
    * onEnd(voyage): called once the voyage is over and it's time to go home.
    */
-  constructor({ crew, ids, rng = Math.random, onProfileChange = () => {}, timing = VOYAGE, onEnd = () => {} }) {
+  constructor({ crew, ids, rng = Math.random, onProfileChange = () => {}, timing = VOYAGE, onEnd = () => {}, records = null }) {
     this.rng = rng;
     this.timing = timing;
     this.onEnd = onEnd;
@@ -40,6 +40,7 @@ export class Voyage {
       kind: 'voyage',
       ids,
       rng,
+      records,
       maxPlayers: Infinity,
       onProfileChange,
       hooks: {

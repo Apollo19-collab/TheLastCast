@@ -4,6 +4,7 @@
 // each room's state only to the players in it.
 
 import { WorldEvents } from './events.js';
+import { Records } from './records.js';
 import { MSG } from '../shared/constants.js';
 import { BOAT, VOYAGE } from '../shared/voyage.js';
 import { DEFAULT_LOCATION, LOCATIONS } from '../shared/world.js';
@@ -16,10 +17,12 @@ export class Hub {
   /**
    * now(): ms since the epoch (drives the boat schedule).
    * boatInterval: seconds between boat visits. voyageTiming: see VOYAGE.
+   * records: saved Hall of Records data, getProfile(id): any saved profile
+   * (for weekly prizes), onRecordsChange(): the records need saving.
    */
   constructor({
     maxPlayers = 50, rng = Math.random, now = () => Date.now(), onProfileChange = () => {},
-    boatInterval = BOAT.interval, voyageTiming = VOYAGE,
+    boatInterval = BOAT.interval, voyageTiming = VOYAGE, records = null, getProfile = () => null, onRecordsChange = () => {},
   } = {}) {
     this.maxPlayers = maxPlayers;
     this.rng = rng;
@@ -27,6 +30,14 @@ export class Hub {
     this.voyageTiming = voyageTiming;
     this.ids = idSource();
     this.voyages = new Set();
+    this.records = new Records({
+      data: records,
+      now,
+      getProfile: (id) => this.onlineProfile(id) ?? getProfile(id),
+      onAward: (profile, award) => this.award(profile, award),
+      announce: (ev) => { for (const room of this.rooms()) room.emitAll(ev); },
+      onChange: onRecordsChange,
+    });
     this.lake = new Game({
       world: LOCATIONS[DEFAULT_LOCATION],
       kind: 'lake',
@@ -35,6 +46,7 @@ export class Hub {
       now,
       maxPlayers: Infinity, // the hub enforces the total
       onProfileChange,
+      records: this.records,
       hooks: {
         snapshot: () => ({ boat: this.boat.snapshot(), we: this.lake.worldEvents.snapshot(), ts: Math.floor(now() / 1000) }),
         onCatch: (p, c) => this.lake.worldEvents.onCatch(p, c),
@@ -73,8 +85,33 @@ export class Hub {
   tick(dt) {
     this.boat.tick();
     this.lake.worldEvents.tick(dt);
+    this.records.tick();
     this.lake.tick(dt);
     for (const v of [...this.voyages]) v.tick(dt);
+  }
+
+  /** The player online with this profile, if any. */
+  onlinePlayer(profileId) {
+    if (!this.lake) return null; // still starting up
+    for (const room of this.rooms()) for (const p of room.players.values()) if (p.profile.id === profileId) return p;
+    return null;
+  }
+
+  onlineProfile(profileId) {
+    return this.onlinePlayer(profileId)?.profile ?? null;
+  }
+
+  /** A weekly records prize was paid: tell the angler now, or next time they join. */
+  award(profile, award) {
+    const player = this.onlinePlayer(profile.id);
+    if (player) {
+      player.room.emitTo(player, award);
+      player.room.checkAchievements(player);
+      player.room.profileChanged(player);
+    } else {
+      profile.notices = [...(profile.notices ?? []), award].slice(-50);
+      this.onProfileChange(null);
+    }
   }
 
   /** What a client needs to know about the room it is in. */
@@ -98,6 +135,7 @@ export class Hub {
       rng: this.rng,
       onProfileChange: this.onProfileChange,
       timing: this.voyageTiming,
+      records: this.records,
       onEnd: (v) => this.endVoyage(v),
     });
     this.voyages.add(voyage);

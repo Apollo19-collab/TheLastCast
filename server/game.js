@@ -45,9 +45,11 @@ export class Game {
    *   onLeave(player)             a player left this room or the game
    *   snapshot()                  extra fields for every state snapshot
    *   playerExtras(player)        extra fields for a player's snapshot entry
+   * records: the Hall of Records (server/records.js), shared by every room.
    */
-  constructor({ world, kind = 'lake', ids = idSource(), maxPlayers = 50, rng = Math.random, onProfileChange = () => {}, hooks = {}, now = () => Date.now() }) {
+  constructor({ world, kind = 'lake', ids = idSource(), maxPlayers = 50, rng = Math.random, onProfileChange = () => {}, hooks = {}, now = () => Date.now(), records = null }) {
     this.now = now;
+    this.records = records;
     this.world = world;
     this.kind = kind;
     this.ids = ids;
@@ -177,6 +179,9 @@ export class Game {
         break;
       case MSG.DUEL:
         this.duels?.handle(player, msg);
+        break;
+      case MSG.RECORDS:
+        this.emitTo(player, { kind: 'records', ...(this.records?.view(player.profile.id) ?? { species: {} }) });
         break;
     }
   }
@@ -467,6 +472,15 @@ export class Game {
     }
   }
 
+  /** News saved for you while you were away (e.g. a weekly records prize). */
+  deliverNotices(player) {
+    const notices = player.profile.notices;
+    if (!notices?.length) return;
+    for (const n of notices) this.emitTo(player, n);
+    player.profile.notices = [];
+    this.profileChanged(player);
+  }
+
   profileChanged(player) {
     this.onProfileChange(player);
     const p = player.profile;
@@ -489,6 +503,7 @@ export class Game {
       counters: p.counters,
       index: p.index,
       history: p.history,
+      trophies: p.trophies,
     });
   }
 

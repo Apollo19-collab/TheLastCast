@@ -157,7 +157,8 @@ test('armour: Trophy Hunter fish run bigger', () => {
   };
   const trophy = computeArmour({ head: 'trophy_head', body: 'trophy_body', legs: 'trophy_legs', feet: 'trophy_feet' });
   assert.ok(avg(trophy.weight) > avg(1) * 1.1);
-  assert.ok(SPECIES.pike.maxKg >= rollKg(() => 0.9999, 'pike', 2));
+  assert.ok(SPECIES.pike.maxKg * 1.5 >= rollKg(() => 0.9999, 'pike', 2), 'even giants have a limit');
+  assert.ok(SPECIES.pike.maxKg >= rollKg(() => 0.99, 'pike', 2), 'only giants pass the usual maximum');
 });
 
 test('existing players start with XP from their score', () => {

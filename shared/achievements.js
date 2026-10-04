@@ -44,8 +44,15 @@ export const ACHIEVEMENTS = [
     metric: { min: ['zone.willowPond', 'zone.frogPond', 'zone.crystalPond', 'zone.blackBog', 'zone.millPond'] }, goal: 30, coins: 1500,
   },
   { id: 'river_runner', name: 'River Runner', desc: 'Catch 200 fish in the East River.', metric: 'zone.eastRiver', goal: 200, coins: 600 },
-  { id: 'trophy_hunter', name: 'Trophy Hunter', desc: 'Land 30 fish weighing 10 kg or more.', metric: 'bigFish', goal: 30, coins: 400 },
+  { id: 'trophy_hunter', name: 'Big Game Angler', desc: 'Land 30 fish weighing 10 kg or more.', metric: 'bigFish', goal: 30, coins: 400 },
   { id: 'heavyweight', name: 'Heavyweight', desc: 'Land a fish of 35 kg or more.', metric: 'heaviest', goal: 35, coins: 500, unit: 'kg' },
+  { id: 'trophy_room', name: 'Trophy Room', desc: 'Land a trophy fish (one of the heaviest of its kind).', metric: 'trophies', goal: 1, coins: 300 },
+  { id: 'trophy_collector', name: 'Trophy Collector', desc: 'Land 50 trophy fish.', metric: 'trophies', goal: 50, coins: 2500 },
+  { id: 'wall_of_fame', name: 'Wall of Fame', desc: 'Land trophies of 40 different species.', metric: 'trophySpecies', goal: 40, coins: 6000 },
+  { id: 'giant_slayer', name: 'Giant Slayer', desc: 'Land a named giant, bigger than its kind should ever grow.', metric: 'giants', goal: 1, coins: 2000 },
+  { id: 'giant_hunter', name: 'Giant Hunter', desc: 'Land 10 named giants.', metric: 'giants', goal: 10, coins: 8000 },
+  { id: 'record_breaker', name: 'Record Breaker', desc: 'Set an all-time record in the Hall of Records.', metric: 'recordsSet', goal: 1, coins: 1500 },
+  { id: 'weekly_champion', name: 'Weekly Champion', desc: 'Finish a week top of a species in the Hall of Records.', metric: 'weeklyWins', goal: 1, coins: 1500 },
   { id: 'hotspot_hopper', name: 'Hotspot Hopper', desc: 'Catch 200 fish inside hotspots.', metric: 'hotspotCatches', goal: 200, coins: 400 },
   { id: 'bait_shop', name: 'Bait Shop Regular', desc: 'Spend 8,000 coins on tackle and bait.', metric: 'coinsSpent', goal: 8000, coins: 400 },
   { id: 'collector', name: 'Collector', desc: 'Discover 40 species for your Fish Index.', metric: 'species', goal: 40, coins: 800 },
@@ -87,6 +94,7 @@ export function newCounters() {
     catches: 0, coinsEarned: 0, coinsSpent: 0, hotspotCatches: 0, legendaryCatches: 0, mythicCatches: 0,
     bigFish: 0, heaviest: 0, snaps: 0, family: {}, zone: {}, area: {},
     duels: 0, duelsWon: 0, voyages: 0, seaCatches: 0, eventCatches: 0, bossKills: 0, mapEvents: 0,
+    trophies: 0, giants: 0, recordsSet: 0, weeklyWins: 0,
   };
 }
 
@@ -97,6 +105,7 @@ function read(profile, path) {
   if (path === 'pets') return profile.pets?.length || 0;
   const [group, key] = path.split('.');
   if (group === 'index') return profile.index?.[key]?.count || 0;
+  if (path === 'trophySpecies') return Object.values(profile.index || {}).filter((e) => e.trophies > 0).length;
   if (path === 'rarity.mythicPet') return (profile.pets || []).filter((id) => PETS[id]?.rarity === 'mythic').length;
   if (group === 'rarity') return Object.keys(profile.index || {}).filter((id) => SPECIES[id]?.rarity === key).length;
   const c = profile.counters || {};

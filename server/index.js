@@ -32,7 +32,16 @@ const VOYAGE_TIMING = STOP_SECONDS >= 10
 const store = new ProfileStore(path.join(DATA_DIR, 'profiles.json'));
 await store.load();
 
-const hub = new Hub({ maxPlayers: MAX_PLAYERS, boatInterval: BOAT_INTERVAL, voyageTiming: VOYAGE_TIMING, onProfileChange: () => store.markDirty() });
+const hub = new Hub({
+  maxPlayers: MAX_PLAYERS,
+  boatInterval: BOAT_INTERVAL,
+  voyageTiming: VOYAGE_TIMING,
+  onProfileChange: () => store.markDirty(),
+  records: store.recordsData,
+  getProfile: (id) => store.profiles.get(id) ?? null,
+  onRecordsChange: () => store.markDirty(),
+});
+store.records = hub.records; // saved with the profiles
 
 const online = new Map(); // profile id -> { player, ws }
 const loginLimiter = new LoginLimiter({ max: 10, windowMs: 10 * 60 * 1000 }); // failed logins per IP
@@ -169,6 +178,7 @@ wss.on('connection', (ws, req) => {
         token,
         guest,
       });
+      player.room.deliverNotices(player);
       return;
     }
     if (msg.t === MSG.LOGOUT) {

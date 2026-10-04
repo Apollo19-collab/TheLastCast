@@ -12,6 +12,7 @@ import { VERSION } from '/shared/version.js';
 import { DUEL } from '/shared/duel.js';
 import { BOAT, BOSS, BOSSES, DECK_AREAS, SEA_BOAT, SEA_EVENTS, SEA_LOCATIONS, makeSeaWorld } from '/shared/voyage.js';
 import { PETS, ZOO } from '/shared/pets.js';
+import { TROPHY_TIERS } from '/shared/trophies.js';
 import { Connection } from './net.js';
 import { SnapshotBuffer } from './interpolation.js';
 import { Input } from './input.js';
@@ -40,6 +41,7 @@ const ui = new UI({
   onEquip: (item) => net.send({ t: MSG.EQUIP, item }),
 });
 ui.onChum = () => net.send({ t: MSG.CHUM });
+ui.onRecords = () => net.send({ t: MSG.RECORDS });
 const buffer = new SnapshotBuffer(100);
 ui.setSoundButton(audio.muted, () => ui.setSoundButton(audio.toggleMute()));
 
@@ -395,7 +397,11 @@ net.on(MSG.EVENT, (ev) => {
       const color = ui.rarityColor(ev.rarity);
       const where = ev.hotspot ? `${ev.zone}, hotspot` : ev.zone;
       const tag = ev.duel ? ' (duel)' : '';
-      ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}${tag}`, color);
+      const T = ev.trophy ? TROPHY_TIERS[ev.trophy.tier] : null;
+      if (T) ui.feed(`${T.icon} ${mine ? 'You' : ev.name} landed a ${T.label.toUpperCase()}: “${ev.trophy.name}”, a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}`, T.color);
+      else ui.feed(`${mine ? 'You' : ev.name} caught a ${ev.kg} kg ${ev.speciesName} (+${ev.points}) in the ${where}${tag}`, color);
+      if (ev.trophy?.tier === 'giant') ui.banner('A GIANT IS LANDED!', `${mine ? 'You' : ev.name} landed “${ev.trophy.name}”, a ${ev.kg} kg ${ev.speciesName}!`, T.color, 5000);
+      else if (ev.trophy && mine && ev.rarity !== 'mythic') ui.banner('TROPHY!', `“${ev.trophy.name}” · ${ev.kg} kg ${ev.speciesName}`, T.color, 3200);
       const p = buffer.latest()?.players.find((q) => q.id === ev.playerId);
       const big = ev.rarity === 'rare' || ev.rarity === 'legendary' || ev.rarity === 'mythic';
       if (ev.rarity === 'mythic' && !ev.duel) ui.banner('MYTHIC CATCH!', `${mine ? 'You' : ev.name} landed ${ev.speciesName}!`, color, 4500);
@@ -444,9 +450,26 @@ net.on(MSG.EVENT, (ev) => {
       audio.play('bite');
       break;
     case 'hooked':
-      ui.flash(`Hooked a ${(ev.strength || 'mystery').toLowerCase()} fish! Hold to reel, release when it pulls.`, 1800);
+      if (ev.giant) {
+        ui.flash('Something ENORMOUS is on the line! A giant: ease off when it runs, or it will snap you.', 3500);
+        ui.banner('A GIANT!', 'Bigger than its kind should ever grow', TROPHY_TIERS.giant.color, 2600);
+      } else ui.flash(`Hooked a ${(ev.strength || 'mystery').toLowerCase()} fish! Hold to reel, release when it pulls.`, 1800);
       audio.play('hook');
       break;
+    case 'records':
+      ui.setRecords(ev);
+      break;
+    case 'record':
+      ui.feed(`📜 NEW RECORD! ${mine ? 'You' : ev.name} set the all-time ${ev.speciesName} record: “${ev.fishName}”, ${ev.kg} kg.`, '#ffd166');
+      if (ui.menuTab === 'trophies') ui.onRecords();
+      break;
+    case 'weeklyPrize': {
+      const place = ['1st', '2nd', '3rd'][ev.place] ?? `#${ev.place + 1}`;
+      ui.toast({ title: '📜 Weekly records prize', name: `+${ev.coins} coins`, detail: `${place} place for ${ev.speciesName} last week (“${ev.fishName}”, ${ev.kg} kg)` });
+      ui.feed(`You won ${ev.coins} coins for ${place} place in last week's ${ev.speciesName} records!`, '#ffd166');
+      audio.play('coin');
+      break;
+    }
     case 'castFail':
       ui.flash(ev.message, 2500);
       audio.play('error');
